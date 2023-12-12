@@ -1,4 +1,4 @@
-# ``CodeEditInputView``
+# ``CodeEditTextView``
 
 A text editor designed to edit code documents.
 

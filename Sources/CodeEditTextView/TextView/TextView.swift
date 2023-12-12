@@ -185,7 +185,7 @@ public class TextView: NSView, NSTextContent {
 
     /// The text storage object for the text view.
     /// - Warning: Do not update the text storage object directly. Doing so will very likely break the text view's
-    ///            layout system. Use methods like ``TextView/replaceCharacters(in:with:)-3h9uo`` or
+    ///            layout system. Use methods like ``TextView/replaceCharacters(in:with:)-58mt7`` or
     ///            ``TextView/insertText(_:)`` to modify content.
     private(set) public var textStorage: NSTextStorage!
     /// The layout manager for the text view.
