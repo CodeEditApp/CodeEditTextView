@@ -326,6 +326,16 @@ public class TextView: NSView, NSTextContent {
         super.canBecomeKeyView && acceptsFirstResponder && !isHiddenOrHasHiddenAncestor
     }
 
+    /// Sent to the window's first responder when `NSWindow.makeKey()` occurs.
+    @objc private func becomeKeyWindow() {
+        let _ = becomeFirstResponder()
+    }
+    
+    /// Sent to the window's first responder when `NSWindow.resignKey()` occurs.
+    @objc private func resignKeyWindow() {
+        let _ = resignFirstResponder()
+    }
+
     open override var needsPanelToBecomeKey: Bool {
         isSelectable || isEditable
     }
@@ -362,6 +372,23 @@ public class TextView: NSView, NSTextContent {
         updateFrameIfNeeded()
     }
 
+    // MARK: - Hit test
+    
+    /// Returns the responding view for a given point.
+    /// - Parameter point: The point to find.
+    /// - Returns: A view at the given point, if any.
+    override public func hitTest(_ point: NSPoint) -> NSView? {
+        // For our purposes, cursor and line fragment views should be transparent from the point of view of
+        // all other views. So, if the normal hitTest returns one of them, we return `self` instead.
+        let hitView = super.hitTest(point)
+
+        if let hitView, hitView != self,
+            (type(of: hitView) == CursorView.self || type(of: hitView) == LineFragmentView.self) {
+            return self
+        }
+        return hitView
+    }
+
     // MARK: - Key Down
 
     override public func keyDown(with event: NSEvent) {
@@ -380,6 +407,15 @@ public class TextView: NSView, NSTextContent {
     }
 
     // MARK: - Layout
+
+    open override class var isCompatibleWithResponsiveScrolling: Bool {
+        true
+    }
+
+    open override func prepareContent(in rect: NSRect) {
+        needsLayout = true
+        super.prepareContent(in: rect)
+    }
 
     override public func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
