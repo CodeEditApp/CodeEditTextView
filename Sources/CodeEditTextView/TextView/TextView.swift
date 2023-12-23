@@ -328,12 +328,12 @@ public class TextView: NSView, NSTextContent {
 
     /// Sent to the window's first responder when `NSWindow.makeKey()` occurs.
     @objc private func becomeKeyWindow() {
-        let _ = becomeFirstResponder()
+        _ = becomeFirstResponder()
     }
-    
+
     /// Sent to the window's first responder when `NSWindow.resignKey()` occurs.
     @objc private func resignKeyWindow() {
-        let _ = resignFirstResponder()
+        _ = resignFirstResponder()
     }
 
     open override var needsPanelToBecomeKey: Bool {
@@ -373,7 +373,7 @@ public class TextView: NSView, NSTextContent {
     }
 
     // MARK: - Hit test
-    
+
     /// Returns the responding view for a given point.
     /// - Parameter point: The point to find.
     /// - Returns: A view at the given point, if any.
