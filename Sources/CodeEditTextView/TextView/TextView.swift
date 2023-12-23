@@ -383,7 +383,7 @@ public class TextView: NSView, NSTextContent {
         let hitView = super.hitTest(point)
 
         if let hitView, hitView != self,
-            (type(of: hitView) == CursorView.self || type(of: hitView) == LineFragmentView.self) {
+            type(of: hitView) == CursorView.self || type(of: hitView) == LineFragmentView.self {
             return self
         }
         return hitView
