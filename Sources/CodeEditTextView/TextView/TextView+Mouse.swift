@@ -48,10 +48,6 @@ extension TextView {
                 self?.autoscroll(with: event)
             }
         }
-
-        if !self.isFirstResponder {
-            self.window?.makeFirstResponder(self)
-        }
     }
 
     override public func mouseUp(with event: NSEvent) {

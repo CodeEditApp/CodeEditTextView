@@ -224,4 +224,12 @@ public class CEUndoManager {
     public func enable() {
         isDisabled = false
     }
+
+    // MARK: - Internal
+
+    /// Sets a new text view to use for mutation registration, undo/redo operations.
+    /// - Parameter newTextView: The new text view.
+    func setTextView(_ newTextView: TextView) {
+        self.textView = newTextView
+    }
 }
