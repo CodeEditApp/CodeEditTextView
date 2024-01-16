@@ -19,7 +19,7 @@ class CursorTimer {
     var shouldHide: Bool = false
 
     // MARK: - Methods
-    
+
     /// Resets the cursor blink timer.
     /// - Parameter newBlinkDuration: The duration to blink, leave as nil to never blink.
     func resetTimer(newBlinkDuration: TimeInterval? = 0.5) {
@@ -56,13 +56,12 @@ class CursorTimer {
             cursor.blinkTimer(shouldHide)
         }
     }
-    
+
     /// Register a new cursor view with the timer.
     /// - Parameter newCursor: The cursor to blink.
     func register(_ newCursor: CursorView) {
         cursors.add(newCursor)
     }
-    
 
     deinit {
         timer?.invalidate()

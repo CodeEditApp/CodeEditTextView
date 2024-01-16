@@ -159,7 +159,7 @@ public class TextSelectionManager: NSObject {
     }
 
     // MARK: - Selection Views
-    
+
     /// Update all selection cursors. Placing them in the correct position for each text selection and reseting the
     /// blink timer.
     func updateSelectionViews() {
@@ -197,7 +197,7 @@ public class TextSelectionManager: NSObject {
             cursorTimer.resetTimer()
         }
     }
-    
+
     /// Removes all cursor views and stops the cursor blink timer.
     func removeCursors() {
         cursorTimer.stopTimer()
