@@ -81,19 +81,21 @@ public class TextSelectionManager: NSObject {
     internal(set) public var textSelections: [TextSelection] = []
     weak var layoutManager: TextLayoutManager?
     weak var textStorage: NSTextStorage?
-    weak var layoutView: NSView?
+    weak var textView: TextView?
     weak var delegate: TextSelectionManagerDelegate?
+    var cursorTimer: CursorTimer
 
     init(
         layoutManager: TextLayoutManager,
         textStorage: NSTextStorage,
-        layoutView: NSView?,
+        textView: TextView?,
         delegate: TextSelectionManagerDelegate?
     ) {
         self.layoutManager = layoutManager
         self.textStorage = textStorage
-        self.layoutView = layoutView
+        self.textView = textView
         self.delegate = delegate
+        self.cursorTimer = CursorTimer()
         super.init()
         textSelections = []
         updateSelectionViews()
@@ -106,8 +108,10 @@ public class TextSelectionManager: NSObject {
         let selection = TextSelection(range: range)
         selection.suggestedXPos = layoutManager?.rectForOffset(range.location)?.minX
         textSelections = [selection]
-        updateSelectionViews()
-        NotificationCenter.default.post(Notification(name: Self.selectionChangedNotification, object: self))
+        if textView?.isFirstResponder ?? false {
+            updateSelectionViews()
+            NotificationCenter.default.post(Notification(name: Self.selectionChangedNotification, object: self))
+        }
     }
 
     public func setSelectedRanges(_ ranges: [NSRange]) {
@@ -123,8 +127,10 @@ public class TextSelectionManager: NSObject {
                 selection.suggestedXPos = layoutManager?.rectForOffset($0.location)?.minX
                 return selection
             }
-        updateSelectionViews()
-        NotificationCenter.default.post(Notification(name: Self.selectionChangedNotification, object: self))
+        if textView?.isFirstResponder ?? false {
+            updateSelectionViews()
+            NotificationCenter.default.post(Notification(name: Self.selectionChangedNotification, object: self))
+        }
     }
 
     public func addSelectedRange(_ range: NSRange) {
@@ -146,12 +152,16 @@ public class TextSelectionManager: NSObject {
             textSelections.append(newTextSelection)
         }
 
-        updateSelectionViews()
-        NotificationCenter.default.post(Notification(name: Self.selectionChangedNotification, object: self))
+        if textView?.isFirstResponder ?? false {
+            updateSelectionViews()
+            NotificationCenter.default.post(Notification(name: Self.selectionChangedNotification, object: self))
+        }
     }
 
     // MARK: - Selection Views
-
+    
+    /// Update all selection cursors. Placing them in the correct position for each text selection and reseting the
+    /// blink timer.
     func updateSelectionViews() {
         var didUpdate: Bool = false
 
@@ -163,12 +173,16 @@ public class TextSelectionManager: NSObject {
                     || textSelection.boundingRect.height != layoutManager?.estimateLineHeight() ?? 0 {
                     textSelection.view?.removeFromSuperview()
                     textSelection.view = nil
+
                     let cursorView = CursorView(color: insertionPointColor)
                     cursorView.frame.origin = cursorOrigin
                     cursorView.frame.size.height = layoutManager?.estimateLineHeight() ?? 0
-                    layoutView?.addSubview(cursorView)
+                    textView?.addSubview(cursorView)
                     textSelection.view = cursorView
                     textSelection.boundingRect = cursorView.frame
+
+                    cursorTimer.register(cursorView)
+
                     didUpdate = true
                 }
             } else if !textSelection.range.isEmpty && textSelection.view != nil {
@@ -180,10 +194,13 @@ public class TextSelectionManager: NSObject {
 
         if didUpdate {
             delegate?.setNeedsDisplay()
+            cursorTimer.resetTimer()
         }
     }
-
+    
+    /// Removes all cursor views and stops the cursor blink timer.
     func removeCursors() {
+        cursorTimer.stopTimer()
         for textSelection in textSelections {
             textSelection.view?.removeFromSuperview()
         }

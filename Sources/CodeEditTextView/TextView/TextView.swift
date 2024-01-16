@@ -313,6 +313,7 @@ public class TextView: NSView, NSTextContent {
 
     open override func becomeFirstResponder() -> Bool {
         isFirstResponder = true
+        selectionManager.cursorTimer.resetTimer()
         return super.becomeFirstResponder()
     }
 
