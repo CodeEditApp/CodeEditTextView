@@ -17,7 +17,7 @@ final class TextSelectionManagerTests: XCTestCase {
         return TextSelectionManager(
             layoutManager: layoutManager,
             textStorage: textStorage,
-            layoutView: nil,
+            textView: nil,
             delegate: nil
         )
     }
