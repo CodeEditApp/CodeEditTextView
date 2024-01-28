@@ -22,7 +22,7 @@ extension TextView {
         TextSelectionManager(
             layoutManager: layoutManager,
             textStorage: textStorage,
-            layoutView: self,
+            textView: self,
             delegate: self
         )
     }

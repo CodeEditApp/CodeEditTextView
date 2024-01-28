@@ -384,10 +384,10 @@ public extension TextSelectionManager {
     ///   - delta: The direction the selection should be extended. `1` for forwards, `-1` for backwards.
     /// - Returns: The range of the extended selection.
     private func extendSelectionContainer(from offset: Int, delta: Int) -> NSRange {
-        guard let layoutView, let endOffset = layoutManager?.textOffsetAtPoint(
+        guard let textView, let endOffset = layoutManager?.textOffsetAtPoint(
             CGPoint(
-                x: delta > 0 ? layoutView.frame.maxX : layoutView.frame.minX,
-                y: delta > 0 ? layoutView.frame.maxY : layoutView.frame.minY
+                x: delta > 0 ? textView.frame.maxX : textView.frame.minX,
+                y: delta > 0 ? textView.frame.maxY : textView.frame.minY
             )
         ) else {
             return NSRange(location: offset, length: 0)
