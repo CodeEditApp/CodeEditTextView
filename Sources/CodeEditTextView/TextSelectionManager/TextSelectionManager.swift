@@ -269,7 +269,12 @@ public class TextSelectionManager: NSObject {
     ///   - context: The context to draw in.
     private func drawSelectedRange(in rect: NSRect, for textSelection: TextSelection, context: CGContext) {
         context.saveGState()
-        context.setFillColor(selectionBackgroundColor.cgColor)
+
+        let fillColor = (textView?.isFirstResponder ?? false)
+        ? selectionBackgroundColor.cgColor
+        : selectionBackgroundColor.grayscale.cgColor
+
+        context.setFillColor(fillColor)
 
         let fillRects = getFillRects(in: rect, for: textSelection)
 
