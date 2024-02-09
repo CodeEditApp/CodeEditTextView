@@ -180,7 +180,7 @@ public class TextSelectionManager: NSObject {
                     textSelection.view = nil
 
                     let cursorView: NSView
-                    
+
                     if useSystemCursor, #available(macOS 14.0, *) {
                         let systemCursorView = NSTextInsertionIndicator(frame: .zero)
                         cursorView = systemCursorView

@@ -177,7 +177,7 @@ public class TextView: NSView, NSTextContent {
             layoutManager.lineBreakStrategy = newValue
         }
     }
-    
+
     /// Determines if the text view uses the macOS system cursor or a ``CursorView`` for cursors.
     ///
     /// - Important: Only available after macOS 14.
