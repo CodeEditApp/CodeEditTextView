@@ -177,6 +177,22 @@ public class TextView: NSView, NSTextContent {
             layoutManager.lineBreakStrategy = newValue
         }
     }
+    
+    /// Determines if the text view uses the macOS system cursor or a ``CursorView`` for cursors.
+    ///
+    /// - Important: Only available after macOS 14.
+    public var useSystemCursor: Bool {
+        get {
+            selectionManager?.useSystemCursor ?? false
+        }
+        set {
+            guard #available(macOS 14, *) else {
+                logger.warning("useSystemCursor only available after macOS 14.")
+                return
+            }
+            selectionManager?.useSystemCursor = newValue
+        }
+    }
 
     open var contentType: NSTextContentType?
 
@@ -203,7 +219,7 @@ public class TextView: NSView, NSTextContent {
         (" " as NSString).size(withAttributes: [.font: font]).width
     }
 
-    var _undoManager: CEUndoManager?
+    internal(set) public var _undoManager: CEUndoManager?
     @objc dynamic open var allowsUndo: Bool
 
     var scrollView: NSScrollView? {
