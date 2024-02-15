@@ -182,8 +182,18 @@ final class Typesetter {
         startingOffset: Int,
         constrainingWidth: CGFloat
     ) -> Int {
-        let breakIndex = startingOffset + CTTypesetterSuggestClusterBreak(typesetter, startingOffset, constrainingWidth)
-        if breakIndex >= string.length || (breakIndex - 1 > 0 && ensureCharacterCanBreakLine(at: breakIndex - 1)) {
+        var breakIndex = startingOffset + CTTypesetterSuggestClusterBreak(typesetter, startingOffset, constrainingWidth)
+
+        let isBreakAtEndOfString = breakIndex >= string.length
+
+        let isNextCharacterCarriageReturn = checkIfLineBreakOnCRLF(breakIndex)
+        if isNextCharacterCarriageReturn {
+            breakIndex += 1
+        }
+
+        let canLastCharacterBreak = (breakIndex - 1 > 0 && ensureCharacterCanBreakLine(at: breakIndex - 1))
+
+        if isBreakAtEndOfString || canLastCharacterBreak {
             // Breaking either at the end of the string, or on a whitespace.
             return breakIndex
         } else if breakIndex - 1 > 0 {
@@ -208,7 +218,20 @@ final class Typesetter {
         let set = CharacterSet(
             charactersIn: string.attributedSubstring(from: NSRange(location: index, length: 1)).string
         )
-        return set.isSubset(of: .whitespaces) || set.isSubset(of: .punctuationCharacters)
+        return set.isSubset(of: .whitespacesAndNewlines) || set.isSubset(of: .punctuationCharacters)
+    }
+
+    /// Check if the break index is on a CRLF (`\r\n`) character, indicating a valid break position.
+    /// - Parameter breakIndex: The index to check in the string.
+    /// - Returns: True, if the break index lies after the `\n` character in a `\r\n` sequence.
+    private func checkIfLineBreakOnCRLF(_ breakIndex: Int) -> Bool {
+        guard breakIndex - 1 > 0 && breakIndex + 1 <= string.length else {
+            return false
+        }
+        let substringRange = NSRange(location: breakIndex - 1, length: 2)
+        let substring = string.attributedSubstring(from: substringRange).string
+
+        return substring == LineEnding.carriageReturnLineFeed.rawValue
     }
 
     deinit {
