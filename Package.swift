@@ -46,7 +46,7 @@ let package = Package(
 
         // ObjC addons
         .target(
-            name: "CodeEditTextViewObjC", 
+            name: "CodeEditTextViewObjC",
             publicHeadersPath: "include"
         ),
 
