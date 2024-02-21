@@ -52,7 +52,7 @@ public class ViewReuseQueue<View: NSView, Key: Hashable> {
     /// Enqueues all views not in the given set.
     /// - Parameter outsideSet: The keys who's views should not be enqueued for reuse.
     public func enqueueViews(notInSet keys: Set<Key>) {
-        // Get all keys that are in "use" but not in the given set.
+        // Get all keys that are currently in "use" but not in the given set, and enqueue them for reuse.
         for key in Set(usedViews.keys).subtracting(keys) {
             enqueueView(forKey: key)
         }

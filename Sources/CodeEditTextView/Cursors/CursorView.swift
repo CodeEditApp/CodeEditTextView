@@ -25,6 +25,8 @@ open class CursorView: NSView {
         true
     }
 
+    override open func hitTest(_ point: NSPoint) -> NSView? { nil }
+
     /// Create a cursor view.
     /// - Parameters:
     ///   - blinkDuration: The duration to blink, leave as nil to never blink.
