@@ -54,6 +54,17 @@ public class TextLayoutManager: NSObject {
         }
     }
 
+    /// The amount of extra vertical padding used to lay out lines in before they come into view.
+    ///
+    /// This solves a small problem with layout performance, if you're seeing layout lagging behind while scrolling,
+    /// adjusting this value higher may help fix that.
+    /// Defaults to `350`.
+    public var verticalLayoutPadding: CGFloat = 350 {
+        didSet {
+            setNeedsLayout()
+        }
+    }
+
     // MARK: - Internal
 
     weak var textStorage: NSTextStorage?
@@ -234,8 +245,8 @@ public class TextLayoutManager: NSObject {
     func layoutLines() { // swiftlint:disable:this function_body_length
         guard let visibleRect = delegate?.visibleRect, !isInTransaction, let textStorage else { return }
         CATransaction.begin()
-        let minY = max(visibleRect.minY - 350, 0) // +-350px for a bit padding while laying out lines.
-        let maxY = max(visibleRect.maxY + 350, 0)
+        let minY = max(visibleRect.minY - verticalLayoutPadding, 0)
+        let maxY = max(visibleRect.maxY + verticalLayoutPadding, 0)
         let originalHeight = lineStorage.height
         var usedFragmentIDs = Set<UUID>()
         var forceLayout: Bool = needsLayout
