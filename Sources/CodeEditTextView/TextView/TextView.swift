@@ -178,6 +178,22 @@ public class TextView: NSView, NSTextContent {
         }
     }
 
+    /// Determines if the text view uses the macOS system cursor or a ``CursorView`` for cursors.
+    ///
+    /// - Important: Only available after macOS 14.
+    public var useSystemCursor: Bool {
+        get {
+            selectionManager?.useSystemCursor ?? false
+        }
+        set {
+            guard #available(macOS 14, *) else {
+                logger.warning("useSystemCursor only available after macOS 14.")
+                return
+            }
+            selectionManager?.useSystemCursor = newValue
+        }
+    }
+
     open var contentType: NSTextContentType?
 
     /// The text view's delegate.
@@ -225,6 +241,7 @@ public class TextView: NSView, NSTextContent {
     ///   - isEditable: Determines if the view is editable.
     ///   - isSelectable: Determines if the view is selectable.
     ///   - letterSpacing: Sets the letter spacing on the view.
+    ///   - useSystemCursor: Set to true to use the system cursor. Only available in macOS >= 14.
     ///   - delegate: The text view's delegate.
     public init(
         string: String,
@@ -235,6 +252,7 @@ public class TextView: NSView, NSTextContent {
         isEditable: Bool,
         isSelectable: Bool,
         letterSpacing: Double,
+        useSystemCursor: Bool = false,
         delegate: TextViewDelegate
     ) {
         self.textStorage = NSTextStorage(string: string)
@@ -264,6 +282,7 @@ public class TextView: NSView, NSTextContent {
         layoutManager = setUpLayoutManager(lineHeightMultiplier: lineHeightMultiplier, wrapLines: wrapLines)
         storageDelegate.addDelegate(layoutManager)
         selectionManager = setUpSelectionManager()
+        selectionManager.useSystemCursor = useSystemCursor
 
         _undoManager = CEUndoManager(textView: self)
 
@@ -368,6 +387,14 @@ public class TextView: NSView, NSTextContent {
     override public func viewWillMove(toWindow newWindow: NSWindow?) {
         super.viewWillMove(toWindow: newWindow)
         layoutManager.layoutLines()
+    }
+
+    override public func viewWillMove(toSuperview newSuperview: NSView?) {
+        guard let scrollView = enclosingScrollView else {
+            return
+        }
+
+        setUpScrollListeners(scrollView: scrollView)
     }
 
     override public func viewDidEndLiveResize() {

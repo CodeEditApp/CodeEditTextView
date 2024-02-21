@@ -23,7 +23,7 @@ public class TextSelectionManager: NSObject {
 
     public class TextSelection: Hashable, Equatable {
         public var range: NSRange
-        weak var view: CursorView?
+        weak var view: NSView?
         var boundingRect: CGRect = .zero
         var suggestedXPos: CGFloat?
         /// The position this selection should 'rotate' around when modifying selections.
@@ -71,12 +71,17 @@ public class TextSelectionManager: NSObject {
 
     public var insertionPointColor: NSColor = NSColor.labelColor {
         didSet {
-            textSelections.forEach { $0.view?.color = insertionPointColor }
+            textSelections.compactMap({ $0.view as? CursorView }).forEach { $0.color = insertionPointColor }
         }
     }
     public var highlightSelectedLine: Bool = true
     public var selectedLineBackgroundColor: NSColor = NSColor.selectedTextBackgroundColor.withSystemEffect(.disabled)
     public var selectionBackgroundColor: NSColor = NSColor.selectedTextBackgroundColor
+    public var useSystemCursor: Bool = false {
+        didSet {
+            updateSelectionViews()
+        }
+    }
 
     internal(set) public var textSelections: [TextSelection] = []
     weak var layoutManager: TextLayoutManager?
@@ -89,7 +94,8 @@ public class TextSelectionManager: NSObject {
         layoutManager: TextLayoutManager,
         textStorage: NSTextStorage,
         textView: TextView?,
-        delegate: TextSelectionManagerDelegate?
+        delegate: TextSelectionManagerDelegate?,
+        useSystemCursor: Bool = false
     ) {
         self.layoutManager = layoutManager
         self.textStorage = textStorage
@@ -168,20 +174,46 @@ public class TextSelectionManager: NSObject {
         for textSelection in textSelections {
             if textSelection.range.isEmpty {
                 let cursorOrigin = (layoutManager?.rectForOffset(textSelection.range.location) ?? .zero).origin
-                if textSelection.view == nil
-                    || textSelection.boundingRect.origin != cursorOrigin
-                    || textSelection.boundingRect.height != layoutManager?.estimateLineHeight() ?? 0 {
-                    textSelection.view?.removeFromSuperview()
-                    textSelection.view = nil
 
-                    let cursorView = CursorView(color: insertionPointColor)
+                var doesViewNeedReposition: Bool
+
+                // If using the system cursor, macOS will change the origin and height by about 0.5, so we do an
+                // approximate equals in that case to avoid extra updates.
+                if useSystemCursor, #available(macOS 14.0, *) {
+                    doesViewNeedReposition = !textSelection.boundingRect.origin.approxEqual(cursorOrigin)
+                    || !textSelection.boundingRect.height.approxEqual(layoutManager?.estimateLineHeight() ?? 0)
+                } else {
+                    doesViewNeedReposition = textSelection.boundingRect.origin != cursorOrigin
+                    || textSelection.boundingRect.height != layoutManager?.estimateLineHeight() ?? 0
+                }
+
+                if textSelection.view == nil || doesViewNeedReposition {
+                    let cursorView: NSView
+
+                    if let existingCursorView = textSelection.view {
+                        cursorView = existingCursorView
+                    } else {
+                        textSelection.view?.removeFromSuperview()
+                        textSelection.view = nil
+
+                        if useSystemCursor, #available(macOS 14.0, *) {
+                            let systemCursorView = NSTextInsertionIndicator(frame: .zero)
+                            cursorView = systemCursorView
+                            systemCursorView.displayMode = .automatic
+                        } else {
+                            let internalCursorView = CursorView(color: insertionPointColor)
+                            cursorView = internalCursorView
+                            cursorTimer.register(internalCursorView)
+                        }
+
+                        textView?.addSubview(cursorView)
+                    }
+
                     cursorView.frame.origin = cursorOrigin
                     cursorView.frame.size.height = layoutManager?.estimateLineHeight() ?? 0
-                    textView?.addSubview(cursorView)
+
                     textSelection.view = cursorView
                     textSelection.boundingRect = cursorView.frame
-
-                    cursorTimer.register(cursorView)
 
                     didUpdate = true
                 }
