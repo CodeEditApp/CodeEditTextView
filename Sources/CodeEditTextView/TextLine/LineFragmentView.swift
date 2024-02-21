@@ -19,6 +19,8 @@ final class LineFragmentView: NSView {
         false
     }
 
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
     /// Prepare the view for reuse, clears the line fragment reference.
     override func prepareForReuse() {
         super.prepareForReuse()

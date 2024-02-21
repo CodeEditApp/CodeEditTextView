@@ -381,15 +381,11 @@ public class TextView: NSView, NSTextContent {
     /// - Parameter point: The point to find.
     /// - Returns: A view at the given point, if any.
     override public func hitTest(_ point: NSPoint) -> NSView? {
-        // For our purposes, cursor and line fragment views should be transparent from the point of view of
-        // all other views. So, if the normal hitTest returns one of them, we return `self` instead.
-        let hitView = super.hitTest(point)
-
-        if let hitView, hitView != self,
-            type(of: hitView) == CursorView.self || type(of: hitView) == LineFragmentView.self {
+        if visibleRect.contains(point) {
             return self
+        } else {
+            return super.hitTest(point)
         }
-        return hitView
     }
 
     // MARK: - Key Down

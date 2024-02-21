@@ -215,10 +215,12 @@ public class TextLayoutManager: NSObject {
     }
 
     /// Ends a transaction. When called, the layout manager will layout any necessary lines.
-    public func endTransaction() {
+    public func endTransaction(forceLayout: Bool = false) {
         transactionCounter -= 1
         if transactionCounter == 0 {
-            setNeedsLayout()
+            if forceLayout {
+                setNeedsLayout()
+            }
             layoutLines()
         } else if transactionCounter < 0 {
             // swiftlint:disable:next line_length
@@ -240,6 +242,10 @@ public class TextLayoutManager: NSObject {
         var newVisibleLines: Set<TextLine.ID> = []
         var yContentAdjustment: CGFloat = 0
         var maxFoundLineWidth = maxLineWidth
+
+        var info = mach_timebase_info()
+        guard mach_timebase_info(&info) == KERN_SUCCESS else { return }
+        let start = mach_absolute_time()
 
         // Layout all lines
         for linePosition in lineStorage.linesStartingAt(minY, until: maxY) {
@@ -278,6 +284,8 @@ public class TextLayoutManager: NSObject {
             newVisibleLines.insert(linePosition.data.id)
         }
 
+        CATransaction.commit()
+
         // Enqueue any lines not used in this layout pass.
         viewReuseQueue.enqueueViews(notInSet: usedFragmentIDs)
 
@@ -297,7 +305,6 @@ public class TextLayoutManager: NSObject {
         }
 
         needsLayout = false
-        CATransaction.commit()
     }
 
     /// Lays out a single text line.
