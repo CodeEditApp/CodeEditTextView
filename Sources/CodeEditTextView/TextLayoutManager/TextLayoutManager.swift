@@ -234,18 +234,14 @@ public class TextLayoutManager: NSObject {
     func layoutLines() { // swiftlint:disable:this function_body_length
         guard let visibleRect = delegate?.visibleRect, !isInTransaction, let textStorage else { return }
         CATransaction.begin()
-        let minY = max(visibleRect.minY, 0)
-        let maxY = max(visibleRect.maxY, 0)
+        let minY = max(visibleRect.minY - 350, 0) // +-350px for a bit padding while laying out lines.
+        let maxY = max(visibleRect.maxY + 350, 0)
         let originalHeight = lineStorage.height
         var usedFragmentIDs = Set<UUID>()
         var forceLayout: Bool = needsLayout
         var newVisibleLines: Set<TextLine.ID> = []
         var yContentAdjustment: CGFloat = 0
         var maxFoundLineWidth = maxLineWidth
-
-        var info = mach_timebase_info()
-        guard mach_timebase_info(&info) == KERN_SUCCESS else { return }
-        let start = mach_absolute_time()
 
         // Layout all lines
         for linePosition in lineStorage.linesStartingAt(minY, until: maxY) {
