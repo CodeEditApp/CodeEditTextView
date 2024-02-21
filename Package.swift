@@ -36,11 +36,18 @@ let package = Package(
             name: "CodeEditTextView",
             dependencies: [
                 "TextStory",
-                .product(name: "Collections", package: "swift-collections")
+                .product(name: "Collections", package: "swift-collections"),
+                "CodeEditTextViewObjC"
             ],
             plugins: [
                 .plugin(name: "SwiftLint", package: "SwiftLintPlugin")
             ]
+        ),
+
+        // ObjC addons
+        .target(
+            name: "CodeEditTextViewObjC",
+            publicHeadersPath: "include"
         ),
 
         // Tests for the text view

@@ -20,12 +20,17 @@ extension TextView {
         NotificationCenter.default.post(name: Self.textWillChangeNotification, object: self)
         layoutManager.beginTransaction()
         textStorage.beginEditing()
-        _undoManager?.beginGrouping()
+
+        var shouldEndGrouping = false
+        if !(_undoManager?.isGrouping ?? false) {
+            _undoManager?.beginGrouping()
+            shouldEndGrouping = true
+        }
 
         // Can't insert an empty string into an empty range. One must be not empty
         for range in ranges.sorted(by: { $0.location > $1.location }) where
-        (delegate?.textView(self, shouldReplaceContentsIn: range, with: string) ?? true)
-        && (!range.isEmpty || !string.isEmpty) {
+        (!range.isEmpty || !string.isEmpty) &&
+        (delegate?.textView(self, shouldReplaceContentsIn: range, with: string) ?? true) {
             delegate?.textView(self, willReplaceContentsIn: range, with: string)
 
             layoutManager.willReplaceCharactersInRange(range: range, with: string)
@@ -41,7 +46,10 @@ extension TextView {
             delegate?.textView(self, didReplaceContentsIn: range, with: string)
         }
 
-        _undoManager?.endGrouping()
+        if shouldEndGrouping {
+            _undoManager?.endGrouping()
+        }
+
         layoutManager.endTransaction()
         textStorage.endEditing()
         selectionManager.notifyAfterEdit()

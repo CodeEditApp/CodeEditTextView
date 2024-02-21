@@ -96,11 +96,11 @@ public class CEUndoManager {
             return
         }
         isUndoing = true
+        NotificationCenter.default.post(name: .NSUndoManagerWillUndoChange, object: self.manager)
         for mutation in item.mutations.reversed() {
-            NotificationCenter.default.post(name: .NSUndoManagerWillUndoChange, object: self.manager)
-            textView.insertText(mutation.inverse.string, replacementRange: mutation.inverse.range)
-            NotificationCenter.default.post(name: .NSUndoManagerDidUndoChange, object: self.manager)
+            textView.replaceCharacters(in: mutation.inverse.range, with: mutation.inverse.string)
         }
+        NotificationCenter.default.post(name: .NSUndoManagerDidUndoChange, object: self.manager)
         redoStack.append(item)
         isUndoing = false
     }
@@ -111,11 +111,11 @@ public class CEUndoManager {
             return
         }
         isRedoing = true
+        NotificationCenter.default.post(name: .NSUndoManagerWillRedoChange, object: self.manager)
         for mutation in item.mutations {
-            NotificationCenter.default.post(name: .NSUndoManagerWillRedoChange, object: self.manager)
-            textView.insertText(mutation.mutation.string, replacementRange: mutation.mutation.range)
-            NotificationCenter.default.post(name: .NSUndoManagerDidRedoChange, object: self.manager)
+            textView.replaceCharacters(in: mutation.mutation.range, with: mutation.mutation.string)
         }
+        NotificationCenter.default.post(name: .NSUndoManagerDidRedoChange, object: self.manager)
         undoStack.append(item)
         isRedoing = false
     }
@@ -159,11 +159,19 @@ public class CEUndoManager {
 
     /// Groups all incoming mutations.
     public func beginGrouping() {
+        guard !isGrouping else {
+            assertionFailure("UndoManager already in a group. Call `endGrouping` before this can be called.")
+            return
+        }
         isGrouping = true
     }
 
     /// Stops grouping all incoming mutations.
     public func endGrouping() {
+        guard isGrouping else {
+            assertionFailure("UndoManager not in a group. Call `beginGrouping` before this can be called.")
+            return
+        }
         isGrouping = false
     }
 
