@@ -203,7 +203,7 @@ public class TextView: NSView, NSTextContent {
         (" " as NSString).size(withAttributes: [.font: font]).width
     }
 
-    var _undoManager: CEUndoManager?
+    internal(set) public var _undoManager: CEUndoManager?
     @objc dynamic open var allowsUndo: Bool
 
     var scrollView: NSScrollView? {

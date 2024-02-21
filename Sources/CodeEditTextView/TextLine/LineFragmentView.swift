@@ -6,6 +6,7 @@
 //
 
 import AppKit
+import CodeEditTextViewObjC
 
 /// Displays a line fragment.
 final class LineFragmentView: NSView {
@@ -23,7 +24,6 @@ final class LineFragmentView: NSView {
     override func prepareForReuse() {
         super.prepareForReuse()
         lineFragment = nil
-
     }
 
     /// Set a new line fragment for this view, updating view size.
@@ -39,13 +39,24 @@ final class LineFragmentView: NSView {
             return
         }
         context.saveGState()
-        context.setAllowsFontSmoothing(true)
-        context.setShouldSmoothFonts(true)
+
+        context.setAllowsAntialiasing(true)
+        context.setShouldAntialias(true)
+        context.setAllowsFontSmoothing(false)
+        context.setShouldSmoothFonts(false)
+        context.setAllowsFontSubpixelPositioning(true)
+        context.setShouldSubpixelPositionFonts(true)
+        context.setAllowsFontSubpixelQuantization(true)
+        context.setShouldSubpixelQuantizeFonts(true)
+
+        ContextSetHiddenSmoothingStyle(context, 16)
+
         context.textMatrix = .init(scaleX: 1, y: -1)
         context.textPosition = CGPoint(
             x: 0,
             y: lineFragment.height - lineFragment.descent + (lineFragment.heightDifference/2)
         ).pixelAligned
+
         CTLineDraw(lineFragment.ctLine, context)
         context.restoreGState()
     }

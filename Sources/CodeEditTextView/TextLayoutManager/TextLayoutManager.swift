@@ -230,7 +230,12 @@ public class TextLayoutManager: NSObject {
 
     /// Lays out all visible lines
     func layoutLines() { // swiftlint:disable:this function_body_length
-        guard let visibleRect = delegate?.visibleRect, !isInTransaction, let textStorage else { return }
+        guard layoutView?.superview != nil,
+              let visibleRect = delegate?.visibleRect,
+              !isInTransaction,
+              let textStorage else {
+            return
+        }
         CATransaction.begin()
         let minY = max(visibleRect.minY, 0)
         let maxY = max(visibleRect.maxY, 0)
