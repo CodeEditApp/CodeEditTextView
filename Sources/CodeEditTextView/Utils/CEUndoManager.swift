@@ -22,6 +22,8 @@ public class CEUndoManager {
     public class DelegatedUndoManager: UndoManager {
         weak var parent: CEUndoManager?
 
+        public override var isUndoing: Bool { parent?.isUndoing ?? false }
+        public override var isRedoing: Bool { parent?.isRedoing ?? false }
         public override var canUndo: Bool { parent?.canUndo ?? false }
         public override var canRedo: Bool { parent?.canRedo ?? false }
 
@@ -97,9 +99,11 @@ public class CEUndoManager {
         }
         isUndoing = true
         NotificationCenter.default.post(name: .NSUndoManagerWillUndoChange, object: self.manager)
+        textView.textStorage.beginEditing()
         for mutation in item.mutations.reversed() {
             textView.replaceCharacters(in: mutation.inverse.range, with: mutation.inverse.string)
         }
+        textView.textStorage.endEditing()
         NotificationCenter.default.post(name: .NSUndoManagerDidUndoChange, object: self.manager)
         redoStack.append(item)
         isUndoing = false
@@ -112,9 +116,11 @@ public class CEUndoManager {
         }
         isRedoing = true
         NotificationCenter.default.post(name: .NSUndoManagerWillRedoChange, object: self.manager)
+        textView.textStorage.beginEditing()
         for mutation in item.mutations {
             textView.replaceCharacters(in: mutation.mutation.range, with: mutation.mutation.string)
         }
+        textView.textStorage.endEditing()
         NotificationCenter.default.post(name: .NSUndoManagerDidRedoChange, object: self.manager)
         undoStack.append(item)
         isRedoing = false
@@ -188,6 +194,7 @@ public class CEUndoManager {
     ///   - lastMutation: The last mutation applied to the document.
     /// - Returns: Whether or not the given mutations can be grouped.
     private func shouldContinueGroup(_ mutation: Mutation, lastMutation: Mutation) -> Bool {
+        return false
         // If last mutation was delete & new is insert or vice versa, split group
         if (mutation.mutation.range.length > 0 && lastMutation.mutation.range.length == 0)
             || (mutation.mutation.range.length == 0 && lastMutation.mutation.range.length > 0) {
