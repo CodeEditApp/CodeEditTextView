@@ -194,7 +194,6 @@ public class CEUndoManager {
     ///   - lastMutation: The last mutation applied to the document.
     /// - Returns: Whether or not the given mutations can be grouped.
     private func shouldContinueGroup(_ mutation: Mutation, lastMutation: Mutation) -> Bool {
-        return false
         // If last mutation was delete & new is insert or vice versa, split group
         if (mutation.mutation.range.length > 0 && lastMutation.mutation.range.length == 0)
             || (mutation.mutation.range.length == 0 && lastMutation.mutation.range.length > 0) {
@@ -205,7 +204,7 @@ public class CEUndoManager {
             // Deleting
             return (
                 lastMutation.mutation.range.location == mutation.mutation.range.max
-                && mutation.inverse.string != "\n"
+                && LineEnding(line: lastMutation.inverse.string) == nil
             )
         } else {
             // Inserting
@@ -214,14 +213,14 @@ public class CEUndoManager {
             // If the last mutation was not whitespace, and the new one is, break the group.
             if lastMutation.mutation.string.count < 1024
                 && mutation.mutation.string.count < 1024
-                && !lastMutation.mutation.string.trimmingCharacters(in: .whitespaces).isEmpty
+                && !lastMutation.mutation.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 && mutation.mutation.string.trimmingCharacters(in: .whitespaces).isEmpty {
                 return false
             }
 
             return (
                 lastMutation.mutation.range.max + 1 == mutation.mutation.range.location
-                && mutation.mutation.string != "\n"
+                && LineEnding(line: mutation.mutation.string) == nil
             )
         }
     }
