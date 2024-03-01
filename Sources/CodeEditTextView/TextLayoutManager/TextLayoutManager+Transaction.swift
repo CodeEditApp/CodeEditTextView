@@ -30,8 +30,9 @@ extension TextLayoutManager {
             }
             layoutLines()
         } else if transactionCounter < 0 {
-            // swiftlint:disable:next line_length
-            assertionFailure("TextLayoutManager.endTransaction called without a matching TextLayoutManager.beginTransaction call")
+            assertionFailure(
+                "TextLayoutManager.endTransaction called without a matching TextLayoutManager.beginTransaction call"
+            )
         }
     }
 }
