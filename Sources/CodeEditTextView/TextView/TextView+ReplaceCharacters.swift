@@ -21,12 +21,6 @@ extension TextView {
         layoutManager.beginTransaction()
         textStorage.beginEditing()
 
-        var shouldEndGrouping = false
-        if !(_undoManager?.isGrouping ?? false) {
-            _undoManager?.beginGrouping()
-            shouldEndGrouping = true
-        }
-
         // Can't insert an empty string into an empty range. One must be not empty
         for range in ranges.sorted(by: { $0.location > $1.location }) where
         (!range.isEmpty || !string.isEmpty) &&
@@ -44,10 +38,6 @@ extension TextView {
             selectionManager.didReplaceCharacters(in: range, replacementLength: (string as NSString).length)
 
             delegate?.textView(self, didReplaceContentsIn: range, with: string)
-        }
-
-        if shouldEndGrouping {
-            _undoManager?.endGrouping()
         }
 
         layoutManager.endTransaction()

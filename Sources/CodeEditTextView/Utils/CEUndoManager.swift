@@ -22,6 +22,8 @@ public class CEUndoManager {
     public class DelegatedUndoManager: UndoManager {
         weak var parent: CEUndoManager?
 
+        public override var isUndoing: Bool { parent?.isUndoing ?? false }
+        public override var isRedoing: Bool { parent?.isRedoing ?? false }
         public override var canUndo: Bool { parent?.canUndo ?? false }
         public override var canRedo: Bool { parent?.canRedo ?? false }
 
@@ -97,9 +99,11 @@ public class CEUndoManager {
         }
         isUndoing = true
         NotificationCenter.default.post(name: .NSUndoManagerWillUndoChange, object: self.manager)
+        textView.textStorage.beginEditing()
         for mutation in item.mutations.reversed() {
             textView.replaceCharacters(in: mutation.inverse.range, with: mutation.inverse.string)
         }
+        textView.textStorage.endEditing()
         NotificationCenter.default.post(name: .NSUndoManagerDidUndoChange, object: self.manager)
         redoStack.append(item)
         isUndoing = false
@@ -112,9 +116,11 @@ public class CEUndoManager {
         }
         isRedoing = true
         NotificationCenter.default.post(name: .NSUndoManagerWillRedoChange, object: self.manager)
+        textView.textStorage.beginEditing()
         for mutation in item.mutations {
             textView.replaceCharacters(in: mutation.mutation.range, with: mutation.mutation.string)
         }
+        textView.textStorage.endEditing()
         NotificationCenter.default.post(name: .NSUndoManagerDidRedoChange, object: self.manager)
         undoStack.append(item)
         isRedoing = false
@@ -198,7 +204,7 @@ public class CEUndoManager {
             // Deleting
             return (
                 lastMutation.mutation.range.location == mutation.mutation.range.max
-                && mutation.inverse.string != "\n"
+                && LineEnding(line: lastMutation.inverse.string) == nil
             )
         } else {
             // Inserting
@@ -207,14 +213,14 @@ public class CEUndoManager {
             // If the last mutation was not whitespace, and the new one is, break the group.
             if lastMutation.mutation.string.count < 1024
                 && mutation.mutation.string.count < 1024
-                && !lastMutation.mutation.string.trimmingCharacters(in: .whitespaces).isEmpty
+                && !lastMutation.mutation.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 && mutation.mutation.string.trimmingCharacters(in: .whitespaces).isEmpty {
                 return false
             }
 
             return (
                 lastMutation.mutation.range.max + 1 == mutation.mutation.range.location
-                && mutation.mutation.string != "\n"
+                && LineEnding(line: mutation.mutation.string) == nil
             )
         }
     }

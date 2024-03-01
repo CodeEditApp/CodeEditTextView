@@ -71,11 +71,11 @@ public class TextLayoutManager: NSObject {
     var lineStorage: TextLineStorage<TextLine> = TextLineStorage()
     var markedTextManager: MarkedTextManager = MarkedTextManager()
     private let viewReuseQueue: ViewReuseQueue<LineFragmentView, UUID> = ViewReuseQueue()
-    private var visibleLineIds: Set<TextLine.ID> = []
+    package var visibleLineIds: Set<TextLine.ID> = []
     /// Used to force a complete re-layout using `setNeedsLayout`
-    private var needsLayout: Bool = false
+    package var needsLayout: Bool = false
 
-    private var transactionCounter: Int = 0
+    package var transactionCounter: Int = 0
     public var isInTransaction: Bool {
         transactionCounter > 0
     }
@@ -185,59 +185,6 @@ public class TextLayoutManager: NSObject {
     /// The last known line height estimate. If  set to `nil`, will be recalculated the next time
     /// ``TextLayoutManager/estimateLineHeight()`` is called.
     private var _estimateLineHeight: CGFloat?
-
-    // MARK: - Invalidation
-
-    /// Invalidates layout for the given rect.
-    /// - Parameter rect: The rect to invalidate.
-    public func invalidateLayoutForRect(_ rect: NSRect) {
-        for linePosition in lineStorage.linesStartingAt(rect.minY, until: rect.maxY) {
-            linePosition.data.setNeedsLayout()
-        }
-        layoutLines()
-    }
-
-    /// Invalidates layout for the given range of text.
-    /// - Parameter range: The range of text to invalidate.
-    public func invalidateLayoutForRange(_ range: NSRange) {
-        for linePosition in lineStorage.linesInRange(range) {
-            linePosition.data.setNeedsLayout()
-        }
-
-        layoutLines()
-    }
-
-    public func setNeedsLayout() {
-        needsLayout = true
-        visibleLineIds.removeAll(keepingCapacity: true)
-    }
-
-    /// Begins a transaction, preventing the layout manager from performing layout until the `endTransaction` is called.
-    /// Useful for grouping attribute modifications into one layout pass rather than laying out every update.
-    ///
-    /// You can nest transaction start/end calls, the layout manager will not cause layout until the last transaction
-    /// group is ended.
-    ///
-    /// Ensure there is a balanced number of begin/end calls. If there is a missing endTranscaction call, the layout
-    /// manager will never lay out text. If there is a end call without matching a start call an assertionFailure
-    /// will occur.
-    public func beginTransaction() {
-        transactionCounter += 1
-    }
-
-    /// Ends a transaction. When called, the layout manager will layout any necessary lines.
-    public func endTransaction(forceLayout: Bool = false) {
-        transactionCounter -= 1
-        if transactionCounter == 0 {
-            if forceLayout {
-                setNeedsLayout()
-            }
-            layoutLines()
-        } else if transactionCounter < 0 {
-            // swiftlint:disable:next line_length
-            assertionFailure("TextLayoutManager.endTransaction called without a matching TextLayoutManager.beginTransaction call")
-        }
-    }
 
     // MARK: - Layout
 
