@@ -458,7 +458,6 @@ public class TextView: NSView, NSTextContent {
         if let scrollView = scrollView {
             var rect = scrollView.documentVisibleRect
             rect.origin.y += scrollView.contentInsets.top
-            rect.size.height -= scrollView.contentInsets.top + scrollView.contentInsets.bottom
             return rect
         } else {
             return super.visibleRect
