@@ -76,16 +76,22 @@ public class TextView: NSView, NSTextContent {
     }
 
     /// The default font of the text view.
+    /// - Note: Setting the font for the text view will update the font as the user types. To change the font for the
+    ///         entire view, update the `font` attribute in ``TextView/textStorage``.
     public var font: NSFont {
         get {
             (typingAttributes[.font] as? NSFont) ?? NSFont.systemFont(ofSize: 12)
         }
         set {
             typingAttributes[.font] = newValue
+            layoutManager?.setNeedsLayout()
+            setNeedsDisplay()
         }
     }
 
     /// The text color of the text view.
+    /// - Note: Setting the text color for the text view will update the text color as the user types. To change the
+    ///         text color for the entire view, update the `foregroundColor` attribute in ``TextView/textStorage``.
     public var textColor: NSColor {
         get {
             (typingAttributes[.foregroundColor] as? NSColor) ?? NSColor.textColor
@@ -159,6 +165,8 @@ public class TextView: NSView, NSTextContent {
     }
 
     /// The kern to use for characters. Defaults to `0.0` and is updated when `letterSpacing` is set.
+    /// - Note: Setting the kern for the text view will update the kern as the user types. To change the
+    ///         kern for the entire view, update the `kern` attribute in ``TextView/textStorage``.
     public var kern: CGFloat {
         get {
             typingAttributes[.kern] as? CGFloat ?? 0

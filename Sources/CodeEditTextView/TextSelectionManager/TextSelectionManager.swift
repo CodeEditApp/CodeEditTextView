@@ -210,7 +210,7 @@ public class TextSelectionManager: NSObject {
                     }
 
                     cursorView.frame.origin = cursorOrigin
-                    cursorView.frame.size.height = layoutManager?.estimateLineHeight() ?? 0
+                    cursorView.frame.size.height = heightForCursorAt(textSelection.range) ?? 0
 
                     textSelection.view = cursorView
                     textSelection.boundingRect = cursorView.frame
@@ -228,6 +228,19 @@ public class TextSelectionManager: NSObject {
             delegate?.setNeedsDisplay()
             cursorTimer.resetTimer()
         }
+    }
+    
+    /// Get the height for a cursor placed at the beginning of the given range.
+    /// - Parameter range: The range the cursor is at.
+    /// - Returns: The height the cursor should be to match the text at that location.
+    fileprivate func heightForCursorAt(_ range: NSRange) -> CGFloat? {
+        let selectedLine = layoutManager?.textLineForOffset(range.location)
+        return selectedLine?
+            .data
+            .lineFragments
+            .getLine(atOffset: range.location - (selectedLine?.range.location ?? 0))?
+            .height
+
     }
 
     /// Removes all cursor views and stops the cursor blink timer.

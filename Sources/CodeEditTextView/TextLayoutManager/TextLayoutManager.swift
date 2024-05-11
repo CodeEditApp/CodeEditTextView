@@ -206,9 +206,8 @@ public class TextLayoutManager: NSObject {
         var yContentAdjustment: CGFloat = 0
         var maxFoundLineWidth = maxLineWidth
 
-        // Layout all lines
-        for linePosition in lineStorage.linesStartingAt(minY, until: maxY) {
-            // Updating height in the loop may cause the iterator to be wrong
+        // Layout all lines, fetching lines lazily as they are laid out.
+        for linePosition in lineStorage.linesStartingAt(minY, until: maxY).lazy {
             guard linePosition.yPos < maxY else { break }
             if forceLayout
                 || linePosition.data.needsLayout(maxWidth: maxLineLayoutWidth)
@@ -216,7 +215,7 @@ public class TextLayoutManager: NSObject {
                 let lineSize = layoutLine(
                     linePosition,
                     textStorage: textStorage,
-                    layoutData: LineLayoutData(minY: linePosition.yPos, maxY: maxY, maxWidth: maxLineLayoutWidth),
+                    layoutData: LineLayoutData(minY: minY, maxY: maxY, maxWidth: maxLineLayoutWidth),
                     laidOutFragmentIDs: &usedFragmentIDs
                 )
                 if lineSize.height != linePosition.height {
@@ -270,9 +269,7 @@ public class TextLayoutManager: NSObject {
     /// - Parameters:
     ///   - position: The line position from storage to use for layout.
     ///   - textStorage: The text storage object to use for text info.
-    ///   - minY: The minimum Y value to start at.
-    ///   - maxY: The maximum Y value to end layout at.
-    ///   - maxWidth: The maximum layout width, infinite if ``TextLayoutManager/wrapLines`` is `false`.
+    ///   - layoutData: The information required to perform layout for the given line.
     ///   - laidOutFragmentIDs: Updated by this method as line fragments are laid out.
     /// - Returns: A `CGSize` representing the max width and total height of the laid out portion of the line.
     private func layoutLine(
@@ -302,12 +299,16 @@ public class TextLayoutManager: NSObject {
 
         var height: CGFloat = 0
         var width: CGFloat = 0
+        var relativeMinY = max(layoutData.minY - position.yPos, 0)
+        var relativeMaxY = max(layoutData.maxY - position.yPos, relativeMinY)
 
-        // TODO: Lay out only fragments in min/max Y
-        for lineFragmentPosition in line.typesetter.lineFragments {
+        for lineFragmentPosition in line.typesetter.lineFragments.linesStartingAt(
+            relativeMinY, 
+            until: relativeMaxY
+        ) {
             let lineFragment = lineFragmentPosition.data
 
-            layoutFragmentView(for: lineFragmentPosition, at: layoutData.minY + lineFragmentPosition.yPos)
+            layoutFragmentView(for: lineFragmentPosition, at: position.yPos + lineFragmentPosition.yPos)
 
             width = max(width, lineFragment.width)
             height += lineFragment.scaledHeight

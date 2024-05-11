@@ -294,6 +294,14 @@ public extension TextSelectionManager {
         up: Bool,
         suggestedXPos: CGFloat?
     ) -> NSRange {
+        // If moving up and on first line, jump to beginning of the line
+        // If moving down and on last line, jump to end of document.
+        if up && layoutManager?.lineStorage.first?.range.contains(offset) ?? false {
+            return NSRange(location: 0, length: offset)
+        } else if !up && layoutManager?.lineStorage.last?.range.contains(offset) ?? false {
+            return NSRange(location: offset, length: (textStorage?.length ?? 0) - offset)
+        }
+
         switch destination {
         case .character:
             return extendSelectionVerticalCharacter(from: offset, up: up, suggestedXPos: suggestedXPos)
