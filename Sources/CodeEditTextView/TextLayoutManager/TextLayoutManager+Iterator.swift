@@ -23,7 +23,7 @@ public extension TextLayoutManager {
         )
         return Iterator(minY: max(visibleRect.minY, 0), maxY: max(visibleRect.maxY, 0), storage: self.lineStorage)
     }
-    
+
     /// Iterate over all lines in the y position range.
     /// - Parameters:
     ///   - minY: The minimum y position to begin at.

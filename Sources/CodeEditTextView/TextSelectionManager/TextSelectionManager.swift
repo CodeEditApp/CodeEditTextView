@@ -229,7 +229,7 @@ public class TextSelectionManager: NSObject {
             cursorTimer.resetTimer()
         }
     }
-    
+
     /// Get the height for a cursor placed at the beginning of the given range.
     /// - Parameter range: The range the cursor is at.
     /// - Returns: The height the cursor should be to match the text at that location.

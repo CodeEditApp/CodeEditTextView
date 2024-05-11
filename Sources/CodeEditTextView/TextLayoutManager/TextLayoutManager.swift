@@ -303,7 +303,7 @@ public class TextLayoutManager: NSObject {
         var relativeMaxY = max(layoutData.maxY - position.yPos, relativeMinY)
 
         for lineFragmentPosition in line.typesetter.lineFragments.linesStartingAt(
-            relativeMinY, 
+            relativeMinY,
             until: relativeMaxY
         ) {
             let lineFragment = lineFragmentPosition.data
