@@ -522,19 +522,29 @@ public class TextView: NSView, NSTextContent {
 
     /// Scrolls the upmost selection to the visible rect if `scrollView` is not `nil`.
     public func scrollSelectionToVisible() {
-        guard let scrollView,
-              let selection = selectionManager.textSelections
-            .sorted(by: { $0.boundingRect.origin.y < $1.boundingRect.origin.y }).first else {
+        guard let scrollView else {
             return
         }
+
+        // There's a bit of a chicken-and-the-egg issue going on here. We need to know the rect to scroll to, but we
+        // can't know the exact rect to make visible without laying out the text. Then, once text is laid out the
+        // selection rect may be different again. To solve this, we loop until the frame doesn't change after a layout
+        // pass and scroll to that rect.
+
         var lastFrame: CGRect = .zero
-        while lastFrame != selection.boundingRect {
+        while let selection = selectionManager
+            .textSelections
+            .sorted(by: { $0.boundingRect.origin.y < $1.boundingRect.origin.y })
+            .first,
+              lastFrame != selection.boundingRect {
             lastFrame = selection.boundingRect
             layoutManager.layoutLines()
             selectionManager.updateSelectionViews()
             selectionManager.drawSelections(in: visibleRect)
         }
-        scrollView.contentView.scrollToVisible(lastFrame)
+        if lastFrame != .zero {
+            scrollView.contentView.scrollToVisible(lastFrame)
+        }
     }
 
     deinit {
