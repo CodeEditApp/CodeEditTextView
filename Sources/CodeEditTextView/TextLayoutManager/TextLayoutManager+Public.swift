@@ -16,10 +16,28 @@ extension TextLayoutManager {
         maxLineWidth
     }
 
+    /// Finds a text line for the given y position relative to the text view.
+    ///
+    /// Y values begin at the top of the view and extend down. Eg, a `0` y value would  return the first line in
+    /// the text view if it exists. Though, for that operation the user should instead use
+    /// ``TextLayoutManager/textLineForIndex(_:)`` for reliability.
+    ///
+    /// - Parameter posY: The y position to find a line for.
+    /// - Returns: A text line position, if a line could be found at the given y position.
     public func textLineForPosition(_ posY: CGFloat) -> TextLineStorage<TextLine>.TextLinePosition? {
         lineStorage.getLine(atPosition: posY)
     }
 
+    /// Finds a text line for a given text offset.
+    ///
+    /// This method will not do any checking for document bounds, and will simply return `nil` if the offset if negative
+    /// or outside the range of the document.
+    ///
+    /// However, if the offset is equal to the length of the text storage (one index past the end of the document) this
+    /// method will return the last line in the document if it exists.
+    ///
+    /// - Parameter offset: The offset in the document to fetch a line for.
+    /// - Returns: A text line position, if a line could be found at the given offset.
     public func textLineForOffset(_ offset: Int) -> TextLineStorage<TextLine>.TextLinePosition? {
         if offset == lineStorage.length {
             return lineStorage.last
@@ -37,6 +55,12 @@ extension TextLayoutManager {
         return lineStorage.getLine(atIndex: index)
     }
 
+    /// Calculates the text position at the given point in the view.
+    /// - Parameter point: The point to translate to text position.
+    /// - Returns: The text offset in the document where the given point is laid out.
+    /// - Warning: If the requested point has not been laid out or it's layout has since been invalidated by edits or
+    ///            other changes, this method will return the invalid data. For best results, ensure the text around the
+    ///            point has been laid out or is visible before calling this method.
     public func textOffsetAtPoint(_ point: CGPoint) -> Int? {
         guard point.y <= estimatedHeight() else { // End position is a special case.
             return textStorage?.length
