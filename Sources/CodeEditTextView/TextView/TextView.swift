@@ -463,10 +463,9 @@ public class TextView: NSView, NSTextContent {
     }
 
     override public var visibleRect: NSRect {
-        if let scrollView = scrollView {
+        if let scrollView {
             var rect = scrollView.documentVisibleRect
             rect.origin.y += scrollView.contentInsets.top
-            rect.size.height -= scrollView.contentInsets.top + scrollView.contentInsets.bottom
             return rect
         } else {
             return super.visibleRect
