@@ -51,6 +51,7 @@ extension TextView {
     ) {
         /// Extend each selection by a distance specified by `destination`, then update both storage and the selection.
         for textSelection in selectionManager.textSelections {
+            guard textSelection.range.isEmpty else { continue }
             let extendedRange = selectionManager.rangeOfSelection(
                 from: textSelection.range.location,
                 direction: direction,
