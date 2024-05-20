@@ -43,7 +43,11 @@ extension TextView {
         layoutManager.endTransaction()
         textStorage.endEditing()
         selectionManager.notifyAfterEdit()
-        NotificationCenter.default.post(name: Self.textDidChangeNotification, object: self)
+        NotificationCenter.default.post(
+            name: Self.textDidChangeNotification,
+            object: self,
+            userInfo: [Self.textDidChangeRangeKey: ranges]
+        )
     }
 
     /// Replace the characters in a range with a new string.

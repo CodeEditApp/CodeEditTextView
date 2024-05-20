@@ -48,11 +48,13 @@ public class TextView: NSView, NSTextContent {
         [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: NSColor.textColor, .kern: 0.0]
     }
 
-    // swiftlint:disable:next line_length
-    public static let textDidChangeNotification: Notification.Name = .init(rawValue: "com.CodeEdit.TextView.TextDidChangeNotification")
+    /// The notification sent when text changes.
+    public static let textDidChangeNotification: Notification.Name = .init(rawValue: "com.CodeEdit.TextView.TextDidChangeNotification") // swiftlint:disable:this line_length
+    /// The key name for the array of `NSRange` sent in the `userInfo` of the ``textDidChangeNotification``.
+    public static let textDidChangeRangeKey: String = "Range"
 
-    // swiftlint:disable:next line_length
-    public static let textWillChangeNotification: Notification.Name = .init(rawValue: "com.CodeEdit.TextView.TextWillChangeNotification")
+    /// The notification sent before text changes
+    public static let textWillChangeNotification: Notification.Name = .init(rawValue: "com.CodeEdit.TextView.TextWillChangeNotification") // swiftlint:disable:this line_length
 
     // MARK: - Configuration
 
@@ -308,6 +310,7 @@ public class TextView: NSView, NSTextContent {
     /// Set a new text storage object for the view.
     /// - Parameter textStorage: The new text storage to use.
     public func setTextStorage(_ textStorage: NSTextStorage) {
+        self.textStorage?.delegate = nil
         self.textStorage = textStorage
 
         subviews.forEach { view in
@@ -321,9 +324,9 @@ public class TextView: NSView, NSTextContent {
         selectionManager.textStorage = textStorage
         selectionManager.setSelectedRanges(selectionManager.textSelections.map { $0.range })
 
+        textStorage.delegate = storageDelegate
         _undoManager?.clearStack()
 
-        textStorage.delegate = storageDelegate
         needsDisplay = true
         needsLayout = true
     }
