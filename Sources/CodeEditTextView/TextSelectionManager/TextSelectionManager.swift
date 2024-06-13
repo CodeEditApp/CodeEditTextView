@@ -52,8 +52,7 @@ public class TextSelectionManager: NSObject {
         case word
         case line
         case visualLine
-        /// Eg: Bottom of screen
-        case container
+        case page
         case document
     }
 

@@ -36,7 +36,7 @@ package extension TextSelectionManager {
             )
         case .word:
             return extendSelectionWord(string: string, from: offset, delta: delta)
-        case .line, .container:
+        case .line:
             return extendSelectionLine(string: string, from: offset, delta: delta)
         case .visualLine:
             return extendSelectionVisualLine(string: string, from: offset, delta: delta)
@@ -46,6 +46,8 @@ package extension TextSelectionManager {
             } else {
                 return NSRange(location: 0, length: offset)
             }
+        case .page: // Not a valid destination horizontally.
+            return NSRange(location: offset, length: 0)
         }
     }
 

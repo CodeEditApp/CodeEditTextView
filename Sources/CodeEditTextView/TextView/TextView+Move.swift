@@ -158,4 +158,24 @@ extension TextView {
         selectionManager.moveSelections(direction: .down, destination: .document, modifySelection: true)
         updateAfterMove()
     }
+
+    override public func pageUp(_ sender: Any?) {
+        selectionManager.moveSelections(direction: .up, destination: .page)
+        updateAfterMove()
+    }
+
+    override public func pageUpAndModifySelection(_ sender: Any?) {
+        selectionManager.moveSelections(direction: .up, destination: .page, modifySelection: true)
+        updateAfterMove()
+    }
+
+    override public func pageDown(_ sender: Any?) {
+        selectionManager.moveSelections(direction: .down, destination: .page)
+        updateAfterMove()
+    }
+
+    override public func pageDownAndModifySelection(_ sender: Any?) {
+        selectionManager.moveSelections(direction: .down, destination: .page, modifySelection: true)
+        updateAfterMove()
+    }
 }

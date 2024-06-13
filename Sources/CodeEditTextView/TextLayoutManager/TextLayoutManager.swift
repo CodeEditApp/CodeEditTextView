@@ -299,8 +299,8 @@ public class TextLayoutManager: NSObject {
 
         var height: CGFloat = 0
         var width: CGFloat = 0
-        var relativeMinY = max(layoutData.minY - position.yPos, 0)
-        var relativeMaxY = max(layoutData.maxY - position.yPos, relativeMinY)
+        let relativeMinY = max(layoutData.minY - position.yPos, 0)
+        let relativeMaxY = max(layoutData.maxY - position.yPos, relativeMinY)
 
         for lineFragmentPosition in line.typesetter.lineFragments.linesStartingAt(
             relativeMinY,

@@ -36,8 +36,8 @@ package extension TextSelectionManager {
             return extendSelectionVerticalCharacter(from: offset, up: up, suggestedXPos: suggestedXPos)
         case .word, .line, .visualLine:
             return extendSelectionVerticalLine(from: offset, up: up)
-        case .container:
-            return extendSelectionContainer(from: offset, delta: up ? 1 : -1)
+        case .page:
+            return extendSelectionPage(from: offset, delta: up ? 1 : -1)
         case .document:
             if up {
                 return NSRange(location: 0, length: offset)
@@ -115,12 +115,12 @@ package extension TextSelectionManager {
         }
     }
 
-    /// Extends a selection one "container" long.
+    /// Extends a selection one "page" long.
     /// - Parameters:
     ///   - offset: The location to start extending the selection from.
     ///   - delta: The direction the selection should be extended. `1` for forwards, `-1` for backwards.
     /// - Returns: The range of the extended selection.
-    private func extendSelectionContainer(from offset: Int, delta: Int) -> NSRange {
+    private func extendSelectionPage(from offset: Int, delta: Int) -> NSRange {
         guard let textView, let endOffset = layoutManager?.textOffsetAtPoint(
             CGPoint(
                 x: delta > 0 ? textView.frame.maxX : textView.frame.minX,
