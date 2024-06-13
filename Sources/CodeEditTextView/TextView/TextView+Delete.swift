@@ -60,6 +60,9 @@ extension TextView {
             guard extendedRange.location >= 0 else { continue }
             textSelection.range.formUnion(extendedRange)
         }
+        KillRing.shared.kill(
+            strings: selectionManager.textSelections.map(\.range).compactMap({ textStorage.substring(from: $0) })
+        )
         replaceCharacters(in: selectionManager.textSelections.map(\.range), with: "")
         unmarkTextIfNeeded()
     }
