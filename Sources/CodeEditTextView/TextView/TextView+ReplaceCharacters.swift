@@ -9,8 +9,6 @@ import AppKit
 import TextStory
 
 extension TextView {
-    // MARK: - Replace Characters
-
     /// Replace the characters in the given ranges with the given string.
     /// - Parameters:
     ///   - ranges: The ranges to replace

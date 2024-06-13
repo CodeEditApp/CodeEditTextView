@@ -253,15 +253,15 @@ public class TextView: NSView, NSTextContent {
     ///   - delegate: The text view's delegate.
     public init(
         string: String,
-        font: NSFont,
-        textColor: NSColor,
-        lineHeightMultiplier: CGFloat,
-        wrapLines: Bool,
-        isEditable: Bool,
-        isSelectable: Bool,
-        letterSpacing: Double,
+        font: NSFont = .monospacedSystemFont(ofSize: 12, weight: .regular),
+        textColor: NSColor = .labelColor,
+        lineHeightMultiplier: CGFloat = 1.0,
+        wrapLines: Bool = true,
+        isEditable: Bool = true,
+        isSelectable: Bool = true,
+        letterSpacing: Double = 1.0,
         useSystemCursor: Bool = false,
-        delegate: TextViewDelegate
+        delegate: TextViewDelegate? = nil
     ) {
         self.textStorage = NSTextStorage(string: string)
         self.delegate = delegate
