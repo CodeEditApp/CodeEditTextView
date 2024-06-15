@@ -8,10 +8,6 @@
 import AppKit
 import TextStory
 
-// Disabling file length and type body length as the methods and variables contained in this file cannot be moved
-// to extensions.
-// swiftlint:disable type_body_length
-
 /// # Text View
 ///
 /// A view that draws and handles user interactions with text.
@@ -336,55 +332,6 @@ public class TextView: NSView, NSTextContent {
         NSRange(location: 0, length: textStorage.length)
     }
 
-    // MARK: - First Responder
-
-    open override func becomeFirstResponder() -> Bool {
-        isFirstResponder = true
-        selectionManager.cursorTimer.resetTimer()
-        needsDisplay = true
-        return super.becomeFirstResponder()
-    }
-
-    open override func resignFirstResponder() -> Bool {
-        isFirstResponder = false
-        selectionManager.removeCursors()
-        needsDisplay = true
-        return super.resignFirstResponder()
-    }
-
-    open override var canBecomeKeyView: Bool {
-        super.canBecomeKeyView && acceptsFirstResponder && !isHiddenOrHasHiddenAncestor
-    }
-
-    /// Sent to the window's first responder when `NSWindow.makeKey()` occurs.
-    @objc private func becomeKeyWindow() {
-        _ = becomeFirstResponder()
-    }
-
-    /// Sent to the window's first responder when `NSWindow.resignKey()` occurs.
-    @objc private func resignKeyWindow() {
-        _ = resignFirstResponder()
-    }
-
-    open override var needsPanelToBecomeKey: Bool {
-        isSelectable || isEditable
-    }
-
-    open override var acceptsFirstResponder: Bool {
-        isSelectable
-    }
-
-    open override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
-        return true
-    }
-
-    open override func resetCursorRects() {
-        super.resetCursorRects()
-        if isSelectable {
-            addCursorRect(visibleRect, cursor: .iBeam)
-        }
-    }
-
     // MARK: - View Lifecycle
 
     override public func layout() {
@@ -423,137 +370,6 @@ public class TextView: NSView, NSTextContent {
         }
     }
 
-    // MARK: - Key Down
-
-    override public func keyDown(with event: NSEvent) {
-        guard isEditable else {
-            super.keyDown(with: event)
-            return
-        }
-
-        NSCursor.setHiddenUntilMouseMoves(true)
-
-        if !(inputContext?.handleEvent(event) ?? false) {
-            interpretKeyEvents([event])
-        } else {
-            // Handle key events?
-        }
-    }
-
-    // MARK: - Layout
-
-    open override class var isCompatibleWithResponsiveScrolling: Bool {
-        true
-    }
-
-    open override func prepareContent(in rect: NSRect) {
-        needsLayout = true
-        super.prepareContent(in: rect)
-    }
-
-    override public func draw(_ dirtyRect: NSRect) {
-        super.draw(dirtyRect)
-        if isSelectable {
-            selectionManager.drawSelections(in: dirtyRect)
-        }
-    }
-
-    override open var isFlipped: Bool {
-        true
-    }
-
-    override public var visibleRect: NSRect {
-        if let scrollView {
-            var rect = scrollView.documentVisibleRect
-            rect.origin.y += scrollView.contentInsets.top
-            return rect
-        } else {
-            return super.visibleRect
-        }
-    }
-
-    public var visibleTextRange: NSRange? {
-        let minY = max(visibleRect.minY, 0)
-        let maxY = min(visibleRect.maxY, layoutManager.estimatedHeight())
-        guard let minYLine = layoutManager.textLineForPosition(minY),
-              let maxYLine = layoutManager.textLineForPosition(maxY) else {
-            return nil
-        }
-        return NSRange(
-            location: minYLine.range.location,
-            length: (maxYLine.range.location - minYLine.range.location) + maxYLine.range.length
-        )
-    }
-
-    public func updatedViewport(_ newRect: CGRect) {
-        if !updateFrameIfNeeded() {
-            layoutManager.layoutLines()
-        }
-        inputContext?.invalidateCharacterCoordinates()
-    }
-
-    @discardableResult
-    public func updateFrameIfNeeded() -> Bool {
-        var availableSize = scrollView?.contentSize ?? .zero
-        availableSize.height -= (scrollView?.contentInsets.top ?? 0) + (scrollView?.contentInsets.bottom ?? 0)
-        let newHeight = max(layoutManager.estimatedHeight(), availableSize.height)
-        let newWidth = layoutManager.estimatedWidth()
-
-        var didUpdate = false
-
-        if newHeight >= availableSize.height && frame.size.height != newHeight {
-            frame.size.height = newHeight
-            // No need to update layout after height adjustment
-        }
-
-        if wrapLines && frame.size.width != availableSize.width {
-            frame.size.width = availableSize.width
-            didUpdate = true
-        } else if !wrapLines && frame.size.width != max(newWidth, availableSize.width) {
-            frame.size.width = max(newWidth, availableSize.width)
-            didUpdate = true
-        }
-
-        if didUpdate {
-            needsLayout = true
-            needsDisplay = true
-            layoutManager.layoutLines()
-        }
-
-        if isSelectable {
-            selectionManager?.updateSelectionViews()
-        }
-
-        return didUpdate
-    }
-
-    /// Scrolls the upmost selection to the visible rect if `scrollView` is not `nil`.
-    public func scrollSelectionToVisible() {
-        guard let scrollView else {
-            return
-        }
-
-        // There's a bit of a chicken-and-the-egg issue going on here. We need to know the rect to scroll to, but we
-        // can't know the exact rect to make visible without laying out the text. Then, once text is laid out the
-        // selection rect may be different again. To solve this, we loop until the frame doesn't change after a layout
-        // pass and scroll to that rect.
-
-        var lastFrame: CGRect = .zero
-        while let selection = selectionManager
-            .textSelections
-            .sorted(by: { $0.boundingRect.origin.y < $1.boundingRect.origin.y })
-            .first,
-              lastFrame != selection.boundingRect {
-            lastFrame = selection.boundingRect
-            layoutManager.layoutLines()
-            selectionManager.updateSelectionViews()
-            selectionManager.drawSelections(in: visibleRect)
-        }
-        if lastFrame != .zero {
-            scrollView.contentView.scrollToVisible(lastFrame)
-        }
-    }
-
     deinit {
         layoutManager = nil
         selectionManager = nil
@@ -561,18 +377,3 @@ public class TextView: NSView, NSTextContent {
         NotificationCenter.default.removeObserver(self)
     }
 }
-
-// MARK: - TextSelectionManagerDelegate
-
-extension TextView: TextSelectionManagerDelegate {
-    public func setNeedsDisplay() {
-        self.setNeedsDisplay(frame)
-    }
-
-    public func estimatedLineHeight() -> CGFloat {
-        layoutManager.estimateLineHeight()
-    }
-}
-
-// swiftlint:enable type_body_length
-// swiftlint:disable:this file_length

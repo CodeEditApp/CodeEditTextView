@@ -189,9 +189,9 @@ public class TextLayoutManager: NSObject {
     // MARK: - Layout
 
     /// Lays out all visible lines
-    func layoutLines() { // swiftlint:disable:this function_body_length
+    func layoutLines(in rect: NSRect? = nil) { // swiftlint:disable:this function_body_length
         guard layoutView?.superview != nil,
-              let visibleRect = delegate?.visibleRect,
+              let visibleRect = rect ?? delegate?.visibleRect,
               !isInTransaction,
               let textStorage else {
             return
