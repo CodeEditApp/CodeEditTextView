@@ -121,7 +121,7 @@ package extension TextSelectionManager {
     ///   - delta: The direction the selection should be extended. `1` for forwards, `-1` for backwards.
     /// - Returns: The range of the extended selection.
     private func extendSelectionPage(from offset: Int, delta: Int, suggestedXPos: CGFloat?) -> NSRange {
-        guard let textView = textView, 
+        guard let textView = textView,
               let layoutManager,
               let currentYPos = layoutManager.rectForOffset(offset)?.origin.y else {
             return NSRange(location: offset, length: 0)
@@ -131,7 +131,9 @@ package extension TextSelectionManager {
 
         // Grab the line where the next selection should be. Then use the suggestedXPos to find where in the line the
         // selection should be extended to.
-        layoutManager.layoutLines(in: NSRect(x: 0, y: currentYPos, width: layoutManager.maxLineWidth, height: pageHeight))
+        layoutManager.layoutLines(
+            in: NSRect(x: 0, y: currentYPos, width: layoutManager.maxLineWidth, height: pageHeight)
+        )
         guard let nextPageOffset = layoutManager.textOffsetAtPoint(CGPoint(
             x: suggestedXPos ?? 0,
             y: min(textView.frame.height, max(0, currentYPos + (delta > 0 ? -pageHeight : pageHeight)))

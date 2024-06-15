@@ -44,7 +44,7 @@ extension TextView {
             .sorted(by: { $0.range.max > $1.range.max }) // Get the lowest one.
             .first
     }
-    
+
     /// Returns the offset that isn't the pivot of the selection.
     /// - Parameter selection: The selection to use.
     /// - Returns: The offset suitable for scrolling to.
