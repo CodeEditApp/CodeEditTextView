@@ -52,8 +52,7 @@ public class TextSelectionManager: NSObject {
         case word
         case line
         case visualLine
-        /// Eg: Bottom of screen
-        case container
+        case page
         case document
     }
 
@@ -323,10 +322,12 @@ public class TextSelectionManager: NSObject {
 
         let fillRects = getFillRects(in: rect, for: textSelection)
 
-        let min = fillRects.min(by: { $0.origin.y < $1.origin.y })?.origin ?? .zero
-        let max = fillRects.max(by: { $0.origin.y < $1.origin.y }) ?? .zero
-        let size = CGSize(width: max.maxX - min.x, height: max.maxY - min.y)
-        textSelection.boundingRect = CGRect(origin: min, size: size)
+        let minX = fillRects.min(by: { $0.origin.x < $1.origin.x })?.origin.x ?? 0
+        let minY = fillRects.min(by: { $0.origin.y < $1.origin.y })?.origin.y ?? 0
+        let max = fillRects.max(by: { $0.maxY < $1.maxY }) ?? .zero
+        let origin = CGPoint(x: minX, y: minY)
+        let size = CGSize(width: max.maxX - minX, height: max.maxY - minY)
+        textSelection.boundingRect = CGRect(origin: origin, size: size)
 
         context.fill(fillRects)
         context.restoreGState()

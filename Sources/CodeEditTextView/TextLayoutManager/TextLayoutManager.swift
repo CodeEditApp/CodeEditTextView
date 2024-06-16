@@ -189,9 +189,9 @@ public class TextLayoutManager: NSObject {
     // MARK: - Layout
 
     /// Lays out all visible lines
-    func layoutLines() { // swiftlint:disable:this function_body_length
+    func layoutLines(in rect: NSRect? = nil) { // swiftlint:disable:this function_body_length
         guard layoutView?.superview != nil,
-              let visibleRect = delegate?.visibleRect,
+              let visibleRect = rect ?? delegate?.visibleRect,
               !isInTransaction,
               let textStorage else {
             return
@@ -299,8 +299,8 @@ public class TextLayoutManager: NSObject {
 
         var height: CGFloat = 0
         var width: CGFloat = 0
-        var relativeMinY = max(layoutData.minY - position.yPos, 0)
-        var relativeMaxY = max(layoutData.maxY - position.yPos, relativeMinY)
+        let relativeMinY = max(layoutData.minY - position.yPos, 0)
+        let relativeMaxY = max(layoutData.maxY - position.yPos, relativeMinY)
 
         for lineFragmentPosition in line.typesetter.lineFragments.linesStartingAt(
             relativeMinY,
