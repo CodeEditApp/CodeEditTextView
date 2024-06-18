@@ -233,12 +233,15 @@ public class TextSelectionManager: NSObject {
     /// - Parameter range: The range the cursor is at.
     /// - Returns: The height the cursor should be to match the text at that location.
     fileprivate func heightForCursorAt(_ range: NSRange) -> CGFloat? {
-        let selectedLine = layoutManager?.textLineForOffset(range.location)
-        return selectedLine?
+        guard let selectedLine = layoutManager?.textLineForOffset(range.location) else {
+            return layoutManager?.estimateLineHeight()
+        }
+        return selectedLine
             .data
             .lineFragments
-            .getLine(atOffset: range.location - (selectedLine?.range.location ?? 0))?
+            .getLine(atOffset: range.location - (selectedLine.range.location))?
             .height
+        ?? layoutManager?.estimateLineHeight()
 
     }
 
