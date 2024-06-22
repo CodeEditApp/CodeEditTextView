@@ -43,7 +43,7 @@ class LineEndingTests: XCTestCase {
     func makeRandomText(_ goalLineEnding: LineEnding) -> String {
         (10..<Int.random(in: 20..<100)).reduce("") { partialResult, _ in
             return partialResult + String(
-                (0..<Int.random(in: 1..<20)).map{ _ in corpus.randomElement()! }
+                (0..<Int.random(in: 1..<20)).map { _ in corpus.randomElement()! }
             ) + goalLineEnding.rawValue
         }
     }
