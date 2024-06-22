@@ -68,6 +68,28 @@ class MarkedTextTests: XCTestCase {
         )
     }
 
+    func test_markedTextMultipleSelectionMultipleChar() {
+        let textView = TextView(string: "ABCDE")
+        textView.selectionManager.setSelectedRanges([NSRange(location: 0, length: 1), NSRange(location: 4, length: 1)])
+
+        textView.setMarkedText("´", selectedRange: .notFound, replacementRange: .notFound)
+        XCTAssertEqual(textView.string, "´BCD´")
+
+        textView.setMarkedText("´´´", selectedRange: .notFound, replacementRange: .notFound)
+        XCTAssertEqual(textView.string, "´´´BCD´´´")
+        XCTAssertEqual(
+            textView.selectionManager.textSelections.map(\.range).sorted(by: { $0.location < $1.location }),
+            [NSRange(location: 3, length: 0), NSRange(location: 9, length: 0)]
+        )
+
+        textView.insertText("é", replacementRange: .notFound)
+        XCTAssertEqual(textView.string, "éBCDé")
+        XCTAssertEqual(
+            textView.selectionManager.textSelections.map(\.range).sorted(by: { $0.location < $1.location }),
+            [NSRange(location: 1, length: 0), NSRange(location: 5, length: 0)]
+        )
+    }
+
     func test_cancelMarkedText() {
         let textView = TextView(string: "")
         textView.selectionManager.setSelectedRange(.zero)

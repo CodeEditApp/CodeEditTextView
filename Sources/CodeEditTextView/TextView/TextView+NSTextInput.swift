@@ -107,6 +107,7 @@ extension TextView: NSTextInputClient {
             insertLength: (insertString as NSString).length,
             textSelections: selectionCopies
         )
+
         // Reset the selected ranges to reflect the replaced text.
         selectionManager.setSelectedRanges(layoutManager.markedTextManager.markedRanges.map({
             NSRange(location: $0.max, length: 0)

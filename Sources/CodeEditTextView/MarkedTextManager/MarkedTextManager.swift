@@ -47,30 +47,21 @@ class MarkedTextManager {
     /// - Parameters:
     ///   - insertLength: The length of the string being inserted.
     ///   - textSelections: The current text selections.
-    func updateMarkedRanges(
-        insertLength: Int,
-        textSelections: [NSRange]
-    ) {
+    func updateMarkedRanges(insertLength: Int, textSelections: [NSRange]) {
         var cumulativeExistingDiff = 0
-        if markedRanges.isEmpty {
-            let lengthDiff = insertLength
-            var newRanges = [NSRange]()
-            for (idx, range) in textSelections.sorted(by: { $0.location < $1.location }).enumerated() {
-                let rangeOffset = (lengthDiff * idx) - cumulativeExistingDiff
-                newRanges.append(NSRange(location: range.location + rangeOffset, length: insertLength))
-                cumulativeExistingDiff += range.length
-            }
-            markedRanges = newRanges
-        } else if let firstRange = markedRanges.first {
-            let lengthDiff = insertLength - firstRange.length
-            var newRanges = [NSRange]()
-            for (idx, range) in markedRanges.sorted(by: { $0.location < $1.location }).enumerated() {
-                let rangeOffset = (lengthDiff * idx) - cumulativeExistingDiff
-                newRanges.append(NSRange(location: range.location + rangeOffset, length: insertLength))
-                cumulativeExistingDiff += range.length
-            }
-            markedRanges = newRanges
+        let lengthDiff = insertLength
+        var newRanges = [NSRange]()
+        let ranges: [NSRange] = if markedRanges.isEmpty {
+            textSelections.sorted(by: { $0.location < $1.location })
+        } else {
+            markedRanges.sorted(by: { $0.location < $1.location })
         }
+
+        for (idx, range) in ranges.enumerated() {
+            newRanges.append(NSRange(location: range.location + cumulativeExistingDiff, length: insertLength))
+            cumulativeExistingDiff += insertLength - range.length
+        }
+        markedRanges = newRanges
     }
 
     /// Finds any marked ranges for a line and returns them.
