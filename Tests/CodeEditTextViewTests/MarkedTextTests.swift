@@ -98,7 +98,7 @@ class MarkedTextTests: XCTestCase {
 
         XCTAssertEqual(textView.string, "A´4B´4C")
         XCTAssertEqual(
-            textView.selectionManager.textSelections.map(\.range),
+            textView.selectionManager.textSelections.map(\.range).sorted(by: { $0.location < $1.location }),
             [NSRange(location: 3, length: 0), NSRange(location: 6, length: 0)]
         )
     }
