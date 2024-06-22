@@ -7,8 +7,10 @@
 
 import AppKit
 
-/// Manages marked ranges
+/// Manages marked ranges. Not a public API.
 class MarkedTextManager {
+    /// Struct for passing attribute and range information easily down into line fragments, typesetters w/o
+    /// requiring a reference to the marked text manager.
     struct MarkedRanges {
         let ranges: [NSRange]
         let attributes: [NSAttributedString.Key: Any]
@@ -18,7 +20,9 @@ class MarkedTextManager {
     private(set) var markedRanges: [NSRange] = []
 
     /// The attributes to use for marked text. Defaults to a single underline when `nil`
-    var markedTextAttributes: [NSAttributedString.Key: Any]?
+    var markedTextAttributes: [NSAttributedString.Key: Any] = [
+        .underlineStyle: NSUnderlineStyle.single.rawValue
+    ]
 
     /// True if there is marked text being tracked.
     var hasMarkedText: Bool {
@@ -31,23 +35,41 @@ class MarkedTextManager {
     }
 
     /// Updates the stored marked ranges.
+    ///
+    /// Two cases here:
+    /// - No marked ranges yet:
+    ///     - Create new marked ranges from the text selection, with the length of the text being inserted
+    /// - Marked ranges exist:
+    ///     - Update the existing marked ranges, using the original ranges as a reference. The marked ranges don't
+    ///       change position, so we update each one with the new length and then move it to reflect each cursor's
+    ///       added text.
+    ///
     /// - Parameters:
     ///   - insertLength: The length of the string being inserted.
-    ///   - replacementRange: The range to replace with marked text.
-    ///   - selectedRange: The selected range from `NSTextInput`.
     ///   - textSelections: The current text selections.
     func updateMarkedRanges(
         insertLength: Int,
-        replacementRange: NSRange,
-        selectedRange: NSRange,
-        textSelections: [TextSelectionManager.TextSelection]
+        textSelections: [NSRange]
     ) {
-        if replacementRange.location == NSNotFound {
-            markedRanges = textSelections.map {
-                NSRange(location: $0.range.location, length: insertLength)
+        var cumulativeExistingDiff = 0
+        if markedRanges.isEmpty {
+            let lengthDiff = insertLength
+            var newRanges = [NSRange]()
+            for (idx, range) in textSelections.sorted(by: { $0.location < $1.location }).enumerated() {
+                let rangeOffset = (lengthDiff * idx) - cumulativeExistingDiff
+                newRanges.append(NSRange(location: range.location + rangeOffset, length: insertLength))
+                cumulativeExistingDiff += range.length
             }
-        } else {
-            markedRanges = [selectedRange]
+            markedRanges = newRanges
+        } else if let firstRange = markedRanges.first {
+            let lengthDiff = insertLength - firstRange.length
+            var newRanges = [NSRange]()
+            for (idx, range) in markedRanges.sorted(by: { $0.location < $1.location }).enumerated() {
+                let rangeOffset = (lengthDiff * idx) - cumulativeExistingDiff
+                newRanges.append(NSRange(location: range.location + rangeOffset, length: insertLength))
+                cumulativeExistingDiff += range.length
+            }
+            markedRanges = newRanges
         }
     }
 
@@ -56,7 +78,6 @@ class MarkedTextManager {
     /// - Returns: A `MarkedRange` struct with information about attributes and ranges. `nil` if there is no marked
     ///            text for this line.
     func markedRanges(in lineRange: NSRange) -> MarkedRanges? {
-        let attributes = markedTextAttributes ?? [.underlineStyle: NSUnderlineStyle.single.rawValue]
         let ranges = markedRanges.compactMap {
             $0.intersection(lineRange)
         }.map {
@@ -65,7 +86,7 @@ class MarkedTextManager {
         if ranges.isEmpty {
             return nil
         } else {
-            return MarkedRanges(ranges: ranges, attributes: attributes)
+            return MarkedRanges(ranges: ranges, attributes: markedTextAttributes)
         }
     }
 

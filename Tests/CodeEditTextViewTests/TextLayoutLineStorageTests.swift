@@ -1,8 +1,6 @@
 import XCTest
 @testable import CodeEditTextView
 
-// swiftlint:disable function_body_length
-
 fileprivate extension CGFloat {
     func approxEqual(_ value: CGFloat) -> Bool {
         return abs(self - value) < 0.05
@@ -141,6 +139,7 @@ final class TextLayoutLineStorageTests: XCTestCase {
         }
     }
 
+    // swiflint:disable:next function_body_length
     func test_delete() throws {
         var tree = TextLineStorage<TextLine>()
 
@@ -274,5 +273,3 @@ final class TextLayoutLineStorageTests: XCTestCase {
         }
     }
 }
-
-// swiftlint:enable function_body_length

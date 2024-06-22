@@ -198,6 +198,18 @@ public class TextView: NSView, NSTextContent {
         }
     }
 
+    /// The attributes used to render marked text.
+    /// Defaults to a single underline.
+    public var markedTextAttributes: [NSAttributedString.Key: Any] {
+        get {
+            layoutManager.markedTextManager.markedTextAttributes
+        }
+        set {
+            layoutManager.markedTextManager.markedTextAttributes = newValue
+            layoutManager.layoutLines() // Layout lines to refresh attributes. This should be rare.
+        }
+    }
+
     open var contentType: NSTextContentType?
 
     /// The text view's delegate.
