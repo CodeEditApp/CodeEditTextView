@@ -80,13 +80,10 @@ extension TextView: NSTextInputClient {
 
     // MARK: - Marked Text
 
-    /// Replaces a specified range in the receiver’s text storage with the given string and sets the selection.
+    /// Sets up marked text for a marking session. See ``MarkedTextManager`` for more details.
     ///
-    /// If there is no marked text, the current selection is replaced. If there is no selection, the string is
-    /// inserted at the insertion point.
-    ///
-    /// When `string` is an `NSString` object, the receiver is expected to render the marked text with
-    /// distinguishing appearance (for example, `NSTextView` renders with `markedTextAttributes`).
+    /// Decides whether or not to insert/replace text. Then updates the current marked ranges and updates cursor
+    /// positions.
     ///
     /// - Parameters:
     ///   - string: The string to insert. Can be either an NSString or NSAttributedString instance.
@@ -96,13 +93,26 @@ extension TextView: NSTextInputClient {
         guard isEditable, let insertString = anyToString(string) else { return }
         // Needs to insert text, but not notify the undo manager.
         _undoManager?.disable()
+        let shouldInsert = layoutManager.markedTextManager.markedRanges.isEmpty
+
+        // Copy the text selections *before* we modify them.
+        let selectionCopies = selectionManager.textSelections.map(\.range)
+
+        if shouldInsert {
+            _insertText(insertString: insertString, replacementRange: replacementRange)
+        } else {
+            replaceCharacters(in: layoutManager.markedTextManager.markedRanges, with: insertString)
+        }
         layoutManager.markedTextManager.updateMarkedRanges(
             insertLength: (insertString as NSString).length,
-            replacementRange: replacementRange,
-            selectedRange: selectedRange,
-            textSelections: selectionManager.textSelections
+            textSelections: selectionCopies
         )
-        _insertText(insertString: insertString, replacementRange: replacementRange)
+
+        // Reset the selected ranges to reflect the replaced text.
+        selectionManager.setSelectedRanges(layoutManager.markedTextManager.markedRanges.map({
+            NSRange(location: $0.max, length: 0)
+        }))
+
         _undoManager?.enable()
     }
 
