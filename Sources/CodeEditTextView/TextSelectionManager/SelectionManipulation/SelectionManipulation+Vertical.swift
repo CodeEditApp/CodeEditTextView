@@ -28,7 +28,7 @@ package extension TextSelectionManager {
         if up && layoutManager?.lineStorage.first?.range.contains(offset) ?? false {
             return NSRange(location: 0, length: offset)
         } else if !up && layoutManager?.lineStorage.last?.range.contains(offset) ?? false {
-            return NSRange(location: offset, length: (textStorage?.length ?? 0) - offset)
+            return NSRange(start: offset, end: (textStorage?.length ?? offset))
         }
 
         switch destination {
@@ -42,7 +42,7 @@ package extension TextSelectionManager {
             if up {
                 return NSRange(location: 0, length: offset)
             } else {
-                return NSRange(location: offset, length: (textStorage?.length ?? 0) - offset)
+                return NSRange(start: offset, end: (textStorage?.length ?? offset))
             }
         }
     }
@@ -107,10 +107,8 @@ package extension TextSelectionManager {
                 return NSRange(location: offset, length: 0)
             }
             return NSRange(
-                location: up ? nextLine.range.location : offset,
-                length: up
-                ? offset - nextLine.range.location
-                : nextLine.range.max - offset - (layoutManager?.detectedLineEnding.length ?? 0)
+                start: up ? nextLine.range.location : offset,
+                end: up ? offset : nextLine.range.max - (layoutManager?.detectedLineEnding.length ?? 0)
             )
         }
     }
@@ -142,7 +140,7 @@ package extension TextSelectionManager {
         }
 
         if delta > 0 {
-            return NSRange(location: nextPageOffset, length: offset - nextPageOffset)
+            return NSRange(start: nextPageOffset, end: offset)
         } else {
             return NSRange(location: offset, length: nextPageOffset - offset)
         }

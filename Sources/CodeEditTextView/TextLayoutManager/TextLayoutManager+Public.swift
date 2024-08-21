@@ -188,10 +188,7 @@ extension TextLayoutManager {
         let originalHeight = lineStorage.height
 
         for linePosition in lineStorage.linesInRange(
-            NSRange(
-                location: startingLinePosition.range.location,
-                length: linePosition.range.max - startingLinePosition.range.location
-            )
+            NSRange(start: startingLinePosition.range.location, end: linePosition.range.max)
         ) {
             let height = ensureLayoutFor(position: linePosition)
             if height != linePosition.height {

@@ -19,50 +19,6 @@ public protocol TextSelectionManagerDelegate: AnyObject {
 /// Draws selections using a draw method similar to the `TextLayoutManager` class, and adds cursor views when
 /// appropriate.
 public class TextSelectionManager: NSObject {
-    // MARK: - TextSelection
-
-    public class TextSelection: Hashable, Equatable {
-        public var range: NSRange
-        weak var view: NSView?
-        var boundingRect: CGRect = .zero
-        var suggestedXPos: CGFloat?
-        /// The position this selection should 'rotate' around when modifying selections.
-        var pivot: Int?
-
-        init(range: NSRange, view: CursorView? = nil) {
-            self.range = range
-            self.view = view
-        }
-
-        var isCursor: Bool {
-            range.length == 0
-        }
-
-        public func hash(into hasher: inout Hasher) {
-            hasher.combine(range)
-        }
-
-        public static func == (lhs: TextSelection, rhs: TextSelection) -> Bool {
-            lhs.range == rhs.range
-        }
-    }
-
-    public enum Destination {
-        case character
-        case word
-        case line
-        case visualLine
-        case page
-        case document
-    }
-
-    public enum Direction {
-        case up
-        case down
-        case forward
-        case backward
-    }
-
     // MARK: - Properties
 
     // swiftlint:disable:next line_length
@@ -107,7 +63,9 @@ public class TextSelectionManager: NSObject {
     }
 
     // MARK: - Selected Ranges
-
+    
+    /// Set the selected ranges to a single range. Overrides any existing selections.
+    /// - Parameter range: The range to set.
     public func setSelectedRange(_ range: NSRange) {
         textSelections.forEach { $0.view?.removeFromSuperview() }
         let selection = TextSelection(range: range)
@@ -119,6 +77,8 @@ public class TextSelectionManager: NSObject {
         }
     }
 
+    /// Set the selected ranges to new ranges. Overrides any existing selections.
+    /// - Parameter range: The selected ranges to set.
     public func setSelectedRanges(_ ranges: [NSRange]) {
         textSelections.forEach { $0.view?.removeFromSuperview() }
         // Remove duplicates, invalid ranges, update suggested X position.
@@ -137,7 +97,9 @@ public class TextSelectionManager: NSObject {
             NotificationCenter.default.post(Notification(name: Self.selectionChangedNotification, object: self))
         }
     }
-
+    
+    /// Append a new selected range to the existing ones.
+    /// - Parameter range: The new range to add.
     public func addSelectedRange(_ range: NSRange) {
         let newTextSelection = TextSelection(range: range)
         var didHandle = false
@@ -334,16 +296,5 @@ public class TextSelectionManager: NSObject {
 
         context.fill(fillRects)
         context.restoreGState()
-    }
-}
-
-// MARK: - Private TextSelection
-
-private extension TextSelectionManager.TextSelection {
-    func didInsertText(length: Int, retainLength: Bool = false) {
-        if !retainLength {
-            range.length = 0
-        }
-        range.location += length
     }
 }

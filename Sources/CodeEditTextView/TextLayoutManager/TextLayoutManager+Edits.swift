@@ -43,7 +43,7 @@ extension TextLayoutManager: NSTextStorageDelegate {
         if !string.isEmpty {
             var index = 0
             while let nextLine = (string as NSString).getNextLine(startingAt: index) {
-                let lineRange = NSRange(location: index, length: nextLine.max - index)
+                let lineRange = NSRange(start: index, end: nextLine.max)
                 applyLineInsert((string as NSString).substring(with: lineRange) as NSString, at: range.location + index)
                 index = nextLine.max
             }

@@ -14,7 +14,7 @@ extension NSString {
         var contentsEnd: Int = NSNotFound
         self.getLineStart(nil, end: &end, contentsEnd: &contentsEnd, for: range)
         if end != NSNotFound && contentsEnd != NSNotFound && end != contentsEnd {
-            return NSRange(location: contentsEnd, length: end - contentsEnd)
+            return NSRange(start: contentsEnd, end: end)
         } else {
             return nil
         }

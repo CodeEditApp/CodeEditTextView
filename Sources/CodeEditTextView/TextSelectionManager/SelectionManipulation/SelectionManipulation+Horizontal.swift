@@ -42,7 +42,7 @@ package extension TextSelectionManager {
             return extendSelectionVisualLine(string: string, from: offset, delta: delta)
         case .document:
             if delta > 0 {
-                return NSRange(location: offset, length: string.length - offset)
+                return NSRange(start: offset, end: string.length)
             } else {
                 return NSRange(location: 0, length: offset)
             }
@@ -194,8 +194,8 @@ package extension TextSelectionManager {
         delta: Int
     ) -> NSRange {
         var foundRange = NSRange(
-            location: min(lineBound, offset),
-            length: max(lineBound, offset) - min(lineBound, offset)
+            start: min(lineBound, offset),
+            end: max(lineBound, offset)
         )
         let originalFoundRange = foundRange
 
