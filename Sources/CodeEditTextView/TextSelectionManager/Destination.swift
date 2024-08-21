@@ -6,7 +6,7 @@
 //
 
 public extension TextSelectionManager {
-    public enum Destination {
+    enum Destination {
         case character
         case word
         case line

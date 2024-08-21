@@ -9,7 +9,7 @@ import Foundation
 import AppKit
 
 public extension TextSelectionManager {
-    public class TextSelection: Hashable, Equatable {
+    class TextSelection: Hashable, Equatable {
         public var range: NSRange
         weak var view: NSView?
         var boundingRect: CGRect = .zero

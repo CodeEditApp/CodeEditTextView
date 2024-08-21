@@ -6,7 +6,7 @@
 //
 
 public extension TextSelectionManager {
-    public enum Direction {
+    enum Direction {
         case up
         case down
         case forward
