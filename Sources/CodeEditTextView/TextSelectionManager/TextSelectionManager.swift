@@ -63,7 +63,7 @@ public class TextSelectionManager: NSObject {
     }
 
     // MARK: - Selected Ranges
-    
+
     /// Set the selected ranges to a single range. Overrides any existing selections.
     /// - Parameter range: The range to set.
     public func setSelectedRange(_ range: NSRange) {
@@ -97,7 +97,7 @@ public class TextSelectionManager: NSObject {
             NotificationCenter.default.post(Notification(name: Self.selectionChangedNotification, object: self))
         }
     }
-    
+
     /// Append a new selected range to the existing ones.
     /// - Parameter range: The new range to add.
     public func addSelectedRange(_ range: NSRange) {

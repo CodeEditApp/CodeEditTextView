@@ -19,37 +19,11 @@ extension TextView {
 
         switch event.clickCount {
         case 1:
-            // Single click, if control-shift we add a cursor
-            // if shift, we extend the selection to the click location
-            // else we set the cursor
-            guard isEditable else {
-                super.mouseDown(with: event)
-                return
-            }
-            if event.modifierFlags.intersection(.deviceIndependentFlagsMask).isSuperset(of: [.control, .shift]) {
-                unmarkText()
-                selectionManager.addSelectedRange(NSRange(location: offset, length: 0))
-            } else if event.modifierFlags.intersection(.deviceIndependentFlagsMask).contains(.shift) {
-                unmarkText()
-                shiftClickExtendSelection(to: offset)
-            } else {
-                selectionManager.setSelectedRange(NSRange(location: offset, length: 0))
-                unmarkTextIfNeeded()
-            }
+            handleSingleClick(event: event, offset: offset)
         case 2:
-            guard !event.modifierFlags.contains(.shift) else {
-                super.mouseDown(with: event)
-                return
-            }
-            unmarkText()
-            selectWord(nil)
+            handleDoubleClick(event: event)
         case 3:
-            guard !event.modifierFlags.contains(.shift) else {
-                super.mouseDown(with: event)
-                return
-            }
-            unmarkText()
-            selectLine(nil)
+            handleTripleClick(event: event)
         default:
             break
         }
@@ -62,6 +36,44 @@ extension TextView {
                 self?.autoscroll(with: event)
             }
         }
+    }
+
+    /// Single click, if control-shift we add a cursor
+    /// if shift, we extend the selection to the click location
+    /// else we set the cursor
+    fileprivate func handleSingleClick(event: NSEvent, offset: Int) {
+        guard isEditable else {
+            super.mouseDown(with: event)
+            return
+        }
+        if event.modifierFlags.intersection(.deviceIndependentFlagsMask).isSuperset(of: [.control, .shift]) {
+            unmarkText()
+            selectionManager.addSelectedRange(NSRange(location: offset, length: 0))
+        } else if event.modifierFlags.intersection(.deviceIndependentFlagsMask).contains(.shift) {
+            unmarkText()
+            shiftClickExtendSelection(to: offset)
+        } else {
+            selectionManager.setSelectedRange(NSRange(location: offset, length: 0))
+            unmarkTextIfNeeded()
+        }
+    }
+
+    fileprivate func handleDoubleClick(event: NSEvent) {
+        guard !event.modifierFlags.contains(.shift) else {
+            super.mouseDown(with: event)
+            return
+        }
+        unmarkText()
+        selectWord(nil)
+    }
+
+    fileprivate func handleTripleClick(event: NSEvent) {
+        guard !event.modifierFlags.contains(.shift) else {
+            super.mouseDown(with: event)
+            return
+        }
+        unmarkText()
+        selectLine(nil)
     }
 
     override public func mouseUp(with event: NSEvent) {
@@ -95,7 +107,7 @@ extension TextView {
             self.autoscroll(with: event)
         }
     }
-    
+
     /// Extends the current selection to the offset. Only used when the user shift-clicks a location in the document.
     ///
     /// If the offset is within the selection, trims the selection from the nearest edge (start or end) towards the
