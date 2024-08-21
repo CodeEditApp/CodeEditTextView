@@ -79,7 +79,7 @@ final class Typesetter {
                     constrainingWidth: maxWidth
                 )
                 let lineFragment = typesetLine(
-                    range: NSRange(location: startIndex, length: lineBreak - startIndex),
+                    range: NSRange(start: startIndex, end: lineBreak),
                     lineHeightMultiplier: lineHeightMultiplier
                 )
                 lines.append(.init(

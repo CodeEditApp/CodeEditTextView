@@ -54,10 +54,7 @@ extension TextView {
                 .findNextOccurrenceOfCharacter(in: characterSet.inverted, from: textSelection.range.max) else {
                 return nil
             }
-            return NSRange(
-                location: start,
-                length: end - start
-            )
+            return NSRange(start: start, end: end)
         }
         selectionManager.setSelectedRanges(newSelections)
         unmarkTextIfNeeded()

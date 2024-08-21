@@ -49,7 +49,6 @@ class MarkedTextManager {
     ///   - textSelections: The current text selections.
     func updateMarkedRanges(insertLength: Int, textSelections: [NSRange]) {
         var cumulativeExistingDiff = 0
-        let lengthDiff = insertLength
         var newRanges = [NSRange]()
         let ranges: [NSRange] = if markedRanges.isEmpty {
             textSelections.sorted(by: { $0.location < $1.location })
@@ -57,7 +56,7 @@ class MarkedTextManager {
             markedRanges.sorted(by: { $0.location < $1.location })
         }
 
-        for (idx, range) in ranges.enumerated() {
+        for range in ranges {
             newRanges.append(NSRange(location: range.location + cumulativeExistingDiff, length: insertLength))
             cumulativeExistingDiff += insertLength - range.length
         }
