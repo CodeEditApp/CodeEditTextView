@@ -17,7 +17,7 @@ let package = Package(
         // Text mutation, storage helpers
         .package(
             url: "https://github.com/ChimeHQ/TextStory",
-            from: "0.8.0"
+            from: "0.9.0"
         ),
         // Useful data structures
         .package(
@@ -27,7 +27,7 @@ let package = Package(
         // SwiftLint
         .package(
             url: "https://github.com/lukepistrol/SwiftLintPlugin",
-            from: "0.2.2"
+            from: "0.52.2"
         )
     ],
     targets: [

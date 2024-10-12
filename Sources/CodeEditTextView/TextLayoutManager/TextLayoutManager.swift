@@ -79,6 +79,13 @@ public class TextLayoutManager: NSObject {
     public var isInTransaction: Bool {
         transactionCounter > 0
     }
+    #if DEBUG
+    /// Guard variable for an assertion check in debug builds.
+    /// Ensures that layout calls are not overlapping, potentially causing layout issues.
+    /// This is used over a lock, as locks in performant code such as this would be detrimental to performance.
+    /// Also only included in debug builds. DO NOT USE for checking if layout is active or not. That is an anti-pattern.
+    private var isInLayout: Bool = false
+    #endif
 
     weak var layoutView: NSView?
 
@@ -188,15 +195,26 @@ public class TextLayoutManager: NSObject {
 
     // MARK: - Layout
 
+    /// Asserts that the caller is not in an active layout pass.
+    /// See docs on ``isInLayout`` for more details.
+    private func assertNotInLayout() {
+        #if DEBUG // This is redundant, but it keeps the flag debug-only too which helps prevent misuse.
+        assert(!isInLayout, "layoutLines called while already in a layout pass. This is a programmer error.")
+        #endif
+    }
+
     /// Lays out all visible lines
     func layoutLines(in rect: NSRect? = nil) { // swiftlint:disable:this function_body_length
+        assertNotInLayout()
         guard layoutView?.superview != nil,
               let visibleRect = rect ?? delegate?.visibleRect,
               !isInTransaction,
               let textStorage else {
             return
         }
-        CATransaction.begin()
+        #if DEBUG
+        isInLayout = true
+        #endif
         let minY = max(visibleRect.minY - verticalLayoutPadding, 0)
         let maxY = max(visibleRect.maxY + verticalLayoutPadding, 0)
         let originalHeight = lineStorage.height
@@ -237,12 +255,10 @@ public class TextLayoutManager: NSObject {
                 }
             } else {
                 // Make sure the used fragment views aren't dequeued.
-                usedFragmentIDs.formUnion(linePosition.data.typesetter.lineFragments.map(\.data.id))
+                usedFragmentIDs.formUnion(linePosition.data.lineFragments.map(\.data.id))
             }
             newVisibleLines.insert(linePosition.data.id)
         }
-
-        CATransaction.commit()
 
         // Enqueue any lines not used in this layout pass.
         viewReuseQueue.enqueueViews(notInSet: usedFragmentIDs)
@@ -262,6 +278,9 @@ public class TextLayoutManager: NSObject {
             delegate?.layoutManagerYAdjustment(yContentAdjustment)
         }
 
+        #if DEBUG
+        isInLayout = false
+        #endif
         needsLayout = false
     }
 
@@ -302,7 +321,7 @@ public class TextLayoutManager: NSObject {
         let relativeMinY = max(layoutData.minY - position.yPos, 0)
         let relativeMaxY = max(layoutData.maxY - position.yPos, relativeMinY)
 
-        for lineFragmentPosition in line.typesetter.lineFragments.linesStartingAt(
+        for lineFragmentPosition in line.lineFragments.linesStartingAt(
             relativeMinY,
             until: relativeMaxY
         ) {
