@@ -38,8 +38,8 @@ extension TextView {
             delegate?.textView(self, didReplaceContentsIn: range, with: string)
         }
 
-        layoutManager.endTransaction()
         textStorage.endEditing()
+        layoutManager.endTransaction()
         selectionManager.notifyAfterEdit()
         NotificationCenter.default.post(name: Self.textDidChangeNotification, object: self)
     }
