@@ -7,6 +7,7 @@
 
 import AppKit
 import SwiftUI
+import LanguageServerProtocol
 
 public protocol ItemBoxEntry {
     var view: NSView { get }
@@ -14,20 +15,22 @@ public protocol ItemBoxEntry {
 
 public final class ItemBoxWindowController: NSWindowController {
 
+    /// Default size of the window when opened
     public static let DEFAULT_SIZE = NSSize(width: 300, height: 212)
 
+    /// The items to be displayed in the window
     public var items: [any ItemBoxEntry] = [] {
-        didSet {
-            updateItems()
-        }
+        didSet { updateItems() }
     }
 
     private let tableView = NSTableView()
     private let scrollView = NSScrollView()
+    /// An event monitor for keyboard events
     private var localEventMonitor: Any?
 
+    /// Whether the ItemBox window is visbile
     public var isVisible: Bool {
-        return window?.isVisible ?? false
+        window?.isVisible ?? false
     }
 
     public init() {
@@ -56,9 +59,9 @@ public final class ItemBoxWindowController: NSWindowController {
         window.contentView?.layer?.backgroundColor = CGColor(
             srgbRed: 31.0 / 255.0, green: 31.0 / 255.0, blue: 36.0 / 255.0, alpha: 1.0
         )
-        window.contentView?.layer?.cornerRadius = 8
+        window.contentView?.layer?.cornerRadius = 8.5
         window.contentView?.layer?.borderWidth = 1
-        window.contentView?.layer?.borderColor = NSColor.gray.withAlphaComponent(0.4).cgColor
+        window.contentView?.layer?.borderColor = NSColor.gray.withAlphaComponent(0.45).cgColor
         let innerShadow = NSShadow()
         innerShadow.shadowColor = NSColor.black.withAlphaComponent(0.1)
         innerShadow.shadowOffset = NSSize(width: 0, height: -1)
@@ -80,6 +83,7 @@ public final class ItemBoxWindowController: NSWindowController {
         setupEventMonitor()
     }
 
+    /// Opens the window as a child of another window
     public func showWindow(attachedTo parentWindow: NSWindow) {
         guard let window = self.window else { return }
         parentWindow.addChildWindow(window, ordered: .above)
@@ -97,6 +101,7 @@ public final class ItemBoxWindowController: NSWindowController {
         self.show()
     }
 
+    /// Close the window
     public override func close() {
         guard isVisible else { return }
         removeEventMonitor()
@@ -108,43 +113,41 @@ public final class ItemBoxWindowController: NSWindowController {
         tableView.dataSource = self
         tableView.headerView = nil
         tableView.backgroundColor = .clear
-        tableView.intercellSpacing = .zero
-        tableView.selectionHighlightStyle = .none
-        tableView.backgroundColor = .clear
-        tableView.enclosingScrollView?.drawsBackground = false
-        tableView.rowHeight = 24
-
+        tableView.intercellSpacing = NSSize.zero
+        tableView.allowsEmptySelection = false
+        tableView.selectionHighlightStyle = .regular
+        tableView.headerView = nil
+        tableView.style = .plain
+        tableView.usesAutomaticRowHeights = false
+        tableView.rowSizeStyle = .custom
+        tableView.rowHeight = 21
+        tableView.gridStyleMask = []
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("ItemsCell"))
         column.width = ItemBoxWindowController.DEFAULT_SIZE.width
         tableView.addTableColumn(column)
 
         scrollView.documentView = tableView
         scrollView.hasVerticalScroller = true
-        scrollView.verticalScroller?.controlSize = .large
+        scrollView.verticalScroller = NoSlotScroller()
+        scrollView.scrollerStyle = .overlay
         scrollView.autohidesScrollers = true
+        scrollView.drawsBackground = false
         scrollView.automaticallyAdjustsContentInsets = false
-        scrollView.contentInsets = NSEdgeInsetsZero
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.verticalScrollElasticity = .allowed
+        scrollView.contentInsets = NSEdgeInsets(top: 5, left: 0, bottom: 5, right: 0)
         window?.contentView?.addSubview(scrollView)
 
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
-            NSLayoutConstraint.activate([
-                scrollView.topAnchor.constraint(equalTo: window!.contentView!.topAnchor),
-                scrollView.leadingAnchor.constraint(equalTo: window!.contentView!.leadingAnchor),
-                scrollView.trailingAnchor.constraint(equalTo: window!.contentView!.trailingAnchor),
-                scrollView.bottomAnchor.constraint(equalTo: window!.contentView!.bottomAnchor)
-            ])
+        NSLayoutConstraint.activate([
+            scrollView.topAnchor.constraint(equalTo: window!.contentView!.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: window!.contentView!.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: window!.contentView!.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: window!.contentView!.bottomAnchor)
+        ])
     }
 
     private func updateItems() {
         tableView.reloadData()
-    }
-
-    public func tableViewSelectionDidChange(_ notification: Notification) {
-        tableView.enumerateAvailableRowViews { (rowView, row) in
-            if let cellView = rowView.view(atColumn: 0) as? CustomTableCellView {
-                cellView.backgroundStyle = tableView.selectedRow == row ? .emphasized : .normal
-            }
-        }
     }
 
     private func setupEventMonitor() {
@@ -158,13 +161,10 @@ public final class ItemBoxWindowController: NSWindowController {
                 switch event.keyCode {
                 case 53: // Escape key
                     self.close()
-                case 125: // Down arrow
-                    self.selectNextItemInTable()
+                case 125, 126: // Down Arrow and Up Arrow
+                    self.tableView.keyDown(with: event)
                     return nil
-                case 126: // Up arrow
-                    self.selectPreviousItemInTable()
-                    return nil
-                case 36: // Return key
+                case 36, 48: // Return and Tab key
                     return nil
                 default:
                     break
@@ -189,18 +189,6 @@ public final class ItemBoxWindowController: NSWindowController {
         }
     }
 
-    private func selectNextItemInTable() {
-        let nextIndex = min(tableView.selectedRow + 1, items.count - 1)
-        tableView.selectRowIndexes(IndexSet(integer: nextIndex), byExtendingSelection: false)
-        tableView.scrollRowToVisible(nextIndex)
-    }
-
-    private func selectPreviousItemInTable() {
-        let previousIndex = max(tableView.selectedRow - 1, 0)
-        tableView.selectRowIndexes(IndexSet(integer: previousIndex), byExtendingSelection: false)
-        tableView.scrollRowToVisible(previousIndex)
-    }
-
     deinit {
         removeEventMonitor()
     }
@@ -213,79 +201,50 @@ extension ItemBoxWindowController: NSTableViewDataSource {
 }
 
 extension ItemBoxWindowController: NSTableViewDelegate {
-//    public func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-//        items[row].view
-//    }
-
     public func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        let cellIdentifier = NSUserInterfaceItemIdentifier("CustomCell")
-        var cell = tableView.makeView(withIdentifier: cellIdentifier, owner: nil) as? CustomTableCellView
+        items[row].view
+    }
 
-        if cell == nil {
-            cell = CustomTableCellView(frame: .zero)
-            cell?.identifier = cellIdentifier
-        }
-
-        // Remove any existing subviews
-        cell?.subviews.forEach { $0.removeFromSuperview() }
-
-        let itemView = items[row].view
-        cell?.addSubview(itemView)
-        itemView.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            itemView.topAnchor.constraint(equalTo: cell!.topAnchor),
-            itemView.leadingAnchor.constraint(equalTo: cell!.leadingAnchor, constant: 4),
-            itemView.trailingAnchor.constraint(equalTo: cell!.trailingAnchor, constant: -4),
-            itemView.bottomAnchor.constraint(equalTo: cell!.bottomAnchor)
-        ])
-
-        return cell
+    public func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+        ItemBoxRowView()
     }
 }
 
-private class CustomTableCellView: NSTableCellView {
-    private let backgroundView = NSView()
+private class NoSlotScroller: NSScroller {
+    override class var isCompatibleWithOverlayScrollers: Bool { true }
 
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
-        setup()
+    override func drawKnobSlot(in slotRect: NSRect, highlight flag: Bool) {
+        // Don't draw the knob slot (the scrollbar background)
     }
+}
 
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
+private class ItemBoxRowView: NSTableRowView {
+    override func drawSelection(in dirtyRect: NSRect) {
+        guard isSelected else { return }
+        guard let context = NSGraphicsContext.current?.cgContext else { return }
 
-    private func setup() {
-        wantsLayer = true
-        layerContentsRedrawPolicy = .onSetNeedsDisplay
+        context.saveGState()
 
-        backgroundView.wantsLayer = true
-        backgroundView.layer?.cornerRadius = 4
-        addSubview(backgroundView, positioned: .below, relativeTo: nil)
+        // Create a rect that's inset from the edges and has proper padding
+        // TODO: We create a new selectionRect instead of using dirtyRect
+        // because there is a visual bug when holding down the arrow keys
+        // to select the first or last item that draws a clipped rectangular
+        // selection highlight shape instead of the whole rectangle. Replace
+        // this when it gets fixed.
+        let padding: CGFloat = 5
+        let selectionRect = NSRect(
+            x: padding,
+            y: 0,
+            width: bounds.width - (padding * 2),
+            height: bounds.height
+        )
 
-        backgroundView.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            backgroundView.topAnchor.constraint(equalTo: topAnchor),
-            backgroundView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            backgroundView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            backgroundView.bottomAnchor.constraint(equalTo: bottomAnchor)
-        ])
-    }
+        let cornerRadius: CGFloat = 5
+        let path = NSBezierPath(roundedRect: selectionRect, xRadius: cornerRadius, yRadius: cornerRadius)
+        let selectionColor = NSColor.gray.withAlphaComponent(0.19)
 
-    override var backgroundStyle: NSView.BackgroundStyle {
-        didSet {
-            updateBackgroundColor()
-        }
-    }
-
-    private func updateBackgroundColor() {
-        switch backgroundStyle {
-        case .normal:
-            backgroundView.layer?.backgroundColor = NSColor.clear.cgColor
-        case .emphasized:
-            backgroundView.layer?.backgroundColor = NSColor.systemBlue.withAlphaComponent(0.5).cgColor
-        @unknown default:
-            backgroundView.layer?.backgroundColor = NSColor.clear.cgColor
-        }
+        context.setFillColor(selectionColor.cgColor)
+        path.fill()
+        context.restoreGState()
     }
 }
