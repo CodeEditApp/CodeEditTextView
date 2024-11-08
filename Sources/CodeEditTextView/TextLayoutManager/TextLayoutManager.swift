@@ -266,10 +266,6 @@ public class TextLayoutManager: NSObject {
         // Update the visible lines with the new set.
         visibleLineIds = newVisibleLines
 
-        if originalHeight != lineStorage.height || layoutView?.frame.size.height != lineStorage.height {
-            delegate?.layoutManagerHeightDidUpdate(newHeight: lineStorage.height)
-        }
-
         if maxFoundLineWidth > maxLineWidth {
             maxLineWidth = maxFoundLineWidth
         }
@@ -282,6 +278,11 @@ public class TextLayoutManager: NSObject {
         isInLayout = false
         #endif
         needsLayout = false
+
+        // This needs to happen after ``needsLayout`` is toggled. Things can be triggered by frame changes.
+        if originalHeight != lineStorage.height || layoutView?.frame.size.height != lineStorage.height {
+            delegate?.layoutManagerHeightDidUpdate(newHeight: lineStorage.height)
+        }
     }
 
     /// Lays out a single text line.

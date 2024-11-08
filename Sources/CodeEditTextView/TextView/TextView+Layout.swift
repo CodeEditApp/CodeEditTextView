@@ -83,7 +83,7 @@ extension TextView {
         if didUpdate {
             needsLayout = true
             needsDisplay = true
-            layoutManager.layoutLines()
+            layoutManager.setNeedsLayout()
         }
 
         if isSelectable {
