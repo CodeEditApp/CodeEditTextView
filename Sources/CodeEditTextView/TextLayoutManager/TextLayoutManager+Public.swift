@@ -13,7 +13,7 @@ extension TextLayoutManager {
     }
 
     public func estimatedWidth() -> CGFloat {
-        maxLineWidth
+        maxLineWidth + edgeInsets.horizontal
     }
 
     /// Finds a text line for the given y position relative to the text view.
