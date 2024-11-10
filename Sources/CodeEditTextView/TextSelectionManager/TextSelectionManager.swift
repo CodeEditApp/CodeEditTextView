@@ -188,6 +188,16 @@ public class TextSelectionManager: NSObject {
         if didUpdate {
             delegate?.setNeedsDisplay()
             cursorTimer.resetTimer()
+            resetSystemCursorTimers()
+        }
+    }
+
+    private func resetSystemCursorTimers() {
+        guard #available(macOS 14, *) else { return }
+        for cursorView in textSelections.compactMap({ $0.view as? NSTextInsertionIndicator }) {
+            let frame = cursorView.frame
+            cursorView.frame = .zero
+            cursorView.frame = frame
         }
     }
 
