@@ -42,6 +42,12 @@ extension TextView {
         layoutManager.endTransaction()
         selectionManager.notifyAfterEdit()
         NotificationCenter.default.post(name: Self.textDidChangeNotification, object: self)
+
+        // `scrollSelectionToVisible` is a little expensive to call every time. Instead we just check if the first
+        // selection is entirely visible. `.contains` checks that all points in the rect are inside. 
+        if let selection = selectionManager.textSelections.first, !visibleRect.contains(selection.boundingRect) {
+            scrollSelectionToVisible()
+        }
     }
 
     /// Replace the characters in a range with a new string.
