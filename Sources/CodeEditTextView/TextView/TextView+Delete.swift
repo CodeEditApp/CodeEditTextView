@@ -60,6 +60,7 @@ extension TextView {
             guard extendedRange.location >= 0 else { continue }
             textSelection.range.formUnion(extendedRange)
         }
+        selectionManager.textSelections.sort(by: { $0.range.location < $1.range.location })
         KillRing.shared.kill(
             strings: selectionManager.textSelections.map(\.range).compactMap({ textStorage.substring(from: $0) })
         )
