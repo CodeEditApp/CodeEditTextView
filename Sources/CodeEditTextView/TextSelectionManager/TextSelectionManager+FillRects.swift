@@ -38,7 +38,7 @@ extension TextSelectionManager {
 
         if firstLinePosition.yPos + firstLinePosition.height < lastLinePosition.yPos {
             fillRects.append(CGRect(
-                x: rect.minX,
+                x: max(layoutManager.edgeInsets.left, rect.minX),
                 y: firstLinePosition.yPos + firstLinePosition.height,
                 width: rect.width,
                 height: lastLinePosition.yPos - (firstLinePosition.yPos + firstLinePosition.height)
