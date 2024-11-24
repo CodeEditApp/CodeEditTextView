@@ -8,7 +8,11 @@
 import Foundation
 
 extension TextSelectionManager {
-    /// Calculate a set of rects for a text selection suitable for highlighting the selection.
+    /// Calculate a set of rects for a text selection suitable for filling with the selection color to indicate a multi-line selection.
+    ///
+    /// The returned rects are inset by edge insets passed to the text view, the given `rect` parameter can be the 'raw'
+    /// rect to draw in, no need to inset it before this method call.
+    ///
     /// - Parameters:
     ///   - rect: The bounding rect of available draw space.
     ///   - textSelection: The selection to use.
@@ -25,27 +29,35 @@ extension TextSelectionManager {
             return []
         }
 
+        let insetXPos = max(layoutManager.edgeInsets.left, rect.minX)
+        let insetWidth = max(0, rect.maxX - insetXPos - layoutManager.edgeInsets.right)
+        let insetRect = NSRect(x: insetXPos, y: rect.origin.y, width: insetWidth, height: rect.height)
+
         // Calculate the first line and any rects selected
         // If the last line position is not the same as the first, calculate any rects from that line.
         // If there's > 0 space between the first and last positions, add a rect between them to cover any
         // intermediate lines.
 
-        fillRects.append(contentsOf: getFillRects(in: rect, selectionRange: range, forPosition: firstLinePosition))
-
-        if lastLinePosition.range != firstLinePosition.range {
-            fillRects.append(contentsOf: getFillRects(in: rect, selectionRange: range, forPosition: lastLinePosition))
+        let firstLineRects = getFillRects(in: rect, selectionRange: range, forPosition: firstLinePosition)
+        let lastLineRects: [CGRect] = if lastLinePosition.range != firstLinePosition.range {
+            getFillRects(in: rect, selectionRange: range, forPosition: lastLinePosition)
+        } else {
+            []
         }
+
+        fillRects.append(contentsOf: firstLineRects + lastLineRects)
 
         if firstLinePosition.yPos + firstLinePosition.height < lastLinePosition.yPos {
             fillRects.append(CGRect(
-                x: max(layoutManager.edgeInsets.left, rect.minX),
+                x: insetXPos,
                 y: firstLinePosition.yPos + firstLinePosition.height,
-                width: rect.width,
+                width: insetWidth,
                 height: lastLinePosition.yPos - (firstLinePosition.yPos + firstLinePosition.height)
             ))
         }
 
-        return fillRects
+        // Pixel align these to avoid aliasing on the edges of each rect that should be a solid box.
+        return fillRects.map { $0.intersection(insetRect).pixelAligned }
     }
 
     /// Find fill rects for a specific line position.
