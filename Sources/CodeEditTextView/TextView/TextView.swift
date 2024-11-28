@@ -225,6 +225,9 @@ public class TextView: NSView, NSTextContent {
     /// The selection manager for the text view.
     private(set) public var selectionManager: TextSelectionManager!
 
+    /// Empasizse text ranges in the text view
+    public var emphasizeAPI: EmphasizeAPI?
+
     // MARK: - Private Properties
 
     var isFirstResponder: Bool = false
@@ -280,6 +283,7 @@ public class TextView: NSView, NSTextContent {
 
         super.init(frame: .zero)
 
+        self.emphasizeAPI = EmphasizeAPI(textView: self)
         self.storageDelegate = MultiStorageDelegate()
 
         wantsLayer = true
