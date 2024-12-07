@@ -58,6 +58,8 @@ extension TextView {
         inputContext?.invalidateCharacterCoordinates()
     }
 
+    /// Updates the view's frame if needed depending on wrapping lines, a new maximum width, or changed available size.
+    /// - Returns: Whether or not the view was updated.
     @discardableResult
     public func updateFrameIfNeeded() -> Bool {
         var availableSize = scrollView?.contentSize ?? .zero
@@ -83,7 +85,7 @@ extension TextView {
         if didUpdate {
             needsLayout = true
             needsDisplay = true
-            layoutManager.layoutLines()
+            layoutManager.setNeedsLayout()
         }
 
         if isSelectable {

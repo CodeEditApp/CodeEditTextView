@@ -266,9 +266,12 @@ public class TextLayoutManager: NSObject {
         // Update the visible lines with the new set.
         visibleLineIds = newVisibleLines
 
-        if originalHeight != lineStorage.height || layoutView?.frame.size.height != lineStorage.height {
-            delegate?.layoutManagerHeightDidUpdate(newHeight: lineStorage.height)
-        }
+        #if DEBUG
+        isInLayout = false
+        #endif
+
+        // These are fine to update outside of `isInLayout` as our internal data structures are finalized at this point
+        // so laying out again won't break our line storage or visible line.
 
         if maxFoundLineWidth > maxLineWidth {
             maxLineWidth = maxFoundLineWidth
@@ -278,9 +281,10 @@ public class TextLayoutManager: NSObject {
             delegate?.layoutManagerYAdjustment(yContentAdjustment)
         }
 
-        #if DEBUG
-        isInLayout = false
-        #endif
+        if originalHeight != lineStorage.height || layoutView?.frame.size.height != lineStorage.height {
+            delegate?.layoutManagerHeightDidUpdate(newHeight: lineStorage.height)
+        }
+
         needsLayout = false
     }
 
