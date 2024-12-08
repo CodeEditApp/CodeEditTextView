@@ -1,5 +1,5 @@
 //
-//  TextView+EmphasizeAPI.swift
+//  EmphasizeAPI.swift
 //  CodeEditTextView
 //
 //  Created by Tom Ludwig on 05.11.24.
