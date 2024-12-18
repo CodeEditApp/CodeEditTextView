@@ -6,26 +6,34 @@
 //
 
 import AppKit
-import SwiftUI
 import LanguageServerProtocol
+
+// DOCUMENTATION BAR BEHAVIOR:
+// IF THE DOCUMENTATION BAR APPEARS WHEN SELECTING AN ITEM AND IT EXTENDS BELOW THE SCREEN, IT WILL FLIP THE DIRECTION OF THE ENTIRE WINDOW
+// IF IT GETS FLIPPED AND THEN THE DOCUMENTATION BAR DISAPPEARS FOR EXAMPLE, IT WONT FLIP BACK EVEN IF THERES SPACE NOW
 
 /// Represents an item that can be displayed in the ItemBox
 public protocol ItemBoxEntry {
     var view: NSView { get }
 }
 
+/// Padding at top and bottom of the window
 private let WINDOW_PADDING: CGFloat = 5
 
 public final class ItemBoxWindowController: NSWindowController {
 
     // MARK: - Properties
 
-    /// Default size of the window when opened
-    public static let DEFAULT_SIZE = NSSize(width: 300, height: 212)
+    public static var DEFAULT_SIZE: NSSize {
+        NSSize(
+            width: 256, // TODO: DOES MIN WIDTH DEPEND ON FONT SIZE?
+            height: rowsToWindowHeight(for: 1)
+        )
+    }
 
     /// The items to be displayed in the window
-    public var items: [any ItemBoxEntry] = [] {
-        didSet { updateItems() }
+    public var items: [CompletionItem] = [] {
+        didSet { onItemsUpdated() }
     }
 
     /// Whether the ItemBox window is visbile
@@ -33,22 +41,46 @@ public final class ItemBoxWindowController: NSWindowController {
         window?.isVisible ?? false
     }
 
+    public weak var delegate: ItemBoxDelegate?
+
     // MARK: - Private Properties
+
+    /// Height of a single row
+    private static let ROW_HEIGHT: CGFloat = 21
+    /// Maximum number of visible rows (8.5)
+    private static let MAX_VISIBLE_ROWS: CGFloat = 8.5
 
     private let tableView = NSTableView()
     private let scrollView = NSScrollView()
+    private let popover = NSPopover()
+    /// Tracks when the window is placed above the cursor
+    private var isWindowAboveCursor = false
+
+    private let noItemsLabel: NSTextField = {
+        let label = NSTextField(labelWithString: "No Completions")
+        label.textColor = .secondaryLabelColor
+        label.alignment = .center
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.isHidden = true
+        // TODO: GET FONT SIZE FROM THEME
+        label.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        return label
+    }()
 
     /// An event monitor for keyboard events
     private var localEventMonitor: Any?
+    
+    public static let itemSelectedNotification = NSNotification.Name("ItemBoxItemSelected")
 
     // MARK: - Initialization
 
     public init() {
         let window = Self.makeWindow()
         super.init(window: window)
-
-        configureTableView(tableView)
-        configureScrollView(scrollView)
+        configureTableView()
+        configureScrollView()
+        setupNoItemsLabel()
+        configurePopover()
     }
 
     required init?(coder: NSCoder) {
@@ -56,9 +88,10 @@ public final class ItemBoxWindowController: NSWindowController {
     }
 
     /// Opens the window of items
-    public func show() {
-        super.showWindow(nil)
+    private func show() {
         setupEventMonitor()
+        resetScrollPosition()
+        super.showWindow(nil)
     }
 
     /// Opens the window as a child of another window
@@ -86,11 +119,62 @@ public final class ItemBoxWindowController: NSWindowController {
         super.close()
     }
 
+    /// Will constrain the window's frame to be within the visible screen
+    public func constrainWindowToScreenEdges(cursorRect: NSRect) {
+        guard let window = self.window,
+              let screenFrame = window.screen?.visibleFrame else {
+            return
+        }
+
+        let windowSize = window.frame.size
+        let padding: CGFloat = 22
+        var newWindowOrigin = NSPoint(
+            x: cursorRect.origin.x,
+            y: cursorRect.origin.y
+        )
+
+        // Keep the horizontal position within the screen and some padding
+        let minX = screenFrame.minX + padding
+        let maxX = screenFrame.maxX - windowSize.width - padding
+
+        if newWindowOrigin.x < minX {
+            newWindowOrigin.x = minX
+        } else if newWindowOrigin.x > maxX {
+            newWindowOrigin.x = maxX
+        }
+
+        // Check if the window will go below the screen
+        // We determine whether the window drops down or upwards by choosing which
+        // corner of the window we will position: `setFrameOrigin` or `setFrameTopLeftPoint`
+        if newWindowOrigin.y - windowSize.height < screenFrame.minY {
+            // If the cursor itself is below the screen, then position the window
+            // at the bottom of the screen with some padding
+            if newWindowOrigin.y < screenFrame.minY {
+                newWindowOrigin.y = screenFrame.minY + padding
+            } else {
+                // Place above the cursor
+                newWindowOrigin.y += cursorRect.height
+            }
+
+            isWindowAboveCursor = true
+            window.setFrameOrigin(newWindowOrigin)
+        } else {
+            // If the window goes above the screen, position it below the screen with padding
+            let maxY = screenFrame.maxY - padding
+            if newWindowOrigin.y > maxY {
+                newWindowOrigin.y = maxY
+            }
+
+            isWindowAboveCursor = false
+            window.setFrameTopLeftPoint(newWindowOrigin)
+        }
+    }
+
     // MARK: - Private Methods
 
     private static func makeWindow() -> NSWindow {
         let window = NSWindow(
-            contentRect: NSRect(origin: .zero, size: ItemBoxWindowController.DEFAULT_SIZE),
+            contentRect: NSRect(origin: .zero, size: self.DEFAULT_SIZE),
             styleMask: [.resizable, .fullSizeContentView, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -112,13 +196,14 @@ public final class ItemBoxWindowController: NSWindowController {
         window.tabbingMode = .disallowed
         window.hidesOnDeactivate = true
         window.backgroundColor = .clear
-        window.minSize = ItemBoxWindowController.DEFAULT_SIZE
+        window.minSize = Self.DEFAULT_SIZE
     }
 
     private static func configureWindowContent(_ window: NSWindow) {
         guard let contentView = window.contentView else { return }
 
         contentView.wantsLayer = true
+        // TODO: GET COLOR FROM THEME
         contentView.layer?.backgroundColor = CGColor(
             srgbRed: 31.0 / 255.0,
             green: 31.0 / 255.0,
@@ -136,7 +221,7 @@ public final class ItemBoxWindowController: NSWindowController {
         contentView.shadow = innerShadow
     }
 
-    private func configureTableView(_ tableView: NSTableView) {
+    private func configureTableView() {
         tableView.delegate = self
         tableView.dataSource = self
         tableView.headerView = nil
@@ -151,11 +236,10 @@ public final class ItemBoxWindowController: NSWindowController {
         tableView.gridStyleMask = []
 
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("ItemsCell"))
-        column.width = ItemBoxWindowController.DEFAULT_SIZE.width
         tableView.addTableColumn(column)
     }
 
-    private func configureScrollView(_ scrollView: NSScrollView) {
+    private func configureScrollView() {
         scrollView.documentView = tableView
         scrollView.hasVerticalScroller = true
         scrollView.verticalScroller = NoSlotScroller()
@@ -178,11 +262,52 @@ public final class ItemBoxWindowController: NSWindowController {
         ])
     }
 
+    private func configurePopover() {
+//        popover.behavior = .transient
+//        popover.animates = true
+
+        // Create and configure the popover content
+        let contentViewController = NSViewController()
+        let contentView = NSView()
+        contentView.translatesAutoresizingMaskIntoConstraints = false
+
+        let textField = NSTextField(labelWithString: "Example Documentation\nThis is some example documentation text.")
+        textField.translatesAutoresizingMaskIntoConstraints = false
+        textField.lineBreakMode = .byWordWrapping
+        textField.preferredMaxLayoutWidth = 300
+        textField.cell?.wraps = true
+        textField.cell?.isScrollable = false
+
+        contentView.addSubview(textField)
+
+        NSLayoutConstraint.activate([
+            textField.topAnchor.constraint(equalTo: contentView.topAnchor),
+            textField.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            textField.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            textField.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            contentView.widthAnchor.constraint(equalToConstant: 300)
+        ])
+
+        contentViewController.view = contentView
+        popover.contentViewController = contentViewController
+    }
+
+    private func setupNoItemsLabel() {
+        window?.contentView?.addSubview(noItemsLabel)
+
+        NSLayoutConstraint.activate([
+            noItemsLabel.centerXAnchor.constraint(equalTo: window!.contentView!.centerXAnchor),
+            noItemsLabel.centerYAnchor.constraint(equalTo: window!.contentView!.centerYAnchor)
+        ])
+    }
+
     @objc private func parentWindowDidResignKey() {
         close()
     }
 
-    private func updateItems() {
+    private func onItemsUpdated() {
+        updateItemBoxWindowAndContents()
+        resetScrollPosition()
         tableView.reloadData()
     }
 
@@ -201,20 +326,128 @@ public final class ItemBoxWindowController: NSWindowController {
                 case 125, 126:  // Down/Up Arrow
                     self.tableView.keyDown(with: event)
                     return nil
+                case 124: // Right Arrow
+//                    handleRightArrow()
+                    return event
+                case 123: // Left Arrow
+                    return event
                 case 36, 48:  // Return/Tab
+                    // TODO: TEMPORARY
+                    let selectedItem = items[tableView.selectedRow]
+                    self.delegate?.applyCompletionItem(selectedItem)
+
+                    if items.count > 0 {
+                        var nextRow = tableView.selectedRow
+                        if nextRow == items.count - 1 && items.count > 1 {
+                            nextRow -= 1
+                        }
+                        items.remove(at: tableView.selectedRow)
+                        if nextRow < items.count {
+                            tableView.selectRowIndexes(IndexSet(integer: nextRow), byExtendingSelection: false)
+                            tableView.scrollRowToVisible(nextRow)
+                        }
+                    }
                     return nil
                 default:
                     return event
                 }
+
             case .leftMouseDown, .rightMouseDown:
                 // If we click outside the window, close the window
                 if !NSMouseInRect(NSEvent.mouseLocation, self.window!.frame, false) {
                     self.close()
                 }
                 return event
+
             default:
                 return event
             }
+        }
+    }
+
+    private func handleRightArrow() {
+        guard let window = self.window,
+              let selectedRow = tableView.selectedRowIndexes.first,
+              selectedRow < items.count,
+              !popover.isShown else {
+            return
+        }
+
+        // Get the rect of the selected row in window coordinates
+        let rowRect = tableView.rect(ofRow: selectedRow)
+        let rowRectInWindow = tableView.convert(rowRect, to: nil)
+        // Calculate the point where the popover should appear
+        let popoverPoint = NSPoint(
+            x: window.frame.maxX,
+            y: window.frame.minY + rowRectInWindow.midY
+        )
+        popover.show(
+            relativeTo: NSRect(x: popoverPoint.x, y: popoverPoint.y, width: 1, height: 1),
+            of: window.contentView!,
+            preferredEdge: .maxX
+        )
+    }
+
+    /// Updates the item box window's height based on the number of items.
+    /// If there are no items, the default label will be displayed instead.
+    private func updateItemBoxWindowAndContents() {
+        guard let window = self.window else {
+            return
+        }
+
+        noItemsLabel.isHidden = !items.isEmpty
+        scrollView.isHidden = items.isEmpty
+
+        // Update window dimensions
+        let numberOfVisibleRows = min(CGFloat(items.count), Self.MAX_VISIBLE_ROWS)
+        let newHeight = items.count == 0 ?
+            Self.rowsToWindowHeight(for: 1) : // Height for 1 row when empty
+            Self.rowsToWindowHeight(for: numberOfVisibleRows)
+
+        let currentFrame = window.frame
+        if isWindowAboveCursor {
+            // When window is above cursor, maintain the bottom position
+            let bottomY = currentFrame.minY
+            let newFrame = NSRect(
+                x: currentFrame.minX,
+                y: bottomY,
+                width: currentFrame.width,
+                height: newHeight
+            )
+            window.setFrame(newFrame, display: true)
+        } else {
+            // When window is below cursor, maintain the top position
+            window.setContentSize(NSSize(width: currentFrame.width, height: newHeight))
+        }
+
+        // Dont allow vertical resizing
+        window.maxSize = NSSize(width: CGFloat.infinity, height: newHeight)
+        window.minSize = NSSize(width: Self.DEFAULT_SIZE.width, height: newHeight)
+    }
+
+    /// Calculate the window height for a given number of rows.
+    private static func rowsToWindowHeight(for numberOfRows: CGFloat) -> CGFloat {
+        let wholeRows = floor(numberOfRows)
+        let partialRow = numberOfRows - wholeRows
+
+        let baseHeight = ROW_HEIGHT * wholeRows
+        let partialHeight = partialRow > 0 ? ROW_HEIGHT * partialRow : 0
+
+        // Add window padding only for whole numbers
+        let padding = numberOfRows.truncatingRemainder(dividingBy: 1) == 0 ? WINDOW_PADDING * 2 : WINDOW_PADDING
+
+        return baseHeight + partialHeight + padding
+    }
+
+    private func resetScrollPosition() {
+        guard let clipView = scrollView.contentView as? NSClipView else { return }
+
+        // Scroll to the top of the content
+        clipView.scroll(to: NSPoint(x: 0, y: -WINDOW_PADDING))
+
+        // Select the first item
+        if !items.isEmpty {
+            tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
         }
     }
 
@@ -236,11 +469,20 @@ extension ItemBoxWindowController: NSTableViewDataSource, NSTableViewDelegate {
     }
 
     public func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        items[row].view
+        (items[row] as? any ItemBoxEntry)?.view
     }
 
     public func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
         ItemBoxRowView()
+    }
+
+    public func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
+        // Only allow selection through keyboard navigation or single clicks
+        let event = NSApp.currentEvent
+        if event?.type == .leftMouseDragged {
+            return false
+        }
+        return true
     }
 }
 
@@ -248,7 +490,7 @@ private class NoSlotScroller: NSScroller {
     override class var isCompatibleWithOverlayScrollers: Bool { true }
 
     override func drawKnobSlot(in slotRect: NSRect, highlight flag: Bool) {
-        // Don't draw the knob slot (the scrollbar background)
+        // Don't draw the knob slot (the background track behind the knob)
     }
 }
 
@@ -263,9 +505,9 @@ private class ItemBoxRowView: NSTableRowView {
         // Create a rect that's inset from the edges and has proper padding
         // TODO: We create a new selectionRect instead of using dirtyRect
         // because there is a visual bug when holding down the arrow keys
-        // to select the first or last item that draws a clipped rectangular
-        // selection highlight shape instead of the whole rectangle. Replace
-        // this when it gets fixed.
+        // to select the first or last item, which draws a clipped
+        // rectangular highlight shape instead of the whole rectangle.
+        // Replace this when it gets fixed.
         let selectionRect = NSRect(
             x: WINDOW_PADDING,
             y: 0,
@@ -279,4 +521,8 @@ private class ItemBoxRowView: NSTableRowView {
         context.setFillColor(selectionColor.cgColor)
         path.fill()
     }
+}
+
+public protocol ItemBoxDelegate: AnyObject {
+    func applyCompletionItem(_ item: CompletionItem)
 }
