@@ -5,6 +5,8 @@
 //  Created by Abe Malla on 12/22/24.
 //
 
+import AppKit
+
 extension ItemBoxWindowController {
     /// Will constrain the window's frame to be within the visible screen
     public func constrainWindowToScreenEdges(cursorRect: NSRect) {
@@ -59,7 +61,7 @@ extension ItemBoxWindowController {
 
     // MARK: - Private Methods
 
-    private static func makeWindow() -> NSWindow {
+    static func makeWindow() -> NSWindow {
         let window = NSWindow(
             contentRect: NSRect(origin: .zero, size: self.DEFAULT_SIZE),
             styleMask: [.resizable, .fullSizeContentView, .nonactivatingPanel],
@@ -72,7 +74,7 @@ extension ItemBoxWindowController {
         return window
     }
 
-    private static func configureWindow(_ window: NSWindow) {
+    static func configureWindow(_ window: NSWindow) {
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.isExcludedFromWindowsMenu = true
@@ -86,7 +88,7 @@ extension ItemBoxWindowController {
         window.minSize = Self.DEFAULT_SIZE
     }
 
-    private static func configureWindowContent(_ window: NSWindow) {
+    static func configureWindowContent(_ window: NSWindow) {
         guard let contentView = window.contentView else { return }
 
         contentView.wantsLayer = true
@@ -108,7 +110,7 @@ extension ItemBoxWindowController {
         contentView.shadow = innerShadow
     }
 
-    private func configureTableView() {
+    func configureTableView() {
         tableView.delegate = self
         tableView.dataSource = self
         tableView.headerView = nil
@@ -125,7 +127,7 @@ extension ItemBoxWindowController {
         tableView.addTableColumn(column)
     }
 
-    private func configureScrollView() {
+    func configureScrollView() {
         scrollView.documentView = tableView
         scrollView.hasVerticalScroller = true
         scrollView.verticalScroller = NoSlotScroller()
@@ -150,7 +152,7 @@ extension ItemBoxWindowController {
 
     /// Updates the item box window's height based on the number of items.
     /// If there are no items, the default label will be displayed instead.
-    private func updateItemBoxWindowAndContents() {
+    func updateItemBoxWindowAndContents() {
         guard let window = self.window else {
             return
         }
@@ -185,7 +187,7 @@ extension ItemBoxWindowController {
         window.minSize = NSSize(width: Self.DEFAULT_SIZE.width, height: newHeight)
     }
 
-    private func configureNoItemsLabel() {
+    func configureNoItemsLabel() {
         window?.contentView?.addSubview(noItemsLabel)
 
         NSLayoutConstraint.activate([
@@ -195,7 +197,7 @@ extension ItemBoxWindowController {
     }
 
     /// Calculate the window height for a given number of rows.
-    private static func rowsToWindowHeight(for numberOfRows: CGFloat) -> CGFloat {
+    static func rowsToWindowHeight(for numberOfRows: CGFloat) -> CGFloat {
         let wholeRows = floor(numberOfRows)
         let partialRow = numberOfRows - wholeRows
 
@@ -229,5 +231,34 @@ extension ItemBoxWindowController: NSTableViewDataSource, NSTableViewDelegate {
             return false
         }
         return true
+    }
+}
+
+private class ItemBoxRowView: NSTableRowView {
+    override func drawSelection(in dirtyRect: NSRect) {
+        guard isSelected else { return }
+        guard let context = NSGraphicsContext.current?.cgContext else { return }
+
+        context.saveGState()
+        defer { context.restoreGState() }
+
+        // Create a rect that's inset from the edges and has proper padding
+        // TODO: We create a new selectionRect instead of using dirtyRect
+        // because there is a visual bug when holding down the arrow keys
+        // to select the first or last item, which draws a clipped
+        // rectangular highlight shape instead of the whole rectangle.
+        // Replace this when it gets fixed.
+        let selectionRect = NSRect(
+            x: WINDOW_PADDING,
+            y: 0,
+            width: bounds.width - (WINDOW_PADDING * 2),
+            height: bounds.height
+        )
+        let cornerRadius: CGFloat = 5
+        let path = NSBezierPath(roundedRect: selectionRect, xRadius: cornerRadius, yRadius: cornerRadius)
+        let selectionColor = NSColor.gray.withAlphaComponent(0.19)
+
+        context.setFillColor(selectionColor.cgColor)
+        path.fill()
     }
 }

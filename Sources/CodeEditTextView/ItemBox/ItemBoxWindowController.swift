@@ -14,7 +14,7 @@ public protocol ItemBoxEntry {
 }
 
 /// Padding at top and bottom of the window
-private let WINDOW_PADDING: CGFloat = 5
+let WINDOW_PADDING: CGFloat = 5
 
 public final class ItemBoxWindowController: NSWindowController {
 
@@ -42,17 +42,17 @@ public final class ItemBoxWindowController: NSWindowController {
     // MARK: - Private Properties
 
     /// Height of a single row
-    private static let ROW_HEIGHT: CGFloat = 21
+    static let ROW_HEIGHT: CGFloat = 21
     /// Maximum number of visible rows (8.5)
-    private static let MAX_VISIBLE_ROWS: CGFloat = 8.5
+    static let MAX_VISIBLE_ROWS: CGFloat = 8.5
 
-    private let tableView = NSTableView()
-    private let scrollView = NSScrollView()
-    private let popover = NSPopover()
+    let tableView = NSTableView()
+    let scrollView = NSScrollView()
+    let popover = NSPopover()
     /// Tracks when the window is placed above the cursor
-    private var isWindowAboveCursor = false
+    var isWindowAboveCursor = false
 
-    private let noItemsLabel: NSTextField = {
+    let noItemsLabel: NSTextField = {
         let label = NSTextField(labelWithString: "No Completions")
         label.textColor = .secondaryLabelColor
         label.alignment = .center
@@ -83,7 +83,7 @@ public final class ItemBoxWindowController: NSWindowController {
     }
 
     /// Opens the window of items
-    private func show() {
+    func show() {
         setupEventMonitor()
         resetScrollPosition()
         super.showWindow(nil)
@@ -227,40 +227,11 @@ public final class ItemBoxWindowController: NSWindowController {
     }
 }
 
-private class NoSlotScroller: NSScroller {
+class NoSlotScroller: NSScroller {
     override class var isCompatibleWithOverlayScrollers: Bool { true }
 
     override func drawKnobSlot(in slotRect: NSRect, highlight flag: Bool) {
         // Don't draw the knob slot (the background track behind the knob)
-    }
-}
-
-private class ItemBoxRowView: NSTableRowView {
-    override func drawSelection(in dirtyRect: NSRect) {
-        guard isSelected else { return }
-        guard let context = NSGraphicsContext.current?.cgContext else { return }
-
-        context.saveGState()
-        defer { context.restoreGState() }
-
-        // Create a rect that's inset from the edges and has proper padding
-        // TODO: We create a new selectionRect instead of using dirtyRect
-        // because there is a visual bug when holding down the arrow keys
-        // to select the first or last item, which draws a clipped
-        // rectangular highlight shape instead of the whole rectangle.
-        // Replace this when it gets fixed.
-        let selectionRect = NSRect(
-            x: WINDOW_PADDING,
-            y: 0,
-            width: bounds.width - (WINDOW_PADDING * 2),
-            height: bounds.height
-        )
-        let cornerRadius: CGFloat = 5
-        let path = NSBezierPath(roundedRect: selectionRect, xRadius: cornerRadius, yRadius: cornerRadius)
-        let selectionColor = NSColor.gray.withAlphaComponent(0.19)
-
-        context.setFillColor(selectionColor.cgColor)
-        path.fill()
     }
 }
 
