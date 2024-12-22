@@ -147,7 +147,7 @@ extension ItemBoxWindowController {
             scrollView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
         ])
     }
-    
+
     /// Updates the item box window's height based on the number of items.
     /// If there are no items, the default label will be displayed instead.
     private func updateItemBoxWindowAndContents() {
@@ -185,7 +185,6 @@ extension ItemBoxWindowController {
         window.minSize = NSSize(width: Self.DEFAULT_SIZE.width, height: newHeight)
     }
 
-
     private func configureNoItemsLabel() {
         window?.contentView?.addSubview(noItemsLabel)
 
@@ -194,7 +193,7 @@ extension ItemBoxWindowController {
             noItemsLabel.centerYAnchor.constraint(equalTo: window!.contentView!.centerYAnchor)
         ])
     }
-    
+
     /// Calculate the window height for a given number of rows.
     private static func rowsToWindowHeight(for numberOfRows: CGFloat) -> CGFloat {
         let wholeRows = floor(numberOfRows)
