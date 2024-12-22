@@ -8,6 +8,7 @@
 import AppKit
 import LanguageServerProtocol
 
+// TODO:
 // DOCUMENTATION BAR BEHAVIOR:
 // IF THE DOCUMENTATION BAR APPEARS WHEN SELECTING AN ITEM AND IT EXTENDS BELOW THE SCREEN, IT WILL FLIP THE DIRECTION OF THE ENTIRE WINDOW
 // IF IT GETS FLIPPED AND THEN THE DOCUMENTATION BAR DISAPPEARS FOR EXAMPLE, IT WONT FLIP BACK EVEN IF THERES SPACE NOW
@@ -61,7 +62,7 @@ public final class ItemBoxWindowController: NSWindowController {
         label.textColor = .secondaryLabelColor
         label.alignment = .center
         label.translatesAutoresizingMaskIntoConstraints = false
-        label.isHidden = true
+        label.isHidden = false
         // TODO: GET FONT SIZE FROM THEME
         label.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
         return label
@@ -80,7 +81,6 @@ public final class ItemBoxWindowController: NSWindowController {
         configureTableView()
         configureScrollView()
         setupNoItemsLabel()
-        configurePopover()
     }
 
     required init?(coder: NSCoder) {
@@ -234,7 +234,6 @@ public final class ItemBoxWindowController: NSWindowController {
         tableView.rowSizeStyle = .custom
         tableView.rowHeight = 21
         tableView.gridStyleMask = []
-
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("ItemsCell"))
         tableView.addTableColumn(column)
     }
@@ -260,36 +259,6 @@ public final class ItemBoxWindowController: NSWindowController {
             scrollView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
         ])
-    }
-
-    private func configurePopover() {
-//        popover.behavior = .transient
-//        popover.animates = true
-
-        // Create and configure the popover content
-        let contentViewController = NSViewController()
-        let contentView = NSView()
-        contentView.translatesAutoresizingMaskIntoConstraints = false
-
-        let textField = NSTextField(labelWithString: "Example Documentation\nThis is some example documentation text.")
-        textField.translatesAutoresizingMaskIntoConstraints = false
-        textField.lineBreakMode = .byWordWrapping
-        textField.preferredMaxLayoutWidth = 300
-        textField.cell?.wraps = true
-        textField.cell?.isScrollable = false
-
-        contentView.addSubview(textField)
-
-        NSLayoutConstraint.activate([
-            textField.topAnchor.constraint(equalTo: contentView.topAnchor),
-            textField.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-            textField.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            textField.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
-            contentView.widthAnchor.constraint(equalToConstant: 300)
-        ])
-
-        contentViewController.view = contentView
-        popover.contentViewController = contentViewController
     }
 
     private func setupNoItemsLabel() {
@@ -325,28 +294,22 @@ public final class ItemBoxWindowController: NSWindowController {
                     return nil
                 case 125, 126:  // Down/Up Arrow
                     self.tableView.keyDown(with: event)
-                    return nil
+                    if self.isVisible {
+                        return nil
+                    }
+                    return event
                 case 124: // Right Arrow
 //                    handleRightArrow()
+                    self.close()
                     return event
                 case 123: // Left Arrow
+                    self.close()
                     return event
                 case 36, 48:  // Return/Tab
-                    // TODO: TEMPORARY
+                    guard tableView.selectedRow >= 0 else { return event }
                     let selectedItem = items[tableView.selectedRow]
                     self.delegate?.applyCompletionItem(selectedItem)
-
-                    if items.count > 0 {
-                        var nextRow = tableView.selectedRow
-                        if nextRow == items.count - 1 && items.count > 1 {
-                            nextRow -= 1
-                        }
-                        items.remove(at: tableView.selectedRow)
-                        if nextRow < items.count {
-                            tableView.selectRowIndexes(IndexSet(integer: nextRow), byExtendingSelection: false)
-                            tableView.scrollRowToVisible(nextRow)
-                        }
-                    }
+                    self.close()
                     return nil
                 default:
                     return event
@@ -372,11 +335,8 @@ public final class ItemBoxWindowController: NSWindowController {
               !popover.isShown else {
             return
         }
-
-        // Get the rect of the selected row in window coordinates
         let rowRect = tableView.rect(ofRow: selectedRow)
         let rowRectInWindow = tableView.convert(rowRect, to: nil)
-        // Calculate the point where the popover should appear
         let popoverPoint = NSPoint(
             x: window.frame.maxX,
             y: window.frame.minY + rowRectInWindow.midY
@@ -423,6 +383,13 @@ public final class ItemBoxWindowController: NSWindowController {
         // Dont allow vertical resizing
         window.maxSize = NSSize(width: CGFloat.infinity, height: newHeight)
         window.minSize = NSSize(width: Self.DEFAULT_SIZE.width, height: newHeight)
+    }
+
+    @objc private func tableViewDoubleClick(_ sender: Any) {
+        guard tableView.clickedRow >= 0 else { return }
+        let selectedItem = items[tableView.clickedRow]
+        delegate?.applyCompletionItem(selectedItem)
+        self.close()
     }
 
     /// Calculate the window height for a given number of rows.
