@@ -196,13 +196,6 @@ public final class ItemBoxWindowController: NSWindowController {
         )
     }
 
-    @objc private func tableViewDoubleClick(_ sender: Any) {
-        guard tableView.clickedRow >= 0 else { return }
-        let selectedItem = items[tableView.clickedRow]
-        delegate?.applyCompletionItem(selectedItem)
-        self.close()
-    }
-
     private func resetScrollPosition() {
         guard let clipView = scrollView.contentView as? NSClipView else { return }
 

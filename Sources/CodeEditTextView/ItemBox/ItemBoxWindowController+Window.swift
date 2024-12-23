@@ -123,8 +123,22 @@ extension ItemBoxWindowController {
         tableView.rowSizeStyle = .custom
         tableView.rowHeight = 21
         tableView.gridStyleMask = []
+        tableView.target = self
+        tableView.action = #selector(tableViewClicked(_:))
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("ItemsCell"))
         tableView.addTableColumn(column)
+    }
+
+    @objc private func tableViewClicked(_ sender: Any?) {
+        if NSApp.currentEvent?.clickCount == 2 {
+            let row = tableView.selectedRow
+            guard row >= 0, row < items.count else {
+                return
+            }
+            let selectedItem = items[row]
+            delegate?.applyCompletionItem(selectedItem)
+            self.close()
+        }
     }
 
     func configureScrollView() {
@@ -173,13 +187,13 @@ extension ItemBoxWindowController {
             let newFrame = NSRect(
                 x: currentFrame.minX,
                 y: bottomY,
-                width: currentFrame.width,
+                width: ItemBoxWindowController.DEFAULT_SIZE.width,
                 height: newHeight
             )
             window.setFrame(newFrame, display: true)
         } else {
             // When window is below cursor, maintain the top position
-            window.setContentSize(NSSize(width: currentFrame.width, height: newHeight))
+            window.setContentSize(NSSize(width: ItemBoxWindowController.DEFAULT_SIZE.width, height: newHeight))
         }
 
         // Dont allow vertical resizing
