@@ -128,6 +128,13 @@ public class EmphasizeAPI {
             layer.path = shapePath.cgPathFallback
         }
 
+        // Set bounds of the layer; needed for the scale animation
+        if let cgPath = layer.path {
+            let boundingBox = cgPath.boundingBox
+            layer.bounds = boundingBox
+            layer.position = CGPoint(x: boundingBox.midX, y: boundingBox.midY)
+        }
+
         return layer
     }
 
@@ -167,13 +174,10 @@ public class EmphasizeAPI {
 
     private func applyPopAnimation(to layer: CALayer) {
         let scaleAnimation = CAKeyframeAnimation(keyPath: "transform.scale")
-        scaleAnimation.values = [1.0, 1.01, 1.0]
-        scaleAnimation.keyTimes = [0, 0.5, 1]
-        scaleAnimation.duration = 0.1
-        scaleAnimation.timingFunctions = [
-            CAMediaTimingFunction(name: .easeInEaseOut),
-            CAMediaTimingFunction(name: .easeInEaseOut)
-        ]
+        scaleAnimation.values = [1.0, 1.5, 1.0]
+        scaleAnimation.keyTimes = [0, 0.3, 1]
+        scaleAnimation.duration = 0.2
+        scaleAnimation.timingFunctions = [CAMediaTimingFunction(name: .easeOut)]
 
         layer.add(scaleAnimation, forKey: "popAnimation")
     }
