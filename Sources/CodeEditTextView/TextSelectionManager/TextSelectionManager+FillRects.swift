@@ -8,7 +8,8 @@
 import Foundation
 
 extension TextSelectionManager {
-    /// Calculate a set of rects for a text selection suitable for filling with the selection color to indicate a multi-line selection.
+    /// Calculate a set of rects for a text selection suitable for filling with the selection color to indicate a
+    /// multi-line selection.
     ///
     /// The returned rects are inset by edge insets passed to the text view, the given `rect` parameter can be the 'raw'
     /// rect to draw in, no need to inset it before this method call.
