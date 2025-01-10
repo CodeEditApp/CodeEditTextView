@@ -5,10 +5,15 @@
 //  Created by Khan Winter on 10/20/23.
 //
 
+import Foundation
 import AppKit
 
+fileprivate let pasteboardObjects = [NSString.self, NSURL.self]
+
 extension TextView: NSDraggingSource {
-    class DragSelectionGesture: NSPressGestureRecognizer {
+    // MARK: - Drag Gesture
+
+    private class DragSelectionGesture: NSPressGestureRecognizer {
         override func mouseDown(with event: NSEvent) {
             guard isEnabled, let view = self.view as? TextView, event.type == .leftMouseDown else {
                 return
@@ -34,46 +39,171 @@ extension TextView: NSDraggingSource {
     }
 
     @objc private func dragGestureHandler(_ sender: Any) {
-        let selectionRects = selectionManager.textSelections.filter({ !$0.range.isEmpty }).flatMap {
-            selectionManager.getFillRects(in: frame, for: $0)
-        }
-        // TODO: This SUcks
-        let minX = selectionRects.min(by: { $0.minX < $1.minX })?.minX ?? 0.0
-        let minY = selectionRects.min(by: { $0.minY < $1.minY })?.minY ?? 0.0
-        let maxX = selectionRects.max(by: { $0.maxX < $1.maxX })?.maxX ?? 0.0
-        let maxY = selectionRects.max(by: { $0.maxY < $1.maxY })?.maxY ?? 0.0
-        let imageBounds = CGRect(
-            x: minX,
-            y: minY,
-            width: maxX - minX,
-            height: maxY - minY
-        )
-
-        guard let bitmap = bitmapImageRepForCachingDisplay(in: imageBounds) else {
+        guard let visibleTextRange,
+              let draggingView = DraggingTextRenderer(
+                ranges: selectionManager.textSelections
+                    .sorted(using: KeyPathComparator(\.range.location))
+                    .compactMap { $0.range.intersection(visibleTextRange) },
+                layoutManager: layoutManager
+              ) else {
             return
         }
 
-        selectionRects.forEach { selectionRect in
-            self.cacheDisplay(in: selectionRect, to: bitmap)
+        guard let bitmap = bitmapImageRepForCachingDisplay(in: draggingView.frame) else {
+            return
         }
 
-        let draggingImage = NSImage(cgImage: bitmap.cgImage!, size: imageBounds.size)
+        draggingView.cacheDisplay(in: draggingView.bounds, to: bitmap)
 
-        let attributedString = selectionManager
+        guard let cgImage = bitmap.cgImage else {
+            return
+        }
+
+        let draggingImage = NSImage(cgImage: cgImage, size: draggingView.intrinsicContentSize)
+
+        let attributedStrings = selectionManager
             .textSelections
             .sorted(by: { $0.range.location < $1.range.location })
             .map { textStorage.attributedSubstring(from: $0.range) }
-            .reduce(NSMutableAttributedString(), { $0.append($1); return $0 })
-        let draggingItem = NSDraggingItem(pasteboardWriter: attributedString)
-        draggingItem.setDraggingFrame(imageBounds, contents: draggingImage)
+        var attributedString = NSMutableAttributedString()
+        for (idx, string) in attributedStrings.enumerated() {
+            attributedString.append(string)
+            if idx < attributedStrings.count - 1 {
+                attributedString.append(NSAttributedString(string: layoutManager.detectedLineEnding.rawValue))
+            }
+        }
 
-        beginDraggingSession(with: [draggingItem], event: NSApp.currentEvent!, source: self)
+        let draggingItem = NSDraggingItem(pasteboardWriter: attributedString)
+        draggingItem.setDraggingFrame(draggingView.frame, contents: draggingImage)
+
+        guard let currentEvent = NSApp.currentEvent else {
+            return
+        }
+
+        beginDraggingSession(with: [draggingItem], event: currentEvent, source: self)
     }
+
+    // MARK: - NSDraggingSource
 
     public func draggingSession(
         _ session: NSDraggingSession,
         sourceOperationMaskFor context: NSDraggingContext
     ) -> NSDragOperation {
         context == .outsideApplication ? .copy : .move
+    }
+
+    public func draggingSession(_ session: NSDraggingSession, willBeginAt screenPoint: NSPoint) {
+        if let draggingCursorView {
+            draggingCursorView.removeFromSuperview()
+            self.draggingCursorView = nil
+        }
+        isDragging = true
+        setUpMouseAutoscrollTimer()
+    }
+
+    public func draggingSession(_ session: NSDraggingSession, movedTo screenPoint: NSPoint) {
+        guard let windowCoordinates = self.window?.convertPoint(fromScreen: screenPoint) else {
+            return
+        }
+
+        let viewPoint = self.convert(windowCoordinates, from: nil) // Converts from window
+        let cursor: NSView
+
+        if let draggingCursorView {
+            cursor = draggingCursorView
+        } else if useSystemCursor, #available(macOS 15, *) {
+            let systemCursor = NSTextInsertionIndicator()
+            cursor = systemCursor
+            systemCursor.displayMode = .visible
+            addSubview(cursor)
+        } else {
+            cursor = CursorView(color: selectionManager.insertionPointColor)
+            addSubview(cursor)
+        }
+
+        self.draggingCursorView = cursor
+
+        guard let documentOffset = layoutManager.textOffsetAtPoint(viewPoint),
+              let cursorPosition = layoutManager.rectForOffset(documentOffset) else {
+            return
+        }
+
+        // Don't show a cursor in selected areas
+        guard !selectionManager.textSelections.contains(where: { $0.range.contains(documentOffset) }) else {
+            draggingCursorView?.removeFromSuperview()
+            draggingCursorView = nil
+            return
+        }
+
+        cursor.frame.origin = cursorPosition.origin
+        cursor.frame.size.height = cursorPosition.height
+    }
+
+    public func draggingSession(
+        _ session: NSDraggingSession,
+        endedAt screenPoint: NSPoint,
+        operation: NSDragOperation
+    ) {
+        if let draggingCursorView {
+            draggingCursorView.removeFromSuperview()
+            self.draggingCursorView = nil
+        }
+        isDragging = false
+        disableMouseAutoscrollTimer()
+    }
+
+    override public func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        let canReadObjects = sender.draggingPasteboard.canReadObject(forClasses: pasteboardObjects)
+
+        if canReadObjects {
+            return .copy
+        }
+
+        return NSDragOperation()
+    }
+
+    override public func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        guard let objects = sender.draggingPasteboard.readObjects(forClasses: pasteboardObjects)?
+            .compactMap({ anyObject in
+                if let object = anyObject as? NSString {
+                    return String(object)
+                } else if let object = anyObject as? NSURL, let string = object.absoluteString {
+                    return String(string)
+                }
+                return nil
+            }),
+              objects.count > 0 else {
+            return false
+        }
+        let insertionString = objects.joined(separator: layoutManager.detectedLineEnding.rawValue)
+
+        // Grab the insertion location
+        guard let draggingCursorView,
+              var insertionOffset = layoutManager.textOffsetAtPoint(draggingCursorView.frame.origin) else {
+            // There was no active drag
+            return false
+        }
+
+        if let source = sender.draggingSource as? TextView, source === self {
+            // Offset the insertion location so that we can remove the text first before pasting it into the editor.
+            var updatedInsertionOffset = insertionOffset
+            for selection in source.selectionManager.textSelections.reversed()
+            where selection.range.location < insertionOffset {
+                if selection.range.upperBound > insertionOffset {
+                    updatedInsertionOffset -= insertionOffset - selection.range.location
+                } else {
+                    updatedInsertionOffset -= selection.range.length
+                }
+            }
+            insertionOffset = updatedInsertionOffset
+            insertText("") // Replace the selected ranges with nothing
+        }
+
+        replaceCharacters(in: [NSRange(location: insertionOffset, length: 0)], with: insertionString)
+        selectionManager.setSelectedRange(
+            NSRange(location: insertionOffset, length: NSString(string: insertionString).length)
+        )
+
+        return true
     }
 }

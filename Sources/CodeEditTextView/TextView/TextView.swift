@@ -220,22 +220,33 @@ public class TextView: NSView, NSTextContent {
     ///            layout system. Use methods like ``TextView/replaceCharacters(in:with:)-58mt7`` or
     ///            ``TextView/insertText(_:)`` to modify content.
     private(set) public var textStorage: NSTextStorage!
+
     /// The layout manager for the text view.
     private(set) public var layoutManager: TextLayoutManager!
+
     /// The selection manager for the text view.
     private(set) public var selectionManager: TextSelectionManager!
 
     // MARK: - Private Properties
 
     var isFirstResponder: Bool = false
+
+    /// When dragging to create a selection, these enable us to scroll the view as the user drags outside the view's
+    /// bounds.
     var mouseDragAnchor: CGPoint?
     var mouseDragTimer: Timer?
+
+    /// When we receive a drag operation we add a temporary cursor view not managed by the selection manager.
+    /// This is the reference to that view, it is cleaned up when a drag ends.
+    var draggingCursorView: NSView?
+    var isDragging: Bool = false
 
     private var fontCharWidth: CGFloat {
         (" " as NSString).size(withAttributes: [.font: font]).width
     }
 
     internal(set) public var _undoManager: CEUndoManager?
+
     @objc dynamic open var allowsUndo: Bool
 
     var scrollView: NSScrollView? {
@@ -286,6 +297,7 @@ public class TextView: NSView, NSTextContent {
         postsFrameChangedNotifications = true
         postsBoundsChangedNotifications = true
         autoresizingMask = [.width, .height]
+        registerForDraggedTypes([.string, .fileContents, .html, .multipleTextSelection, .tabularText, .rtf])
 
         self.typingAttributes = [
             .font: font,

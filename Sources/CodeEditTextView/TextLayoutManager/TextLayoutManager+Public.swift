@@ -8,6 +8,8 @@
 import AppKit
 
 extension TextLayoutManager {
+    // MARK: - Estimate
+
     public func estimatedHeight() -> CGFloat {
         max(lineStorage.height, estimateLineHeight())
     }
@@ -15,6 +17,8 @@ extension TextLayoutManager {
     public func estimatedWidth() -> CGFloat {
         maxLineWidth + edgeInsets.horizontal
     }
+
+    // MARK: - Text Lines
 
     /// Finds a text line for the given y position relative to the text view.
     ///
@@ -101,6 +105,8 @@ extension TextLayoutManager {
         }
     }
 
+    // MARK: - Rect For Offset
+
     /// Find a position for the character at a given offset.
     /// Returns the rect of the character at the given offset.
     /// The rect may represent more than one unicode unit, for instance if the offset is at the beginning of an
@@ -174,6 +180,8 @@ extension TextLayoutManager {
         }
         return nil
     }
+
+    // MARK: - Ensure Layout
 
     /// Forces layout calculation for all lines up to and including the given offset.
     /// - Parameter offset: The offset to ensure layout until.
