@@ -7,7 +7,7 @@
 
 import Foundation
 
-public struct HorizontalEdgeInsets: Codable, Sendable, Equatable {
+public struct HorizontalEdgeInsets: Codable, Sendable, Equatable, AdditiveArithmetic {
     public var left: CGFloat
     public var right: CGFloat
 
@@ -29,4 +29,12 @@ public struct HorizontalEdgeInsets: Codable, Sendable, Equatable {
     public static let zero: HorizontalEdgeInsets = {
         HorizontalEdgeInsets(left: 0, right: 0)
     }()
+
+    public static func + (lhs: HorizontalEdgeInsets, rhs: HorizontalEdgeInsets) -> HorizontalEdgeInsets {
+        HorizontalEdgeInsets(left: lhs.left + rhs.left, right: lhs.right + rhs.right)
+    }
+
+    public static func - (lhs: HorizontalEdgeInsets, rhs: HorizontalEdgeInsets) -> HorizontalEdgeInsets {
+        HorizontalEdgeInsets(left: lhs.left - rhs.left, right: lhs.right - rhs.right)
+    }
 }

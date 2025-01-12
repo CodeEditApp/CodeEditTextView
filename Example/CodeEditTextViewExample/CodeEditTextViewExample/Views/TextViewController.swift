@@ -11,6 +11,22 @@ import CodeEditTextView
 class TextViewController: NSViewController {
     var scrollView: NSScrollView!
     var textView: TextView!
+    var enableEdgeInsets: Bool = false {
+        didSet {
+            if enableEdgeInsets {
+                textView.edgeInsets = .init(left: 20, right: 30)
+                textView.textInsets = .init(left: 10, right: 30)
+            } else {
+                textView.edgeInsets = .zero
+                textView.textInsets = .zero
+            }
+        }
+    }
+    var wrapLines: Bool = true {
+        didSet {
+            textView.wrapLines = wrapLines
+        }
+    }
 
     init(string: String) {
         textView = TextView(string: string)
@@ -24,6 +40,14 @@ class TextViewController: NSViewController {
     override func loadView() {
         scrollView = NSScrollView()
         textView.translatesAutoresizingMaskIntoConstraints = false
+        textView.wrapLines = wrapLines
+        if enableEdgeInsets {
+            textView.edgeInsets = .init(left: 30, right: 30)
+            textView.textInsets = .init(left: 0, right: 30)
+        } else {
+            textView.edgeInsets = .zero
+            textView.textInsets = .zero
+        }
 
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.documentView = textView
