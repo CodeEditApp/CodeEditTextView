@@ -150,13 +150,28 @@ public class TextView: NSView, NSTextContent {
         }
     }
 
-    /// The edge insets for the text view.
+    /// The edge insets for the text view. This value insets every piece of drawable content in the view, including
+    /// selection rects.
+    ///
+    /// To further inset the text from the edge, without modifying how selections are inset, use ``textInsets``
     public var edgeInsets: HorizontalEdgeInsets {
         get {
-            layoutManager?.edgeInsets ?? .zero
+            selectionManager.edgeInsets
         }
         set {
-            layoutManager?.edgeInsets = newValue
+            layoutManager.edgeInsets = newValue + textInsets
+            selectionManager.edgeInsets = newValue
+        }
+    }
+
+    /// Insets just drawn text from the horizontal edges. This is in addition to the insets in ``edgeInsets``, but does
+    /// not apply to other drawn content.
+    public var textInsets: HorizontalEdgeInsets {
+        get {
+            layoutManager.edgeInsets - selectionManager.edgeInsets
+        }
+        set {
+            layoutManager.edgeInsets = edgeInsets + newValue
         }
     }
 

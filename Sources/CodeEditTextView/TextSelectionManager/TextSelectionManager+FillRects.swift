@@ -30,8 +30,8 @@ extension TextSelectionManager {
             return []
         }
 
-        let insetXPos = max(layoutManager.edgeInsets.left, rect.minX)
-        let insetWidth = max(0, rect.maxX - insetXPos - layoutManager.edgeInsets.right)
+        let insetXPos = max(edgeInsets.left, rect.minX)
+        let insetWidth = max(0, rect.maxX - insetXPos - edgeInsets.right)
         let insetRect = NSRect(x: insetXPos, y: rect.origin.y, width: insetWidth, height: rect.height)
 
         // Calculate the first line and any rects selected
