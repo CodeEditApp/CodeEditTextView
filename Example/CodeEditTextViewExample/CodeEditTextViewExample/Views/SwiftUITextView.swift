@@ -11,15 +11,20 @@ import CodeEditTextView
 
 struct SwiftUITextView: NSViewControllerRepresentable {
     @Binding var text: String
+    @Binding var wrapLines: Bool
+    @Binding var enableEdgeInsets: Bool
 
     func makeNSViewController(context: Context) -> TextViewController {
         let controller = TextViewController(string: text)
         context.coordinator.controller = controller
+        controller.wrapLines = wrapLines
+        controller.enableEdgeInsets = enableEdgeInsets
         return controller
     }
 
     func updateNSViewController(_ nsViewController: TextViewController, context: Context) {
-        // Do nothing, our binding has to be a one-way binding
+        nsViewController.wrapLines = wrapLines
+        nsViewController.enableEdgeInsets = enableEdgeInsets
     }
 
     func makeCoordinator() -> Coordinator {
