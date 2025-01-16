@@ -9,9 +9,18 @@ import SwiftUI
 
 struct ContentView: View {
     @Binding var document: CodeEditTextViewExampleDocument
+    @AppStorage("wraplines") private var wrapLines: Bool = true
+    @AppStorage("edgeinsets") private var enableEdgeInsets: Bool = false
 
     var body: some View {
-        SwiftUITextView(text: $document.text)
+        VStack(spacing: 0) {
+            HStack {
+                Toggle("Wrap Lines", isOn: $wrapLines)
+                Toggle("Inset Edges", isOn: $enableEdgeInsets)
+            }
+            Divider()
+            SwiftUITextView(text: $document.text, wrapLines: $wrapLines, enableEdgeInsets: $enableEdgeInsets)
+        }
     }
 }
 
