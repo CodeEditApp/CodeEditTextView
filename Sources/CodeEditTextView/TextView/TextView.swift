@@ -150,13 +150,28 @@ public class TextView: NSView, NSTextContent {
         }
     }
 
-    /// The edge insets for the text view.
+    /// The edge insets for the text view. This value insets every piece of drawable content in the view, including
+    /// selection rects.
+    ///
+    /// To further inset the text from the edge, without modifying how selections are inset, use ``textInsets``
     public var edgeInsets: HorizontalEdgeInsets {
         get {
-            layoutManager?.edgeInsets ?? .zero
+            selectionManager.edgeInsets
         }
         set {
-            layoutManager?.edgeInsets = newValue
+            layoutManager.edgeInsets = newValue + textInsets
+            selectionManager.edgeInsets = newValue
+        }
+    }
+
+    /// Insets just drawn text from the horizontal edges. This is in addition to the insets in ``edgeInsets``, but does
+    /// not apply to other drawn content.
+    public var textInsets: HorizontalEdgeInsets {
+        get {
+            layoutManager.edgeInsets - selectionManager.edgeInsets
+        }
+        set {
+            layoutManager.edgeInsets = edgeInsets + newValue
         }
     }
 
@@ -219,11 +234,14 @@ public class TextView: NSView, NSTextContent {
     /// - Warning: Do not update the text storage object directly. Doing so will very likely break the text view's
     ///            layout system. Use methods like ``TextView/replaceCharacters(in:with:)-58mt7`` or
     ///            ``TextView/insertText(_:)`` to modify content.
-    private(set) public var textStorage: NSTextStorage!
+    package(set) public var textStorage: NSTextStorage!
     /// The layout manager for the text view.
-    private(set) public var layoutManager: TextLayoutManager!
+    package(set) public var layoutManager: TextLayoutManager!
     /// The selection manager for the text view.
-    private(set) public var selectionManager: TextSelectionManager!
+    package(set) public var selectionManager: TextSelectionManager!
+
+    /// Empasizse text ranges in the text view
+    public var emphasizeAPI: EmphasizeAPI?
 
     /// Empasizse text ranges in the text view
     public var emphasizeAPI: EmphasizeAPI?
@@ -308,36 +326,6 @@ public class TextView: NSView, NSTextContent {
 
         layoutManager.layoutLines()
         setUpDragGesture()
-    }
-
-    /// Sets the text view's text to a new value.
-    /// - Parameter text: The new contents of the text view.
-    public func setText(_ text: String) {
-        let newStorage = NSTextStorage(string: text)
-        self.setTextStorage(newStorage)
-    }
-
-    /// Set a new text storage object for the view.
-    /// - Parameter textStorage: The new text storage to use.
-    public func setTextStorage(_ textStorage: NSTextStorage) {
-        self.textStorage = textStorage
-
-        subviews.forEach { view in
-            view.removeFromSuperview()
-        }
-
-        textStorage.addAttributes(typingAttributes, range: documentRange)
-        layoutManager.textStorage = textStorage
-        layoutManager.reset()
-
-        selectionManager.textStorage = textStorage
-        selectionManager.setSelectedRanges(selectionManager.textSelections.map { $0.range })
-
-        _undoManager?.clearStack()
-
-        textStorage.delegate = storageDelegate
-        needsDisplay = true
-        needsLayout = true
     }
 
     required init?(coder: NSCoder) {
