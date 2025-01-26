@@ -25,7 +25,7 @@ extension TextSelectionManager {
         var fillRects: [CGRect] = []
 
         let insetXPos = max(edgeInsets.left, rect.minX)
-        let insetWidth = max(0, rect.maxX - insetXPos - edgeInsets.right)
+        let insetWidth = max(0, rect.maxX - insetXPos - layoutManager.edgeInsets.right)
         let insetRect = NSRect(x: insetXPos, y: rect.origin.y, width: insetWidth, height: rect.height)
 
         for linePosition in layoutManager.lineStorage.linesInRange(range) {
