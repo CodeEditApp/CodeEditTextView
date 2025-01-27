@@ -19,8 +19,10 @@ extension TextSelectionManager {
     ///   - textSelection: The selection to use.
     /// - Returns: An array of rects that the selection overlaps.
     func getFillRects(in rect: NSRect, for textSelection: TextSelection) -> [CGRect] {
-        guard let layoutManager else { return [] }
-        let range = textSelection.range
+        guard let layoutManager,
+                let range = textSelection.range.intersection(textView?.visibleTextRange ?? .zero) else {
+            return []
+        }
 
         var fillRects: [CGRect] = []
 
@@ -33,7 +35,7 @@ extension TextSelectionManager {
         }
 
         // Pixel align these to avoid aliasing on the edges of each rect that should be a solid box.
-        return fillRects.map { $0.intersection(insetRect).pixelAligned }
+        return fillRects.map { $0.pixelAligned }
     }
 
     /// Find fill rects for a specific line position.
