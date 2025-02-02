@@ -9,10 +9,8 @@ import Foundation
 
 extension TextSelectionManager {
     /// Calculate a set of rects for a text selection suitable for filling with the selection color to indicate a
-    /// multi-line selection.
-    ///
-    /// The returned rects are inset by edge insets passed to the text view, the given `rect` parameter can be the 'raw'
-    /// rect to draw in, no need to inset it before this method call.
+    /// multi-line selection. The returned rects surround all selected line fragments for the given selection,
+    /// following the available text layout space, rather than the available selection layout space.
     ///
     /// - Parameters:
     ///   - rect: The bounding rect of available draw space.
@@ -26,16 +24,27 @@ extension TextSelectionManager {
 
         var fillRects: [CGRect] = []
 
-        let insetXPos = max(layoutManager.edgeInsets.left, rect.minX)
-        let insetWidth = max(0, rect.maxX - insetXPos - layoutManager.edgeInsets.right)
-        let insetRect = NSRect(x: insetXPos, y: rect.origin.y, width: insetWidth, height: rect.height)
+        let textWidth = if layoutManager.maxLineLayoutWidth == .greatestFiniteMagnitude {
+            layoutManager.maxLineWidth
+        } else {
+            layoutManager.maxLineLayoutWidth
+        }
+        let maxWidth = max(textWidth, layoutManager.wrapLinesWidth)
+        let validTextDrawingRect = CGRect(
+            x: layoutManager.edgeInsets.left,
+            y: rect.minY,
+            width: maxWidth,
+            height: rect.height
+        ).intersection(rect)
 
         for linePosition in layoutManager.lineStorage.linesInRange(range) {
-            fillRects.append(contentsOf: getFillRects(in: insetRect, selectionRange: range, forPosition: linePosition))
+            fillRects.append(
+                contentsOf: getFillRects(in: validTextDrawingRect, selectionRange: range, forPosition: linePosition)
+            )
         }
 
         // Pixel align these to avoid aliasing on the edges of each rect that should be a solid box.
-        return fillRects.map { $0.pixelAligned }
+        return fillRects.map { $0.intersection(validTextDrawingRect).pixelAligned }
     }
 
     /// Find fill rects for a specific line position.
