@@ -40,6 +40,14 @@ public class CEUndoManager {
             parent?.redo()
         }
 
+        public override func beginUndoGrouping() {
+            parent?.beginGrouping()
+        }
+
+        public override func endUndoGrouping() {
+            parent?.endGrouping()
+        }
+
         public override func registerUndo(withTarget target: Any, selector: Selector, object anObject: Any?) {
             // no-op, but just in case to save resources:
             removeAllActions()
