@@ -41,11 +41,11 @@ public class CEUndoManager {
         }
 
         public override func beginUndoGrouping() {
-            parent?.beginGrouping()
+            parent?.beginUndoGrouping()
         }
 
         public override func endUndoGrouping() {
-            parent?.endGrouping()
+            parent?.endUndoGrouping()
         }
 
         public override func registerUndo(withTarget target: Any, selector: Selector, object anObject: Any?) {
@@ -172,18 +172,18 @@ public class CEUndoManager {
     // MARK: - Grouping
 
     /// Groups all incoming mutations.
-    public func beginGrouping() {
+    public func beginUndoGrouping() {
         guard !isGrouping else {
-            assertionFailure("UndoManager already in a group. Call `endGrouping` before this can be called.")
+            assertionFailure("UndoManager already in a group. Call `beginUndoGrouping` before this can be called.")
             return
         }
         isGrouping = true
     }
 
     /// Stops grouping all incoming mutations.
-    public func endGrouping() {
+    public func endUndoGrouping() {
         guard isGrouping else {
-            assertionFailure("UndoManager not in a group. Call `beginGrouping` before this can be called.")
+            assertionFailure("UndoManager not in a group. Call `endUndoGrouping` before this can be called.")
             return
         }
         isGrouping = false
