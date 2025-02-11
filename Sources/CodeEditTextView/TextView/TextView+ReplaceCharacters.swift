@@ -18,10 +18,13 @@ extension TextView {
         NotificationCenter.default.post(name: Self.textWillChangeNotification, object: self)
         textStorage.beginEditing()
 
+        func valid(range: NSRange, string: String) -> Bool {
+            (!range.isEmpty || !string.isEmpty) &&
+            (delegate?.textView(self, shouldReplaceContentsIn: range, with: string) ?? true)
+        }
+
         // Can't insert an empty string into an empty range. One must be not empty
-        for range in ranges.sorted(by: { $0.location > $1.location }) where
-        (!range.isEmpty || !string.isEmpty) &&
-        (delegate?.textView(self, shouldReplaceContentsIn: range, with: string) ?? true) {
+        for range in ranges.sorted(by: { $0.location > $1.location }) where valid(range: range, string: string) {
             delegate?.textView(self, willReplaceContentsIn: range, with: string)
 
             _undoManager?.registerMutation(
