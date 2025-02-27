@@ -11,8 +11,8 @@ import AppKit
 public class EmphasizeAPI {
     // MARK: - Properties
 
-    private var highlightedRanges: [EmphasizedRange] = []
-    private var emphasizedRangeIndex: Int?
+    public private(set) var emphasizedRanges: [EmphasizedRange] = []
+    public private(set) var emphasizedRangeIndex: Int?
     private let activeColor: NSColor = NSColor(hex: 0xFFFB00, alpha: 1)
     private let inactiveColor: NSColor = NSColor.lightGray.withAlphaComponent(0.4)
 
@@ -23,8 +23,8 @@ public class EmphasizeAPI {
     }
 
     // MARK: - Structs
-    private struct EmphasizedRange {
-        var range: NSRange
+    public struct EmphasizedRange {
+        public var range: NSRange
         var layer: CAShapeLayer
     }
 
@@ -61,18 +61,18 @@ public class EmphasizeAPI {
         let layer = createEmphasizeLayer(shapePath: shapePath, active: active)
         textView?.layer?.insertSublayer(layer, at: 1)
 
-        highlightedRanges.append(EmphasizedRange(range: range, layer: layer))
+        emphasizedRanges.append(EmphasizedRange(range: range, layer: layer))
     }
 
     /// Removes the highlight for a specific range.
     /// - Parameter range: The range to remove.
     public func removeHighlightForRange(_ range: NSRange) {
-        guard let index = highlightedRanges.firstIndex(where: { $0.range == range }) else { return }
+        guard let index = emphasizedRanges.firstIndex(where: { $0.range == range }) else { return }
 
-        let removedLayer = highlightedRanges[index].layer
+        let removedLayer = emphasizedRanges[index].layer
         removedLayer.removeFromSuperlayer()
 
-        highlightedRanges.remove(at: index)
+        emphasizedRanges.remove(at: index)
 
         // Adjust the active highlight index
         if let currentIndex = emphasizedRangeIndex {
@@ -105,8 +105,8 @@ public class EmphasizeAPI {
 
     /// Removes all emphasised ranges.
     public func removeEmphasizeLayers() {
-        highlightedRanges.forEach { $0.layer.removeFromSuperlayer() }
-        highlightedRanges.removeAll()
+        emphasizedRanges.forEach { $0.layer.removeFromSuperlayer() }
+        emphasizedRanges.removeAll()
         emphasizedRangeIndex = nil
     }
 
@@ -147,29 +147,29 @@ public class EmphasizeAPI {
     /// - Returns: An optional `NSRange` representing the newly active highlight, colored in the active color.
     ///            Returns `nil` if no change occurred (e.g., if there are no highlighted ranges).
     private func shiftActiveHighlight(amount: Int) -> NSRange? {
-        guard !highlightedRanges.isEmpty else { return nil }
+        guard !emphasizedRanges.isEmpty else { return nil }
 
         var currentIndex = emphasizedRangeIndex ?? -1
-        currentIndex = (currentIndex + amount + highlightedRanges.count) % highlightedRanges.count
+        currentIndex = (currentIndex + amount + emphasizedRanges.count) % emphasizedRanges.count
 
-        guard currentIndex < highlightedRanges.count else { return nil }
+        guard currentIndex < emphasizedRanges.count else { return nil }
 
         // Reset the previously active layer
         if let currentIndex = emphasizedRangeIndex {
-            let previousLayer = highlightedRanges[currentIndex].layer
+            let previousLayer = emphasizedRanges[currentIndex].layer
             previousLayer.fillColor = inactiveColor.cgColor
             previousLayer.shadowOpacity = 0.0
         }
 
         // Set the new active layer
-        let newLayer = highlightedRanges[currentIndex].layer
+        let newLayer = emphasizedRanges[currentIndex].layer
         newLayer.fillColor = activeColor.cgColor
         newLayer.shadowOpacity = 0.3
 
         applyPopAnimation(to: newLayer)
         emphasizedRangeIndex = currentIndex
 
-        return highlightedRanges[currentIndex].range
+        return emphasizedRanges[currentIndex].range
     }
 
     private func applyPopAnimation(to layer: CALayer) {

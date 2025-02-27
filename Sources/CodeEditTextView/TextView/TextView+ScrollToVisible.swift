@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import AppKit
 
 extension TextView {
     fileprivate typealias Direction = TextSelectionManager.Direction
@@ -33,6 +34,53 @@ extension TextView {
         }
         if lastFrame != .zero {
             scrollView.contentView.scrollToVisible(lastFrame)
+        }
+    }
+
+    public func scrollToRange(_ range: NSRange) {
+        guard let scrollView else { return }
+
+        guard let boundingRect = layoutManager.rectForOffset(range.location) else { return }
+
+        // Check if the range is already visible
+        if visibleRect.contains(boundingRect) {
+            return // No scrolling needed
+        }
+
+        // Calculate the target offset to center the range in the view
+        let targetOffset = CGPoint(
+            x: max(boundingRect.midX - visibleRect.width / 2, 0),
+            y: max(boundingRect.midY - visibleRect.height / 2, 0)
+        )
+
+        var lastFrame: CGRect = .zero
+
+        // Set a timeout to avoid a infinite loop
+        let timeout: TimeInterval = 0.5
+        let startTime = Date()
+
+        // Adjust layout until stable
+        while let newRect = layoutManager.rectForOffset(range.location),
+              lastFrame != newRect,
+              Date().timeIntervalSince(startTime) < timeout {
+            lastFrame = newRect
+            layoutManager.layoutLines()
+            selectionManager.updateSelectionViews()
+            selectionManager.drawSelections(in: visibleRect)
+        }
+
+        // Scroll to make the range appear in the middle of the screen
+        if lastFrame != .zero {
+            let animated = false // feature flag
+            if animated {
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = 0.15 // Adjust duration as needed
+                    context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                    scrollView.contentView.animator().setBoundsOrigin(targetOffset)
+                }
+            } else {
+                scrollView.contentView.scroll(to: targetOffset)
+            }
         }
     }
 
