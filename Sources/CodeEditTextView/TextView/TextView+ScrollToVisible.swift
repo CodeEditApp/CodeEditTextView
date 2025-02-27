@@ -43,7 +43,8 @@ extension TextView {
     ///   - range: The range to scroll to.
     ///   - center: A flag that determines if the range should be centered in the view. Defaults to `true`.
     ///
-    /// If `center` is `true`, the range will be centered in the visible area. If `center` is `false`, the range will be aligned at the top-left of the view.
+    /// If `center` is `true`, the range will be centered in the visible area.
+    /// If `center` is `false`, the range will be aligned at the top-left of the view.
     public func scrollToRange(_ range: NSRange, center: Bool = true) {
         guard let scrollView else { return }
 
