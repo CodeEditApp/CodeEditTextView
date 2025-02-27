@@ -97,10 +97,16 @@ public class TextLayoutManager: NSObject {
             delegate?.layoutManagerMaxWidthDidChange(newWidth: maxLineWidth + edgeInsets.horizontal)
         }
     }
-    /// The maximum width available to lay out lines in.
+
+    /// The maximum width available to lay out lines in, used to determine how much space is available for laying out
+    /// lines. Evals to `.greatestFiniteMagnitude` when ``wrapLines`` is `false`.
     var maxLineLayoutWidth: CGFloat {
-        wrapLines ? (delegate?.textViewportSize().width ?? .greatestFiniteMagnitude) - edgeInsets.horizontal
-        : .greatestFiniteMagnitude
+        wrapLines ? wrapLinesWidth : .greatestFiniteMagnitude
+    }
+
+    /// The width of the space available to draw text fragments when wrapping lines.
+    var wrapLinesWidth: CGFloat {
+        (delegate?.textViewportSize().width ?? .greatestFiniteMagnitude) - edgeInsets.horizontal
     }
 
     /// Contains all data required to perform layout on a text line.
