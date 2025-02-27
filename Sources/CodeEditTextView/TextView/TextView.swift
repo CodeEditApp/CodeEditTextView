@@ -243,9 +243,6 @@ public class TextView: NSView, NSTextContent {
     /// Empasizse text ranges in the text view
     public var emphasizeAPI: EmphasizeAPI?
 
-    /// Empasizse text ranges in the text view
-    public var emphasizeAPI: EmphasizeAPI?
-
     // MARK: - Private Properties
 
     var isFirstResponder: Bool = false
