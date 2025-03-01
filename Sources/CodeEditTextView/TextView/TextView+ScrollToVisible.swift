@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import AppKit
 
 extension TextView {
     fileprivate typealias Direction = TextSelectionManager.Direction
@@ -33,6 +34,69 @@ extension TextView {
         }
         if lastFrame != .zero {
             scrollView.contentView.scrollToVisible(lastFrame)
+        }
+    }
+
+    /// Scrolls the view to the specified range.
+    ///
+    /// - Parameters:
+    ///   - range: The range to scroll to.
+    ///   - center: A flag that determines if the range should be centered in the view. Defaults to `true`.
+    ///
+    /// If `center` is `true`, the range will be centered in the visible area.
+    /// If `center` is `false`, the range will be aligned at the top-left of the view.
+    public func scrollToRange(_ range: NSRange, center: Bool = true) {
+        guard let scrollView else { return }
+
+        guard let boundingRect = layoutManager.rectForOffset(range.location) else { return }
+
+        // Check if the range is already visible
+        if visibleRect.contains(boundingRect) {
+            return // No scrolling needed
+        }
+
+        // Calculate the target offset based on the center flag
+        let targetOffset: CGPoint
+        if center {
+            targetOffset = CGPoint(
+                x: max(boundingRect.midX - visibleRect.width / 2, 0),
+                y: max(boundingRect.midY - visibleRect.height / 2, 0)
+            )
+        } else {
+            targetOffset = CGPoint(
+                x: max(boundingRect.origin.x, 0),
+                y: max(boundingRect.origin.y, 0)
+            )
+        }
+
+        var lastFrame: CGRect = .zero
+
+        // Set a timeout to avoid an infinite loop
+        let timeout: TimeInterval = 0.5
+        let startTime = Date()
+
+        // Adjust layout until stable
+        while let newRect = layoutManager.rectForOffset(range.location),
+              lastFrame != newRect,
+              Date().timeIntervalSince(startTime) < timeout {
+            lastFrame = newRect
+            layoutManager.layoutLines()
+            selectionManager.updateSelectionViews()
+            selectionManager.drawSelections(in: visibleRect)
+        }
+
+        // Scroll to make the range appear at the desired position
+        if lastFrame != .zero {
+            let animated = false // feature flag
+            if animated {
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = 0.15 // Adjust duration as needed
+                    context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                    scrollView.contentView.animator().setBoundsOrigin(targetOffset)
+                }
+            } else {
+                scrollView.contentView.scroll(to: targetOffset)
+            }
         }
     }
 
