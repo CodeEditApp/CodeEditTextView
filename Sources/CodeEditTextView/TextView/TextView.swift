@@ -213,34 +213,6 @@ public class TextView: NSView, NSTextContent {
         }
     }
 
-    /// Whether the text view should use a custom background color
-    private var useCustomBackground: Bool = false
-
-    /// The background color to use when useCustomBackground is true
-    private var customBackgroundColor: NSColor = .textBackgroundColor {
-        didSet {
-            updateBackgroundColor()
-        }
-    }
-
-    /// Sets the background color of the text view
-    /// - Parameters:
-    ///   - color: The color to use for the background
-    ///   - useCustom: Whether to use the custom color (true) or system background (false)
-    public func setBackgroundColor(_ color: NSColor, useCustom: Bool) {
-        useCustomBackground = useCustom
-        customBackgroundColor = color
-        updateBackgroundColor()
-    }
-
-    private func updateBackgroundColor() {
-        if useCustomBackground {
-            layer?.backgroundColor = customBackgroundColor.cgColor
-        } else {
-            layer?.backgroundColor = NSColor.textBackgroundColor.cgColor
-        }
-    }
-
     /// The attributes used to render marked text.
     /// Defaults to a single underline.
     public var markedTextAttributes: [NSAttributedString.Key: Any] {
@@ -351,7 +323,6 @@ public class TextView: NSView, NSTextContent {
 
         layoutManager.layoutLines()
         setUpDragGesture()
-        layer?.backgroundColor = .clear
     }
 
     required init?(coder: NSCoder) {
