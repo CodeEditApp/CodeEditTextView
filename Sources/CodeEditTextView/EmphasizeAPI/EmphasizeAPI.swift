@@ -15,6 +15,8 @@ public class EmphasizeAPI {
     public private(set) var emphasizedRangeIndex: Int?
     private let activeColor: NSColor = NSColor(hex: 0xFFFB00, alpha: 1)
     private let inactiveColor: NSColor = NSColor.lightGray.withAlphaComponent(0.4)
+    private var activeTextLayer: CATextLayer?
+    private var originalSelectionColor: NSColor?
 
     weak var textView: TextView?
 
@@ -26,20 +28,28 @@ public class EmphasizeAPI {
     public struct EmphasizedRange {
         public var range: NSRange
         var layer: CAShapeLayer
+        var textLayer: CATextLayer?
     }
 
     // MARK: - Public Methods
 
-    /// Emphasises multiple ranges, with one optionally marked as active (highlighted usually in yellow).
+    /// Emphasises multiple ranges, with one optionally marked as active (highlighted in yellow with black text).
     ///
     /// - Parameters:
     ///   - ranges: An array of ranges to highlight.
-    ///   - activeIndex: The index of the range to highlight in yellow. Defaults to `nil`.
+    ///   - activeIndex: The index of the range to highlight. Defaults to `nil`.
     ///   - clearPrevious: Removes previous emphasised  ranges. Defaults to `true`.
     public func emphasizeRanges(ranges: [NSRange], activeIndex: Int? = nil, clearPrevious: Bool = true) {
         if clearPrevious {
-            removeEmphasizeLayers() // Clear all existing highlights
+            removeEmphasizeLayers()
         }
+
+        // Store the current selection background color if not already stored
+        if originalSelectionColor == nil {
+            originalSelectionColor = textView?.selectionManager.selectionBackgroundColor ?? .selectedTextBackgroundColor
+        }
+        // Temporarily disable selection highlighting
+        textView?.selectionManager.selectionBackgroundColor = .clear
 
         ranges.enumerated().forEach { index, range in
             let isActive = (index == activeIndex)
@@ -47,6 +57,7 @@ public class EmphasizeAPI {
 
             if isActive {
                 emphasizedRangeIndex = activeIndex
+                setTextColorForRange(range, active: true)
             }
         }
     }
@@ -54,14 +65,20 @@ public class EmphasizeAPI {
     /// Emphasises a single range.
     /// - Parameters:
     ///   - range: The text range to highlight.
-    ///   - active: Whether the range should be highlighted as active (usually in yellow). Defaults to `false`.
+    ///   - active: Whether the range should be highlighted as active (black text). Defaults to `false`.
     public func emphasizeRange(range: NSRange, active: Bool = false) {
         guard let shapePath = textView?.layoutManager?.roundedPathForRange(range) else { return }
 
         let layer = createEmphasizeLayer(shapePath: shapePath, active: active)
         textView?.layer?.insertSublayer(layer, at: 1)
-
-        emphasizedRanges.append(EmphasizedRange(range: range, layer: layer))
+        
+        // Create and add text layer
+        if let textLayer = createTextLayer(for: range, active: active) {
+            textView?.layer?.addSublayer(textLayer)
+            emphasizedRanges.append(EmphasizedRange(range: range, layer: layer, textLayer: textLayer))
+        } else {
+            emphasizedRanges.append(EmphasizedRange(range: range, layer: layer, textLayer: nil))
+        }
     }
 
     /// Removes the highlight for a specific range.
@@ -71,16 +88,18 @@ public class EmphasizeAPI {
 
         let removedLayer = emphasizedRanges[index].layer
         removedLayer.removeFromSuperlayer()
+        
+        // Remove text layer
+        emphasizedRanges[index].textLayer?.removeFromSuperlayer()
 
         emphasizedRanges.remove(at: index)
 
         // Adjust the active highlight index
         if let currentIndex = emphasizedRangeIndex {
             if currentIndex == index {
-                // TODO: What is the desired behaviour here?
-                emphasizedRangeIndex = nil // Reset if the active highlight is removed
+                emphasizedRangeIndex = nil
             } else if currentIndex > index {
-                emphasizedRangeIndex = currentIndex - 1 // Shift if the removed index was before the active index
+                emphasizedRangeIndex = currentIndex - 1
             }
         }
     }
@@ -105,22 +124,34 @@ public class EmphasizeAPI {
 
     /// Removes all emphasised ranges.
     public func removeEmphasizeLayers() {
-        emphasizedRanges.forEach { $0.layer.removeFromSuperlayer() }
+        emphasizedRanges.forEach { range in
+            range.layer.removeFromSuperlayer()
+            range.textLayer?.removeFromSuperlayer()
+        }
         emphasizedRanges.removeAll()
         emphasizedRangeIndex = nil
+        
+        // Restore original selection highlighting
+        if let originalColor = originalSelectionColor {
+            textView?.selectionManager.selectionBackgroundColor = originalColor
+        }
+        
+        // Force a redraw to ensure colors update
+        textView?.needsDisplay = true
     }
 
     // MARK: - Private Methods
 
     private func createEmphasizeLayer(shapePath: NSBezierPath, active: Bool) -> CAShapeLayer {
         let layer = CAShapeLayer()
-        layer.cornerRadius = 3.0
+        layer.cornerRadius = 4.0
         layer.fillColor = (active ? activeColor : inactiveColor).cgColor
         layer.shadowColor = .black
-        layer.shadowOpacity = active ? 0.3 : 0.0
-        layer.shadowOffset = CGSize(width: 0, height: 1)
-        layer.shadowRadius = 3.0
+        layer.shadowOpacity = active ? 0.5 : 0.0
+        layer.shadowOffset = CGSize(width: 0, height: 1.5)
+        layer.shadowRadius = 1.5
         layer.opacity = 1.0
+        layer.zPosition = active ? 1 : 0
 
         if #available(macOS 14.0, *) {
             layer.path = shapePath.cgPath
@@ -154,17 +185,19 @@ public class EmphasizeAPI {
 
         guard currentIndex < emphasizedRanges.count else { return nil }
 
-        // Reset the previously active layer
+        // Reset the previously active layer and text color
         if let currentIndex = emphasizedRangeIndex {
             let previousLayer = emphasizedRanges[currentIndex].layer
             previousLayer.fillColor = inactiveColor.cgColor
             previousLayer.shadowOpacity = 0.0
+            setTextColorForRange(emphasizedRanges[currentIndex].range, active: false)
         }
 
-        // Set the new active layer
+        // Set the new active layer and text color
         let newLayer = emphasizedRanges[currentIndex].layer
         newLayer.fillColor = activeColor.cgColor
         newLayer.shadowOpacity = 0.3
+        setTextColorForRange(emphasizedRanges[currentIndex].range, active: true)
 
         applyPopAnimation(to: newLayer)
         emphasizedRangeIndex = currentIndex
@@ -180,5 +213,56 @@ public class EmphasizeAPI {
         scaleAnimation.timingFunctions = [CAMediaTimingFunction(name: .easeOut)]
 
         layer.add(scaleAnimation, forKey: "popAnimation")
+    }
+
+    private func getInactiveTextColor() -> NSColor {
+        if textView?.effectiveAppearance.name == .darkAqua {
+            return .white
+        }
+        return .black
+    }
+
+    private func createTextLayer(for range: NSRange, active: Bool) -> CATextLayer? {
+        guard let textView = textView,
+              let layoutManager = textView.layoutManager,
+              let shapePath = layoutManager.roundedPathForRange(range),
+              let originalString = textView.textStorage?.attributedSubstring(from: range) else { return nil }
+
+        var bounds = shapePath.bounds
+        bounds.origin.y += 1 // Move down by 1 pixel
+
+        // Create text layer
+        let textLayer = CATextLayer()
+        textLayer.frame = bounds
+        textLayer.backgroundColor = NSColor.clear.cgColor
+        textLayer.contentsScale = textView.window?.screen?.backingScaleFactor ?? 2.0
+        textLayer.allowsFontSubpixelQuantization = true
+        textLayer.zPosition = 2
+
+        // Get the font from the attributed string
+        if let font = originalString.attribute(.font, at: 0, effectiveRange: nil) as? NSFont {
+            textLayer.font = font
+        } else {
+            textLayer.font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+        }
+
+        updateTextLayer(textLayer, with: originalString, active: active)
+        return textLayer
+    }
+
+    private func updateTextLayer(_ textLayer: CATextLayer, with originalString: NSAttributedString, active: Bool) {
+        let text = NSMutableAttributedString(attributedString: originalString)
+        text.addAttribute(.foregroundColor,
+                         value: active ? NSColor.black : getInactiveTextColor(),
+                         range: NSRange(location: 0, length: text.length))
+        textLayer.string = text
+    }
+
+    private func setTextColorForRange(_ range: NSRange, active: Bool) {
+        guard let index = emphasizedRanges.firstIndex(where: { $0.range == range }),
+              let textLayer = emphasizedRanges[index].textLayer,
+              let originalString = textView?.textStorage?.attributedSubstring(from: range) else { return }
+
+        updateTextLayer(textLayer, with: originalString, active: active)
     }
 }
