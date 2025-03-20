@@ -42,15 +42,6 @@ final class LineFragmentView: NSView {
         }
         context.saveGState()
 
-        context.setAllowsAntialiasing(true)
-        context.setShouldAntialias(true)
-        context.setAllowsFontSmoothing(false)
-        context.setShouldSmoothFonts(false)
-        context.setAllowsFontSubpixelPositioning(true)
-        context.setShouldSubpixelPositionFonts(true)
-        context.setAllowsFontSubpixelQuantization(true)
-        context.setShouldSubpixelQuantizeFonts(true)
-
         ContextSetHiddenSmoothingStyle(context, 16)
 
         context.textMatrix = .init(scaleX: 1, y: -1)

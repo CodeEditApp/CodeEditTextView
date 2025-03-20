@@ -13,7 +13,7 @@ public class EmphasizeAPI {
 
     public private(set) var emphasizedRanges: [EmphasizedRange] = []
     public private(set) var emphasizedRangeIndex: Int?
-    private let activeColor: NSColor = NSColor(hex: 0xFFFB00, alpha: 1)
+    private let activeColor: NSColor = .findHighlightColor
     private let inactiveColor: NSColor = NSColor.lightGray.withAlphaComponent(0.4)
     private var activeTextLayer: CATextLayer?
     private var originalSelectionColor: NSColor?
@@ -88,7 +88,7 @@ public class EmphasizeAPI {
 
         let removedLayer = emphasizedRanges[index].layer
         removedLayer.removeFromSuperlayer()
-        
+
         // Remove text layer
         emphasizedRanges[index].textLayer?.removeFromSuperlayer()
 
@@ -130,12 +130,12 @@ public class EmphasizeAPI {
         }
         emphasizedRanges.removeAll()
         emphasizedRangeIndex = nil
-        
+
         // Restore original selection highlighting
         if let originalColor = originalSelectionColor {
             textView?.selectionManager.selectionBackgroundColor = originalColor
         }
-        
+
         // Force a redraw to ensure colors update
         textView?.needsDisplay = true
     }
