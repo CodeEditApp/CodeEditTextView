@@ -22,6 +22,7 @@ extension TextView {
         if isSelectable {
             selectionManager.drawSelections(in: dirtyRect)
         }
+        emphasizeAPI?.updateLayerBackgrounds()
     }
 
     override open var isFlipped: Bool {

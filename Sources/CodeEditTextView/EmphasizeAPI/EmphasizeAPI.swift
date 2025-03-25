@@ -25,6 +25,7 @@ public class EmphasizeAPI {
     }
 
     // MARK: - Structs
+
     public struct EmphasizedRange {
         public var range: NSRange
         var layer: CAShapeLayer
@@ -71,7 +72,7 @@ public class EmphasizeAPI {
 
         let layer = createEmphasizeLayer(shapePath: shapePath, active: active)
         textView?.layer?.insertSublayer(layer, at: 1)
-        
+
         // Create and add text layer
         if let textLayer = createTextLayer(for: range, active: active) {
             textView?.layer?.addSublayer(textLayer)
@@ -138,6 +139,21 @@ public class EmphasizeAPI {
 
         // Force a redraw to ensure colors update
         textView?.needsDisplay = true
+    }
+
+    package func updateLayerBackgrounds() {
+        emphasizedRanges.enumerated().forEach { (idx, range) in
+            let isActive = emphasizedRangeIndex == idx
+            range.layer.fillColor = (isActive ? activeColor : inactiveColor).cgColor
+
+            guard let attributedString = range.textLayer?.string as? NSAttributedString else { return }
+            let mutableString = NSMutableAttributedString(attributedString: attributedString)
+            mutableString.addAttributes(
+                [.foregroundColor: isActive ? NSColor.black : getInactiveTextColor()],
+                range: NSRange(location: 0, length: range.range.length)
+            )
+            range.textLayer?.string = mutableString
+        }
     }
 
     // MARK: - Private Methods
@@ -226,7 +242,9 @@ public class EmphasizeAPI {
         guard let textView = textView,
               let layoutManager = textView.layoutManager,
               let shapePath = layoutManager.roundedPathForRange(range),
-              let originalString = textView.textStorage?.attributedSubstring(from: range) else { return nil }
+              let originalString = textView.textStorage?.attributedSubstring(from: range) else {
+            return nil
+        }
 
         var bounds = shapePath.bounds
         bounds.origin.y += 1 // Move down by 1 pixel
@@ -252,16 +270,20 @@ public class EmphasizeAPI {
 
     private func updateTextLayer(_ textLayer: CATextLayer, with originalString: NSAttributedString, active: Bool) {
         let text = NSMutableAttributedString(attributedString: originalString)
-        text.addAttribute(.foregroundColor,
-                         value: active ? NSColor.black : getInactiveTextColor(),
-                         range: NSRange(location: 0, length: text.length))
+        text.addAttribute(
+            .foregroundColor,
+            value: active ? NSColor.black : getInactiveTextColor(),
+            range: NSRange(location: 0, length: text.length)
+        )
         textLayer.string = text
     }
 
     private func setTextColorForRange(_ range: NSRange, active: Bool) {
         guard let index = emphasizedRanges.firstIndex(where: { $0.range == range }),
               let textLayer = emphasizedRanges[index].textLayer,
-              let originalString = textView?.textStorage?.attributedSubstring(from: range) else { return }
+              let originalString = textView?.textStorage?.attributedSubstring(from: range) else {
+            return
+        }
 
         updateTextLayer(textLayer, with: originalString, active: active)
     }
