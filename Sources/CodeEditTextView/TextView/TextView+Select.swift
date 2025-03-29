@@ -37,8 +37,8 @@ extension TextView {
             }
             let charSet = CharacterSet(charactersIn: String(char))
             let characterSet: CharacterSet
-            if CharacterSet.alphanumerics.isSuperset(of: charSet) {
-                characterSet = .alphanumerics
+            if CharacterSet.codeIdentifierCharacters.isSuperset(of: charSet) {
+                characterSet = .codeIdentifierCharacters
             } else if CharacterSet.whitespaces.isSuperset(of: charSet) {
                 characterSet = .whitespaces
             } else if CharacterSet.newlines.isSuperset(of: charSet) {
