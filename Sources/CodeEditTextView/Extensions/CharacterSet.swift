@@ -8,7 +8,7 @@
 import Foundation
 
 extension CharacterSet {
-    /// Returns a character set containing the characters in common in code names
+    /// Returns a character set containing the characters common in code names
     static let codeIdentifierCharacters: CharacterSet = .alphanumerics
         .union(.init(charactersIn: "_"))
 }
