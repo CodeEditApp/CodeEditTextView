@@ -109,10 +109,11 @@ package extension TextSelectionManager {
 
             if hasFoundValidWordChar && CharacterSet.punctuationCharacters
                 .union(.whitespacesAndNewlines)
+                .subtracting(CharacterSet.codeIdentifierCharacters)
                 .isSuperset(of: CharacterSet(charactersIn: substring)) {
                 stop.pointee = true
                 return
-            } else if CharacterSet.alphanumerics.isSuperset(of: CharacterSet(charactersIn: substring)) {
+            } else if CharacterSet.codeIdentifierCharacters.isSuperset(of: CharacterSet(charactersIn: substring)) {
                 hasFoundValidWordChar = true
             }
             rangeToDelete.length += substring.count
