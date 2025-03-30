@@ -34,6 +34,12 @@ public extension TextSelectionManager {
             lhs.range == rhs.range
         }
     }
+
+    enum SelectionMode {
+        case character
+        case word
+        case line
+    }
 }
 
 private extension TextSelectionManager.TextSelection {
