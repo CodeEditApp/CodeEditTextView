@@ -64,7 +64,9 @@ extension TextView {
     public func updateFrameIfNeeded() -> Bool {
         var availableSize = scrollView?.contentSize ?? .zero
         availableSize.height -= (scrollView?.contentInsets.top ?? 0) + (scrollView?.contentInsets.bottom ?? 0)
-        let newHeight = max(layoutManager.estimatedHeight(), availableSize.height)
+
+        let extraHeight = scrollPastEnd ? availableSize.height * scrollPastEndAmount : 0
+        let newHeight = max(layoutManager.estimatedHeight() + extraHeight, availableSize.height)
         let newWidth = layoutManager.estimatedWidth()
 
         var didUpdate = false

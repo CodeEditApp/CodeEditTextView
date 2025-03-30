@@ -221,7 +221,6 @@ public class TextSelectionManager: NSObject {
             .getLine(atOffset: range.location - (selectedLine.range.location))?
             .height
         ?? layoutManager?.estimateLineHeight()
-
     }
 
     /// Removes all cursor views and stops the cursor blink timer.
