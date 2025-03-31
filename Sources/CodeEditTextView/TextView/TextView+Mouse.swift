@@ -42,6 +42,8 @@ extension TextView {
     /// if shift, we extend the selection to the click location
     /// else we set the cursor
     fileprivate func handleSingleClick(event: NSEvent, offset: Int) {
+        cursorSelectionMode = .character
+
         guard isEditable else {
             super.mouseDown(with: event)
             return
@@ -59,6 +61,8 @@ extension TextView {
     }
 
     fileprivate func handleDoubleClick(event: NSEvent) {
+        cursorSelectionMode = .word
+
         guard !event.modifierFlags.contains(.shift) else {
             super.mouseDown(with: event)
             return
@@ -68,6 +72,8 @@ extension TextView {
     }
 
     fileprivate func handleTripleClick(event: NSEvent) {
+        cursorSelectionMode = .line
+
         guard !event.modifierFlags.contains(.shift) else {
             super.mouseDown(with: event)
             return
@@ -97,12 +103,43 @@ extension TextView {
                   let endPosition = layoutManager.textOffsetAtPoint(convert(event.locationInWindow, from: nil)) else {
                 return
             }
-            selectionManager.setSelectedRange(
-                NSRange(
-                    location: min(startPosition, endPosition),
-                    length: max(startPosition, endPosition) - min(startPosition, endPosition)
+
+            switch cursorSelectionMode {
+            case .character:
+                selectionManager.setSelectedRange(
+                    NSRange(
+                        location: min(startPosition, endPosition),
+                        length: max(startPosition, endPosition) - min(startPosition, endPosition)
+                    )
                 )
-            )
+
+            case .word:
+                let startWordRange = findWordBoundary(at: startPosition)
+                let endWordRange = findWordBoundary(at: endPosition)
+
+                selectionManager.setSelectedRange(
+                    NSRange(
+                        location: min(startWordRange.location, endWordRange.location),
+                        length: max(startWordRange.location + startWordRange.length,
+                                    endWordRange.location + endWordRange.length) -
+                                min(startWordRange.location, endWordRange.location)
+                    )
+                )
+
+            case .line:
+                let startLineRange = findLineBoundary(at: startPosition)
+                let endLineRange = findLineBoundary(at: endPosition)
+
+                selectionManager.setSelectedRange(
+                    NSRange(
+                        location: min(startLineRange.location, endLineRange.location),
+                        length: max(startLineRange.location + startLineRange.length,
+                                    endLineRange.location + endLineRange.length) -
+                                min(startLineRange.location, endLineRange.location)
+                    )
+                )
+            }
+
             setNeedsDisplay()
             self.autoscroll(with: event)
         }
