@@ -108,16 +108,16 @@ public class TextView: NSView, NSTextContent {
     }
 
     /// Determines if the text view should allow scrolling past the end of the document
-    public var scrollPastEnd: Bool = true {
+    public var overscroll: Bool = true {
         didSet {
             updateFrameIfNeeded()
         }
     }
 
     /// The amount of extra space to add when scrolling past end is enabled, as a percentage of the viewport height
-    public var scrollPastEndAmount: CGFloat = 0.5 {
+    public var overscrollAmount: CGFloat = 0.5 {
         didSet {
-            if scrollPastEnd {
+            if overscroll {
                 updateFrameIfNeeded()
             }
         }
