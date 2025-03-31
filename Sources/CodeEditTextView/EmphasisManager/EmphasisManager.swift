@@ -7,52 +7,6 @@
 
 import AppKit
 
-/// Defines the style of emphasis to apply to text ranges
-public enum EmphasisStyle: Equatable {
-    /// Standard emphasis with background color
-    case standard
-    /// Underline emphasis with a line color
-    case underline(color: NSColor)
-    /// Outline emphasis with a border color
-    case outline(color: NSColor)
-
-    public static func == (lhs: EmphasisStyle, rhs: EmphasisStyle) -> Bool {
-        switch (lhs, rhs) {
-        case (.standard, .standard):
-            return true
-        case (.underline(let lhsColor), .underline(let rhsColor)):
-            return lhsColor == rhsColor
-        case (.outline(let lhsColor), .outline(let rhsColor)):
-            return lhsColor == rhsColor
-        default:
-            return false
-        }
-    }
-}
-
-/// Represents a single emphasis with its properties
-public struct Emphasis {
-    public let range: NSRange
-    public let style: EmphasisStyle
-    public let flash: Bool
-    public let inactive: Bool
-    public let select: Bool
-
-    public init(
-        range: NSRange,
-        style: EmphasisStyle = .standard,
-        flash: Bool = false,
-        inactive: Bool = false,
-        select: Bool = false
-    ) {
-        self.range = range
-        self.style = style
-        self.flash = flash
-        self.inactive = inactive
-        self.select = select
-    }
-}
-
 /// Manages text emphases within a text view, supporting multiple styles and groups.
 public final class EmphasisManager {
     /// Internal representation of a emphasis layer with its associated text layer
