@@ -42,7 +42,7 @@ extension TextView {
     /// if shift, we extend the selection to the click location
     /// else we set the cursor
     fileprivate func handleSingleClick(event: NSEvent, offset: Int) {
-        selectionMode = .character
+        cursorSelectionMode = .character
 
         guard isEditable else {
             super.mouseDown(with: event)
@@ -61,7 +61,7 @@ extension TextView {
     }
 
     fileprivate func handleDoubleClick(event: NSEvent) {
-        selectionMode = .word
+        cursorSelectionMode = .word
 
         guard !event.modifierFlags.contains(.shift) else {
             super.mouseDown(with: event)
@@ -72,7 +72,7 @@ extension TextView {
     }
 
     fileprivate func handleTripleClick(event: NSEvent) {
-        selectionMode = .line
+        cursorSelectionMode = .line
 
         guard !event.modifierFlags.contains(.shift) else {
             super.mouseDown(with: event)
@@ -104,7 +104,7 @@ extension TextView {
                 return
             }
 
-            switch selectionMode {
+            switch cursorSelectionMode {
             case .character:
                 selectionManager.setSelectedRange(
                     NSRange(
