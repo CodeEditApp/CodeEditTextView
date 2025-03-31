@@ -6,7 +6,6 @@
 //
 
 import AppKit
-import TextStory
 
 extension TextView {
     override public func insertNewline(_ sender: Any?) {
