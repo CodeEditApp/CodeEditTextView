@@ -100,7 +100,8 @@ public final class EmphasisManager {
         // Handle flash animations
         for (index, emphasis) in emphases.enumerated() where emphasis.flash {
             let layer = layers[index]
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                guard let self = self else { return }
                 self.applyFadeOutAnimation(to: layer.layer, textLayer: layer.textLayer)
                 // Remove the emphasis from the group
                 if var emphases = self.emphasisGroups[id] {
