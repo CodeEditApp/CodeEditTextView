@@ -114,7 +114,7 @@ public class TextView: NSView, NSTextContent {
         }
     }
 
-    /// The amount of extra space to add when scrolling past end is enabled, as a percentage of the viewport height
+    /// The amount of extra space to add when overscroll is enabled, as a percentage of the viewport height
     public var overscrollAmount: CGFloat = 0.5 {
         didSet {
             if overscroll {
