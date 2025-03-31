@@ -296,7 +296,7 @@ public final class EmphasisManager {
             textLayer?.removeFromSuperlayer()
         }
     }
-    
+
     /// Handles selection of text ranges for emphases where select is true
     private func handleSelections(for emphases: [Emphasis]) {
         let selectableRanges = emphases.filter(\.select).map(\.range)
