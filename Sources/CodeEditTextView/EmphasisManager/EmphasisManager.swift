@@ -287,8 +287,7 @@ public final class EmphasisManager {
 
         if let textLayer = textLayer, let textFadeAnimation = fadeAnimation.copy() as? CABasicAnimation {
             textLayer.add(textFadeAnimation, forKey: "fadeOutAnimation")
-                textLayer.add(textFadeAnimation, forKey: "fadeOutAnimation")
-            }
+            textLayer.add(textFadeAnimation, forKey: "fadeOutAnimation")
         }
 
         // Remove both layers after animation completes
@@ -297,7 +296,7 @@ public final class EmphasisManager {
             textLayer?.removeFromSuperlayer()
         }
     }
-
+    
     /// Handles selection of text ranges for emphases where select is true
     private func handleSelections(for emphases: [Emphasis]) {
         let selectableRanges = emphases.filter(\.select).map(\.range)
