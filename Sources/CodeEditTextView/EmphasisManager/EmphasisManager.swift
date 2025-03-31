@@ -351,12 +351,7 @@ public final class EmphasisManager {
         guard let textView, !selectableRanges.isEmpty else { return }
 
         textView.selectionManager.setSelectedRanges(selectableRanges)
-
-        // Scroll to the first selected range
-        if let firstRange = selectableRanges.first {
-            textView.scrollToRange(firstRange)
-        }
-
+        textView.scrollSelectionToVisible()
         textView.needsDisplay = true
     }
 }
