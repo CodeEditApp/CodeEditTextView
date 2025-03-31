@@ -107,6 +107,16 @@ public class TextView: NSView, NSTextContent {
         }
     }
 
+    /// The amount of extra space to add when overscroll is enabled, as a percentage of the viewport height
+    public var overscrollAmount: CGFloat = 0.5 {
+        didSet {
+            if overscrollAmount < 0 {
+                overscrollAmount = 0
+            }
+            updateFrameIfNeeded()
+        }
+    }
+
     /// Whether or not the editor should wrap lines
     public var wrapLines: Bool {
         get {
