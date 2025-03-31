@@ -168,28 +168,26 @@ public final class EmphasisManager {
 
     /// Updates the positions and bounds of all emphasis layers to match the current text layout.
     public func updateLayerBackgrounds() {
-        for (_, layers) in emphasisGroups {
-            for layer in layers {
-                if let shapePath = textView?.layoutManager?.roundedPathForRange(layer.emphasis.range) {
-                    if #available(macOS 14.0, *) {
-                        layer.layer.path = shapePath.cgPath
-                    } else {
-                        layer.layer.path = shapePath.cgPathFallback
-                    }
+        for layer in emphasisGroups.flatMap(\.value) {
+            if let shapePath = textView?.layoutManager?.roundedPathForRange(layer.emphasis.range) {
+                if #available(macOS 14.0, *) {
+                    layer.layer.path = shapePath.cgPath
+                } else {
+                    layer.layer.path = shapePath.cgPathFallback
+                }
 
-                    // Update bounds and position
-                    if let cgPath = layer.layer.path {
-                        let boundingBox = cgPath.boundingBox
-                        layer.layer.bounds = boundingBox
-                        layer.layer.position = CGPoint(x: boundingBox.midX, y: boundingBox.midY)
-                    }
+                // Update bounds and position
+                if let cgPath = layer.layer.path {
+                    let boundingBox = cgPath.boundingBox
+                    layer.layer.bounds = boundingBox
+                    layer.layer.position = CGPoint(x: boundingBox.midX, y: boundingBox.midY)
+                }
 
-                    // Update text layer if it exists
-                    if let textLayer = layer.textLayer {
-                        var bounds = shapePath.bounds
-                        bounds.origin.y += 1 // Move down by 1 pixel
-                        textLayer.frame = bounds
-                    }
+                // Update text layer if it exists
+                if let textLayer = layer.textLayer {
+                    var bounds = shapePath.bounds
+                    bounds.origin.y += 1 // Move down by 1 pixel
+                    textLayer.frame = bounds
                 }
             }
         }
