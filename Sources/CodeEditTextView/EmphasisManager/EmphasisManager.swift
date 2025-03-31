@@ -337,8 +337,8 @@ public final class EmphasisManager {
         }
 
         // Remove both layers after animation completes
-        DispatchQueue.main.asyncAfter(deadline: .now() + fadeAnimation.duration) {
-            layer.removeFromSuperlayer()
+        DispatchQueue.main.asyncAfter(deadline: .now() + fadeAnimation.duration) { [weak layer, weak textLayer] in
+            layer?.removeFromSuperlayer()
             textLayer?.removeFromSuperlayer()
         }
     }
