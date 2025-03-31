@@ -330,8 +330,8 @@ public final class EmphasisManager {
 
         layer.add(fadeAnimation, forKey: "fadeOutAnimation")
 
-        if let textLayer = textLayer {
-            if let textFadeAnimation = fadeAnimation.copy() as? CABasicAnimation {
+        if let textLayer = textLayer, let textFadeAnimation = fadeAnimation.copy() as? CABasicAnimation {
+            textLayer.add(textFadeAnimation, forKey: "fadeOutAnimation")
                 textLayer.add(textFadeAnimation, forKey: "fadeOutAnimation")
             }
         }
