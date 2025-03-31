@@ -240,7 +240,7 @@ public class TextView: NSView, NSTextContent {
     /// The selection manager for the text view.
     package(set) public var selectionManager: TextSelectionManager!
 
-    /// Manages text highlights within the text view
+    /// Managed emphasized text ranges in the text view
     public var emphasisManager: EmphasisManager?
 
     // MARK: - Private Properties

@@ -54,7 +54,8 @@ public final class EmphasisManager {
         // Handle flash animations
         for (index, emphasis) in emphases.enumerated() where emphasis.flash {
             let layer = layers[index]
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                guard let self = self else { return }
                 self.applyFadeOutAnimation(to: layer.layer, textLayer: layer.textLayer)
                 // Remove the emphasis from the group
                 if var emphases = self.emphasisGroups[id] {
@@ -122,28 +123,26 @@ public final class EmphasisManager {
 
     /// Updates the positions and bounds of all emphasis layers to match the current text layout.
     public func updateLayerBackgrounds() {
-        for (_, layers) in emphasisGroups {
-            for layer in layers {
-                if let shapePath = textView?.layoutManager?.roundedPathForRange(layer.emphasis.range) {
-                    if #available(macOS 14.0, *) {
-                        layer.layer.path = shapePath.cgPath
-                    } else {
-                        layer.layer.path = shapePath.cgPathFallback
-                    }
+        for layer in emphasisGroups.flatMap(\.value) {
+            if let shapePath = textView?.layoutManager?.roundedPathForRange(layer.emphasis.range) {
+                if #available(macOS 14.0, *) {
+                    layer.layer.path = shapePath.cgPath
+                } else {
+                    layer.layer.path = shapePath.cgPathFallback
+                }
 
-                    // Update bounds and position
-                    if let cgPath = layer.layer.path {
-                        let boundingBox = cgPath.boundingBox
-                        layer.layer.bounds = boundingBox
-                        layer.layer.position = CGPoint(x: boundingBox.midX, y: boundingBox.midY)
-                    }
+                // Update bounds and position
+                if let cgPath = layer.layer.path {
+                    let boundingBox = cgPath.boundingBox
+                    layer.layer.bounds = boundingBox
+                    layer.layer.position = CGPoint(x: boundingBox.midX, y: boundingBox.midY)
+                }
 
-                    // Update text layer if it exists
-                    if let textLayer = layer.textLayer {
-                        var bounds = shapePath.bounds
-                        bounds.origin.y += 1 // Move down by 1 pixel
-                        textLayer.frame = bounds
-                    }
+                // Update text layer if it exists
+                if let textLayer = layer.textLayer {
+                    var bounds = shapePath.bounds
+                    bounds.origin.y += 1 // Move down by 1 pixel
+                    textLayer.frame = bounds
                 }
             }
         }
@@ -286,15 +285,15 @@ public final class EmphasisManager {
 
         layer.add(fadeAnimation, forKey: "fadeOutAnimation")
 
-        if let textLayer = textLayer {
-            if let textFadeAnimation = fadeAnimation.copy() as? CABasicAnimation {
+        if let textLayer = textLayer, let textFadeAnimation = fadeAnimation.copy() as? CABasicAnimation {
+            textLayer.add(textFadeAnimation, forKey: "fadeOutAnimation")
                 textLayer.add(textFadeAnimation, forKey: "fadeOutAnimation")
             }
         }
 
         // Remove both layers after animation completes
-        DispatchQueue.main.asyncAfter(deadline: .now() + fadeAnimation.duration) {
-            layer.removeFromSuperlayer()
+        DispatchQueue.main.asyncAfter(deadline: .now() + fadeAnimation.duration) { [weak layer, weak textLayer] in
+            layer?.removeFromSuperlayer()
             textLayer?.removeFromSuperlayer()
         }
     }
