@@ -234,7 +234,7 @@ extension TextLayoutManager {
 
         // Close the path
         if let firstPoint = points.first {
-            return NSBezierPath.smoothPath(points + [firstPoint], radius: 2)
+            return NSBezierPath.smoothPath(points + [firstPoint], radius: 4)
         }
 
         return nil
