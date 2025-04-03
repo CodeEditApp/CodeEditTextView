@@ -299,7 +299,7 @@ public final class EmphasisManager {
 
     /// Handles selection of text ranges for emphases where select is true
     private func handleSelections(for emphases: [Emphasis]) {
-        let selectableRanges = emphases.filter(\.select).map(\.range)
+        let selectableRanges = emphases.filter(\.selectInDocument).map(\.range)
         guard let textView, !selectableRanges.isEmpty else { return }
 
         textView.selectionManager.setSelectedRanges(selectableRanges)
