@@ -78,10 +78,9 @@ public class TextSelectionManager: NSObject {
         let selection = TextSelection(range: range)
         selection.suggestedXPos = layoutManager?.rectForOffset(range.location)?.minX
         textSelections = [selection]
-        if textView?.isFirstResponder ?? false {
-            updateSelectionViews()
-            NotificationCenter.default.post(Notification(name: Self.selectionChangedNotification, object: self))
-        }
+        updateSelectionViews()
+        NotificationCenter.default.post(Notification(name: Self.selectionChangedNotification, object: self))
+        delegate?.setNeedsDisplay()
     }
 
     /// Set the selected ranges to new ranges. Overrides any existing selections.
@@ -99,10 +98,9 @@ public class TextSelectionManager: NSObject {
                 selection.suggestedXPos = layoutManager?.rectForOffset($0.location)?.minX
                 return selection
             }
-        if textView?.isFirstResponder ?? false {
-            updateSelectionViews()
-            NotificationCenter.default.post(Notification(name: Self.selectionChangedNotification, object: self))
-        }
+        updateSelectionViews()
+        NotificationCenter.default.post(Notification(name: Self.selectionChangedNotification, object: self))
+        delegate?.setNeedsDisplay()
     }
 
     /// Append a new selected range to the existing ones.
@@ -126,10 +124,9 @@ public class TextSelectionManager: NSObject {
             textSelections.append(newTextSelection)
         }
 
-        if textView?.isFirstResponder ?? false {
-            updateSelectionViews()
-            NotificationCenter.default.post(Notification(name: Self.selectionChangedNotification, object: self))
-        }
+        updateSelectionViews()
+        NotificationCenter.default.post(Notification(name: Self.selectionChangedNotification, object: self))
+        delegate?.setNeedsDisplay()
     }
 
     // MARK: - Selection Views
@@ -137,6 +134,7 @@ public class TextSelectionManager: NSObject {
     /// Update all selection cursors. Placing them in the correct position for each text selection and reseting the
     /// blink timer.
     func updateSelectionViews() {
+        guard textView?.isFirstResponder ?? false else { return }
         var didUpdate: Bool = false
 
         for textSelection in textSelections {
