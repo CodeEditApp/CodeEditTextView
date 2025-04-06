@@ -8,6 +8,16 @@
 import AppKit
 
 /// Manages text emphases within a text view, supporting multiple styles and groups.
+///
+/// Text emphasis draws attention to a range of text, indicating importance.
+/// This object may be used in a code editor to emphasize search results, or indicate 
+/// bracket pairs, for instance.
+///
+/// This object is designed to allow for easy grouping of emphasis types. An outside 
+/// object is responsible for managing what emphases are visible. Because it's very 
+/// likely that more than one type of emphasis may occur on the document at the same
+/// time, grouping allows each emphasis to be managed separately from the others by
+/// each outside object without knowledge of the other's state.
 public final class EmphasisManager {
     /// Internal representation of a emphasis layer with its associated text layer
     private struct EmphasisLayer {
