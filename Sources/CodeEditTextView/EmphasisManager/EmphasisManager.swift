@@ -30,7 +30,7 @@ public final class EmphasisManager {
     /// Adds a single emphasis to the specified group.
     /// - Parameters:
     ///   - emphasis: The emphasis to add
-    ///   - id: The group identifier
+    ///   - id: A group identifier
     public func addEmphasis(_ emphasis: Emphasis, for id: String) {
         addEmphases([emphasis], for: id)
     }
