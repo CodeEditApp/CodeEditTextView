@@ -8,7 +8,7 @@
 import AppKit
 
 /// Represents a single emphasis with its properties
-public struct Emphasis {
+public struct Emphasis: Equatable {
     /// The range the emphasis applies it's style to, relative to the entire text document.
     public let range: NSRange
 
