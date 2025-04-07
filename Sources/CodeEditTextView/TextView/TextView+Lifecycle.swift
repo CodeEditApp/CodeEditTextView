@@ -5,6 +5,8 @@
 //  Created by Khan Winter on 4/7/25.
 //
 
+import AppKit
+
 extension TextView {
     override public func layout() {
         layoutManager.layoutLines()
