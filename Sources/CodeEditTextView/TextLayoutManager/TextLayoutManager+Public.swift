@@ -172,9 +172,7 @@ extension TextLayoutManager {
 
         // Don't make rects in between characters
         let realRangeStart = textStorage.rangeOfComposedCharacterSequence(at: range.lowerBound)
-        ?? NSRange(location: range.lowerBound, length: 0)
         let realRangeEnd = textStorage.rangeOfComposedCharacterSequence(at: range.upperBound - 1)
-        ?? NSRange(location: range.upperBound - 1, length: 0)
 
         // Fragments are relative to the line
         let relativeRange = NSRange(

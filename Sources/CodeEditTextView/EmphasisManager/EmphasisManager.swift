@@ -70,7 +70,7 @@ public final class EmphasisManager {
         handleSelections(for: emphases)
 
         // Handle flash animations
-        for flashingLayer in emphasisGroups[id, default: []].filter { $0.emphasis.flash } {
+        for flashingLayer in emphasisGroups[id, default: []].filter({ $0.emphasis.flash }) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
                 guard let self = self else { return }
                 self.applyFadeOutAnimation(to: flashingLayer.layer, textLayer: flashingLayer.textLayer) {
@@ -204,7 +204,7 @@ public final class EmphasisManager {
             }
             let lineHeight = layoutManager.estimateLineHeight()
             let lineBottomPadding = (lineHeight - (lineHeight / layoutManager.lineHeightMultiplier)) / 4
-            var path = NSBezierPath()
+            let path = NSBezierPath()
             for rect in layoutManager.rectsFor(range: range) {
                 path.move(to: NSPoint(x: rect.minX, y: rect.maxY - lineBottomPadding))
                 path.line(to: NSPoint(x: rect.maxX, y: rect.maxY - lineBottomPadding))
