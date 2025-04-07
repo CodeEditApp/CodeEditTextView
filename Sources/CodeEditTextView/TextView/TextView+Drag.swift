@@ -8,11 +8,12 @@
 import Foundation
 import AppKit
 
-fileprivate let pasteboardObjects = [NSString.self, NSURL.self]
+private let pasteboardObjects = [NSString.self, NSURL.self]
 
 extension TextView: NSDraggingSource {
     // MARK: - Drag Gesture
 
+    /// Custom press gesture recognizer that fails if it does not click into a selected range.
     private class DragSelectionGesture: NSPressGestureRecognizer {
         override func mouseDown(with event: NSEvent) {
             guard isEnabled, let view = self.view as? TextView, event.type == .leftMouseDown else {
@@ -38,7 +39,12 @@ extension TextView: NSDraggingSource {
         addGestureRecognizer(dragGesture)
     }
 
-    @objc private func dragGestureHandler(_ sender: Any) {
+    @objc private func dragGestureHandler(_ sender: DragSelectionGesture) {
+        guard sender.state == .began else { return }
+        defer {
+            sender.state = .ended
+        }
+
         guard let visibleTextRange,
               let draggingView = DraggingTextRenderer(
                 ranges: selectionManager.textSelections
@@ -65,7 +71,7 @@ extension TextView: NSDraggingSource {
             .textSelections
             .sorted(by: { $0.range.location < $1.range.location })
             .map { textStorage.attributedSubstring(from: $0.range) }
-        var attributedString = NSMutableAttributedString()
+        let attributedString = NSMutableAttributedString()
         for (idx, string) in attributedStrings.enumerated() {
             attributedString.append(string)
             if idx < attributedStrings.count - 1 {
@@ -184,6 +190,7 @@ extension TextView: NSDraggingSource {
             return false
         }
 
+        undoManager?.beginUndoGrouping()
         if let source = sender.draggingSource as? TextView, source === self {
             // Offset the insertion location so that we can remove the text first before pasting it into the editor.
             var updatedInsertionOffset = insertionOffset
@@ -200,6 +207,8 @@ extension TextView: NSDraggingSource {
         }
 
         replaceCharacters(in: [NSRange(location: insertionOffset, length: 0)], with: insertionString)
+        undoManager?.endUndoGrouping()
+
         selectionManager.setSelectedRange(
             NSRange(location: insertionOffset, length: NSString(string: insertionString).length)
         )

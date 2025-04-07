@@ -25,17 +25,11 @@ class DraggingTextRenderer: NSView {
 
         assert(!ranges.isEmpty, "Empty ranges not allowed")
 
-        guard let lastRange = ranges.last else { return nil }
-
         var minY: CGFloat = .infinity
         var maxY: CGFloat = 0.0
 
         for range in ranges {
             for line in layoutManager.lineStorage.linesInRange(range) {
-                guard layoutManager.visibleLineIds.contains(line.data.id), // Only grab visible text
-                      let width = line.data.maxWidth else {
-                    break
-                }
                 minY = min(minY, line.yPos)
                 maxY = max(maxY, line.yPos + line.height)
             }

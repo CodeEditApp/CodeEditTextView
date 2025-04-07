@@ -45,7 +45,6 @@ public final class LineFragment: Identifiable, Equatable {
     /// - Parameter offset: The offset, relative to the start of the *line*.
     /// - Returns: The x position of the character in the drawn line, from the left.
     public func xPos(for offset: Int) -> CGFloat {
-        let lineRange = CTLineGetStringRange(ctLine)
         return CTLineGetOffsetForStringIndex(ctLine, offset, nil)
     }
 
@@ -72,7 +71,7 @@ public final class LineFragment: Identifiable, Equatable {
         context.textMatrix = .init(scaleX: 1, y: -1)
         context.textPosition = CGPoint(
             x: 0,
-            y: height - descent + (heightDifference/2)
+            y: yPos + height - descent + (heightDifference/2)
         ).pixelAligned
 
         CTLineDraw(ctLine, context)
