@@ -247,7 +247,7 @@ public class TextView: NSView, NSTextContent {
     package(set) public var textStorage: NSTextStorage!
 
     /// The layout manager for the text view.
-    private(set) public var layoutManager: TextLayoutManager!
+    package(set) public var layoutManager: TextLayoutManager!
 
     /// The selection manager for the text view.
     package(set) public var selectionManager: TextSelectionManager!
