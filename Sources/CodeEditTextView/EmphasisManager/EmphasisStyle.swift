@@ -33,8 +33,10 @@ public enum EmphasisStyle: Equatable {
         switch self {
         case .standard:
             4
-        case .underline, .outline:
+        case .underline:
             0
+        case .outline:
+            2.5
         }
     }
 }
