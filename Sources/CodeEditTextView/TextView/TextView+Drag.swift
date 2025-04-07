@@ -159,13 +159,25 @@ extension TextView: NSDraggingSource {
     }
 
     override public func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        let canReadObjects = sender.draggingPasteboard.canReadObject(forClasses: pasteboardObjects)
+        determineDragOperation(sender)
+    }
 
-        if canReadObjects {
+    override public func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        determineDragOperation(sender)
+    }
+
+    private func determineDragOperation(_ dragInfo: any NSDraggingInfo) -> NSDragOperation {
+        let canReadObjects = dragInfo.draggingPasteboard.canReadObject(forClasses: pasteboardObjects)
+
+        guard canReadObjects else {
+            return NSDragOperation()
+        }
+
+        if let currentEvent = NSApplication.shared.currentEvent, currentEvent.modifierFlags.contains(.option) {
             return .copy
         }
 
-        return NSDragOperation()
+        return .move
     }
 
     override public func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
@@ -190,8 +202,11 @@ extension TextView: NSDraggingSource {
             return false
         }
 
+        let shouldCutSourceText = !(NSApplication.shared.currentEvent?.modifierFlags.contains(.option) ?? false)
+
         undoManager?.beginUndoGrouping()
-        if let source = sender.draggingSource as? TextView, source === self {
+
+        if shouldCutSourceText, let source = sender.draggingSource as? TextView, source === self {
             // Offset the insertion location so that we can remove the text first before pasting it into the editor.
             var updatedInsertionOffset = insertionOffset
             for selection in source.selectionManager.textSelections.reversed()
