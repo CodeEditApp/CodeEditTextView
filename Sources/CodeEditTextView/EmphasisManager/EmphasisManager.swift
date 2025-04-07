@@ -20,10 +20,17 @@ import AppKit
 /// each outside object without knowledge of the other's state.
 public final class EmphasisManager {
     /// Internal representation of a emphasis layer with its associated text layer
-    private struct EmphasisLayer {
+    private struct EmphasisLayer: Equatable {
         let emphasis: Emphasis
         let layer: CAShapeLayer
         let textLayer: CATextLayer?
+
+        func removeLayers() {
+            layer.removeAllAnimations()
+            layer.removeFromSuperlayer()
+            textLayer?.removeAllAnimations()
+            textLayer?.removeFromSuperlayer()
+        }
     }
 
     private var emphasisGroups: [String: [EmphasisLayer]] = [:]
@@ -36,6 +43,8 @@ public final class EmphasisManager {
     init(textView: TextView) {
         self.textView = textView
     }
+
+    // MARK: - Add, Update, Remove
 
     /// Adds a single emphasis to the specified group.
     /// - Parameters:
@@ -56,24 +65,27 @@ public final class EmphasisManager {
         }
 
         let layers = emphases.map { createEmphasisLayer(for: $0) }
-        emphasisGroups[id] = layers
-
+        emphasisGroups[id, default: []].append(contentsOf: layers)
         // Handle selections
         handleSelections(for: emphases)
 
         // Handle flash animations
-        for (index, emphasis) in emphases.enumerated() where emphasis.flash {
-            let layer = layers[index]
+        for flashingLayer in emphasisGroups[id, default: []].filter({ $0.emphasis.flash }) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
                 guard let self = self else { return }
-                self.applyFadeOutAnimation(to: layer.layer, textLayer: layer.textLayer)
-                // Remove the emphasis from the group
-                if var emphases = self.emphasisGroups[id] {
-                    emphases.remove(at: index)
-                    if emphases.isEmpty {
+                self.applyFadeOutAnimation(to: flashingLayer.layer, textLayer: flashingLayer.textLayer) {
+                    // Remove the emphasis from the group if it still exists
+                    guard let emphasisIdx = self.emphasisGroups[id, default: []].firstIndex(
+                        where: { $0 == flashingLayer }
+                    ) else {
+                        return
+                    }
+
+                    self.emphasisGroups[id, default: []][emphasisIdx].removeLayers()
+                    self.emphasisGroups[id, default: []].remove(at: emphasisIdx)
+
+                    if self.emphasisGroups[id, default: []].isEmpty {
                         self.emphasisGroups.removeValue(forKey: id)
-                    } else {
-                        self.emphasisGroups[id] = emphases
                     }
                 }
             }
@@ -94,8 +106,7 @@ public final class EmphasisManager {
     ///   - id: The group identifier
     ///   - transform: The transformation to apply to the existing emphases
     public func updateEmphases(for id: String, _ transform: ([Emphasis]) -> [Emphasis]) {
-        guard let existingLayers = emphasisGroups[id] else { return }
-        let existingEmphases = existingLayers.map { $0.emphasis }
+        let existingEmphases = emphasisGroups[id, default: []].map { $0.emphasis }
         let newEmphases = transform(existingEmphases)
         replaceEmphases(newEmphases, for: id)
     }
@@ -103,13 +114,12 @@ public final class EmphasisManager {
     /// Removes all emphases for the given group.
     /// - Parameter id: The group identifier
     public func removeEmphases(for id: String) {
-        emphasisGroups[id]?.forEach { layer in
-            layer.layer.removeAllAnimations()
-            layer.layer.removeFromSuperlayer()
-            layer.textLayer?.removeAllAnimations()
-            layer.textLayer?.removeFromSuperlayer()
+        emphasisGroups[id]?.forEach { emphasis in
+            emphasis.removeLayers()
         }
         emphasisGroups[id] = nil
+
+        textView?.layer?.layoutIfNeeded()
     }
 
     /// Removes all emphases for all groups.
@@ -117,7 +127,7 @@ public final class EmphasisManager {
         emphasisGroups.keys.forEach { removeEmphases(for: $0) }
         emphasisGroups.removeAll()
 
-        // Restore original selection emphasising
+        // Restore original selection emphasizing
         if let originalColor = originalSelectionColor {
             textView?.selectionManager.selectionBackgroundColor = originalColor
         }
@@ -128,38 +138,44 @@ public final class EmphasisManager {
     /// - Parameter id: The group identifier
     /// - Returns: Array of emphases in the group
     public func getEmphases(for id: String) -> [Emphasis] {
-        emphasisGroups[id]?.map { $0.emphasis } ?? []
+        emphasisGroups[id, default: []].map(\.emphasis)
     }
+
+    // MARK: - Drawing Layers
 
     /// Updates the positions and bounds of all emphasis layers to match the current text layout.
     public func updateLayerBackgrounds() {
-        for layer in emphasisGroups.flatMap(\.value) {
-            if let shapePath = textView?.layoutManager?.roundedPathForRange(layer.emphasis.range) {
-                if #available(macOS 14.0, *) {
-                    layer.layer.path = shapePath.cgPath
-                } else {
-                    layer.layer.path = shapePath.cgPathFallback
-                }
+        for emphasis in emphasisGroups.flatMap(\.value) {
+            guard let shapePath = makeShapePath(
+                forStyle: emphasis.emphasis.style,
+                range: emphasis.emphasis.range
+            ) else {
+                continue
+            }
+            if #available(macOS 14.0, *) {
+                emphasis.layer.path = shapePath.cgPath
+            } else {
+                emphasis.layer.path = shapePath.cgPathFallback
+            }
 
-                // Update bounds and position
-                if let cgPath = layer.layer.path {
-                    let boundingBox = cgPath.boundingBox
-                    layer.layer.bounds = boundingBox
-                    layer.layer.position = CGPoint(x: boundingBox.midX, y: boundingBox.midY)
-                }
+            // Update bounds and position
+            if let cgPath = emphasis.layer.path {
+                let boundingBox = cgPath.boundingBox
+                emphasis.layer.bounds = boundingBox
+                emphasis.layer.position = CGPoint(x: boundingBox.midX, y: boundingBox.midY)
+            }
 
-                // Update text layer if it exists
-                if let textLayer = layer.textLayer {
-                    var bounds = shapePath.bounds
-                    bounds.origin.y += 1 // Move down by 1 pixel
-                    textLayer.frame = bounds
-                }
+            // Update text layer if it exists
+            if let textLayer = emphasis.textLayer {
+                var bounds = shapePath.bounds
+                bounds.origin.y += 1 // Move down by 1 pixel
+                textLayer.frame = bounds
             }
         }
     }
 
     private func createEmphasisLayer(for emphasis: Emphasis) -> EmphasisLayer {
-        guard let shapePath = textView?.layoutManager?.roundedPathForRange(emphasis.range) else {
+        guard let shapePath = makeShapePath(forStyle: emphasis.style, range: emphasis.range) else {
             return EmphasisLayer(emphasis: emphasis, layer: CAShapeLayer(), textLayer: nil)
         }
 
@@ -176,6 +192,25 @@ public final class EmphasisManager {
         }
 
         return EmphasisLayer(emphasis: emphasis, layer: layer, textLayer: textLayer)
+    }
+
+    private func makeShapePath(forStyle emphasisStyle: EmphasisStyle, range: NSRange) -> NSBezierPath? {
+        switch emphasisStyle {
+        case .standard, .outline:
+            return textView?.layoutManager.roundedPathForRange(range, cornerRadius: emphasisStyle.shapeRadius)
+        case .underline:
+            guard let layoutManager = textView?.layoutManager else {
+                return nil
+            }
+            let lineHeight = layoutManager.estimateLineHeight()
+            let lineBottomPadding = (lineHeight - (lineHeight / layoutManager.lineHeightMultiplier)) / 4
+            let path = NSBezierPath()
+            for rect in layoutManager.rectsFor(range: range) {
+                path.move(to: NSPoint(x: rect.minX, y: rect.maxY - lineBottomPadding))
+                path.line(to: NSPoint(x: rect.maxX, y: rect.maxY - lineBottomPadding))
+            }
+            return path
+        }
     }
 
     private func createShapeLayer(shapePath: NSBezierPath, emphasis: Emphasis) -> CAShapeLayer {
@@ -274,6 +309,8 @@ public final class EmphasisManager {
         return .black
     }
 
+    // MARK: - Animations
+
     private func applyPopAnimation(to layer: CALayer) {
         let scaleAnimation = CAKeyframeAnimation(keyPath: "transform.scale")
         scaleAnimation.values = [1.0, 1.25, 1.0]
@@ -284,7 +321,7 @@ public final class EmphasisManager {
         layer.add(scaleAnimation, forKey: "popAnimation")
     }
 
-    private func applyFadeOutAnimation(to layer: CALayer, textLayer: CATextLayer?) {
+    private func applyFadeOutAnimation(to layer: CALayer, textLayer: CATextLayer?, completion: @escaping () -> Void) {
         let fadeAnimation = CABasicAnimation(keyPath: "opacity")
         fadeAnimation.fromValue = 1.0
         fadeAnimation.toValue = 0.0
@@ -301,9 +338,10 @@ public final class EmphasisManager {
         }
 
         // Remove both layers after animation completes
-        DispatchQueue.main.asyncAfter(deadline: .now() + fadeAnimation.duration) { [weak layer, weak textLayer] in
-            layer?.removeFromSuperlayer()
+        DispatchQueue.main.asyncAfter(deadline: .now() + fadeAnimation.duration) {
+            layer.removeFromSuperlayer()
             textLayer?.removeFromSuperlayer()
+            completion()
         }
     }
 

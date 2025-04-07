@@ -77,4 +77,18 @@ public final class LineFragment: Identifiable, Equatable {
         CTLineDraw(ctLine, context)
         context.restoreGState()
     }
+
+    /// Calculates the drawing rect for a given range.
+    /// - Parameter range: The range to calculate the bounds for, relative to the line.
+    /// - Returns: A rect that contains the text contents in the given range.
+    func rectFor(range: NSRange) -> CGRect {
+        let minXPos = CTLineGetOffsetForStringIndex(ctLine, range.lowerBound, nil)
+        let maxXPos = CTLineGetOffsetForStringIndex(ctLine, range.upperBound, nil)
+        return CGRect(
+            x: minXPos,
+            y: 0,
+            width: maxXPos - minXPos,
+            height: scaledHeight
+        )
+    }
 }

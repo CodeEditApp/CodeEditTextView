@@ -212,8 +212,7 @@ public class TextLayoutManager: NSObject {
     /// Lays out all visible lines
     func layoutLines(in rect: NSRect? = nil) { // swiftlint:disable:this function_body_length
         assertNotInLayout()
-        guard layoutView?.superview != nil,
-              let visibleRect = rect ?? delegate?.visibleRect,
+        guard let visibleRect = rect ?? delegate?.visibleRect,
               !isInTransaction,
               let textStorage else {
             return
