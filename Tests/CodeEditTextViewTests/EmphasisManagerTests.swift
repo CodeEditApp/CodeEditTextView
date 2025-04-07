@@ -19,17 +19,17 @@ struct EmphasisManagerTests {
         #expect(textView.layer?.sublayers?.count == 2)
         #expect(textView.emphasisManager?.getEmphases(for: "e").count == 1)
 
-        textView.emphasisManager?.replaceEmphases(
-            [Emphasis(range: NSRange(location: 0, length: 5), style: .underline(color: .red), flash: false)],
+        textView.emphasisManager?.addEmphases(
+            [Emphasis(range: NSRange(location: 0, length: 5), style: .underline(color: .red), flash: true)],
             for: "e"
         )
 
-        #expect(textView.layer?.sublayers?.count == 2)
-        #expect(textView.emphasisManager?.getEmphases(for: "e").count == 1)
+        #expect(textView.layer?.sublayers?.count == 4)
+        #expect(textView.emphasisManager?.getEmphases(for: "e").count == 2)
 
         textView.emphasisManager?.removeAllEmphases()
 
-        // No emphases
+        // No emphasis layers remain
         #expect(textView.layer?.sublayers?.count == nil)
         #expect(textView.emphasisManager?.getEmphases(for: "e").count == 0)
     }
