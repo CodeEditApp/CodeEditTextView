@@ -356,31 +356,6 @@ public class TextView: NSView, NSTextContent {
         NSRange(location: 0, length: textStorage.length)
     }
 
-    // MARK: - View Lifecycle
-
-    override public func layout() {
-        layoutManager.layoutLines()
-        super.layout()
-    }
-
-    override public func viewWillMove(toWindow newWindow: NSWindow?) {
-        super.viewWillMove(toWindow: newWindow)
-        layoutManager.layoutLines()
-    }
-
-    override public func viewWillMove(toSuperview newSuperview: NSView?) {
-        guard let scrollView = enclosingScrollView else {
-            return
-        }
-
-        setUpScrollListeners(scrollView: scrollView)
-    }
-
-    override public func viewDidEndLiveResize() {
-        super.viewDidEndLiveResize()
-        updateFrameIfNeeded()
-    }
-
     // MARK: - Hit test
 
     /// Returns the responding view for a given point.

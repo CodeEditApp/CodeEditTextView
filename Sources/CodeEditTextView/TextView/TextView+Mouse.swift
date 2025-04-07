@@ -163,7 +163,7 @@ extension TextView {
         selectionManager.setSelectedRange(selectedRange)
         setNeedsDisplay()
     }
-    
+
     /// Sets up a timer that fires at a predetermined period to autoscroll the text view.
     /// Ensure the timer is disabled using ``disableMouseAutoscrollTimer``.
     func setUpMouseAutoscrollTimer() {
@@ -176,7 +176,7 @@ extension TextView {
             }
         }
     }
-    
+
     /// Disables the mouse drag timer started by ``setUpMouseAutoscrollTimer``
     func disableMouseAutoscrollTimer() {
         mouseDragTimer?.invalidate()
