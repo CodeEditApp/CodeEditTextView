@@ -107,6 +107,16 @@ public class TextView: NSView, NSTextContent {
         }
     }
 
+    /// The amount of extra space to add when overscroll is enabled, as a percentage of the viewport height
+    public var overscrollAmount: CGFloat = 0.5 {
+        didSet {
+            if overscrollAmount < 0 {
+                overscrollAmount = 0
+            }
+            updateFrameIfNeeded()
+        }
+    }
+
     /// Whether or not the editor should wrap lines
     public var wrapLines: Bool {
         get {
@@ -150,13 +160,28 @@ public class TextView: NSView, NSTextContent {
         }
     }
 
-    /// The edge insets for the text view.
+    /// The edge insets for the text view. This value insets every piece of drawable content in the view, including
+    /// selection rects.
+    ///
+    /// To further inset the text from the edge, without modifying how selections are inset, use ``textInsets``
     public var edgeInsets: HorizontalEdgeInsets {
         get {
-            layoutManager?.edgeInsets ?? .zero
+            selectionManager.edgeInsets
         }
         set {
-            layoutManager?.edgeInsets = newValue
+            layoutManager.edgeInsets = newValue + textInsets
+            selectionManager.edgeInsets = newValue
+        }
+    }
+
+    /// Insets just drawn text from the horizontal edges. This is in addition to the insets in ``edgeInsets``, but does
+    /// not apply to other drawn content.
+    public var textInsets: HorizontalEdgeInsets {
+        get {
+            layoutManager.edgeInsets - selectionManager.edgeInsets
+        }
+        set {
+            layoutManager.edgeInsets = edgeInsets + newValue
         }
     }
 
@@ -225,7 +250,10 @@ public class TextView: NSView, NSTextContent {
     private(set) public var layoutManager: TextLayoutManager!
 
     /// The selection manager for the text view.
-    private(set) public var selectionManager: TextSelectionManager!
+    package(set) public var selectionManager: TextSelectionManager!
+
+    /// Manages emphasized text ranges in the text view
+    public var emphasisManager: EmphasisManager?
 
     // MARK: - Private Properties
 
@@ -235,6 +263,7 @@ public class TextView: NSView, NSTextContent {
     /// bounds.
     var mouseDragAnchor: CGPoint?
     var mouseDragTimer: Timer?
+    var cursorSelectionMode: CursorSelectionMode = .character
 
     /// When we receive a drag operation we add a temporary cursor view not managed by the selection manager.
     /// This is the reference to that view, it is cleaned up when a drag ends.
@@ -291,6 +320,7 @@ public class TextView: NSView, NSTextContent {
 
         super.init(frame: .zero)
 
+        self.emphasisManager = EmphasisManager(textView: self)
         self.storageDelegate = MultiStorageDelegate()
 
         wantsLayer = true
@@ -316,36 +346,6 @@ public class TextView: NSView, NSTextContent {
 
         layoutManager.layoutLines()
         setUpDragGesture()
-    }
-
-    /// Sets the text view's text to a new value.
-    /// - Parameter text: The new contents of the text view.
-    public func setText(_ text: String) {
-        let newStorage = NSTextStorage(string: text)
-        self.setTextStorage(newStorage)
-    }
-
-    /// Set a new text storage object for the view.
-    /// - Parameter textStorage: The new text storage to use.
-    public func setTextStorage(_ textStorage: NSTextStorage) {
-        self.textStorage = textStorage
-
-        subviews.forEach { view in
-            view.removeFromSuperview()
-        }
-
-        textStorage.addAttributes(typingAttributes, range: documentRange)
-        layoutManager.textStorage = textStorage
-        layoutManager.reset()
-
-        selectionManager.textStorage = textStorage
-        selectionManager.setSelectedRanges(selectionManager.textSelections.map { $0.range })
-
-        _undoManager?.clearStack()
-
-        textStorage.delegate = storageDelegate
-        needsDisplay = true
-        needsLayout = true
     }
 
     required init?(coder: NSCoder) {

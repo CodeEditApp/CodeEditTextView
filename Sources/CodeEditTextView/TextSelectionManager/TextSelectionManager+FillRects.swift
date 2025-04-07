@@ -8,56 +8,43 @@
 import Foundation
 
 extension TextSelectionManager {
-    /// Calculate a set of rects for a text selection suitable for filling with the selection color to indicate a multi-line selection.
-    ///
-    /// The returned rects are inset by edge insets passed to the text view, the given `rect` parameter can be the 'raw'
-    /// rect to draw in, no need to inset it before this method call.
+    /// Calculate a set of rects for a text selection suitable for filling with the selection color to indicate a
+    /// multi-line selection. The returned rects surround all selected line fragments for the given selection,
+    /// following the available text layout space, rather than the available selection layout space.
     ///
     /// - Parameters:
     ///   - rect: The bounding rect of available draw space.
     ///   - textSelection: The selection to use.
     /// - Returns: An array of rects that the selection overlaps.
     func getFillRects(in rect: NSRect, for textSelection: TextSelection) -> [CGRect] {
-        guard let layoutManager else { return [] }
-        let range = textSelection.range
-
-        var fillRects: [CGRect] = []
-        guard let firstLinePosition = layoutManager.lineStorage.getLine(atOffset: range.location),
-              let lastLinePosition = range.max == layoutManager.lineStorage.length
-                ? layoutManager.lineStorage.last
-                : layoutManager.lineStorage.getLine(atOffset: range.max) else {
+        guard let layoutManager,
+                let range = textSelection.range.intersection(textView?.visibleTextRange ?? .zero) else {
             return []
         }
 
-        let insetXPos = max(layoutManager.edgeInsets.left, rect.minX)
-        let insetWidth = max(0, rect.maxX - insetXPos - layoutManager.edgeInsets.right)
-        let insetRect = NSRect(x: insetXPos, y: rect.origin.y, width: insetWidth, height: rect.height)
+        var fillRects: [CGRect] = []
 
-        // Calculate the first line and any rects selected
-        // If the last line position is not the same as the first, calculate any rects from that line.
-        // If there's > 0 space between the first and last positions, add a rect between them to cover any
-        // intermediate lines.
-
-        let firstLineRects = getFillRects(in: rect, selectionRange: range, forPosition: firstLinePosition)
-        let lastLineRects: [CGRect] = if lastLinePosition.range != firstLinePosition.range {
-            getFillRects(in: rect, selectionRange: range, forPosition: lastLinePosition)
+        let textWidth = if layoutManager.maxLineLayoutWidth == .greatestFiniteMagnitude {
+            layoutManager.maxLineWidth
         } else {
-            []
+            layoutManager.maxLineLayoutWidth
         }
+        let maxWidth = max(textWidth, layoutManager.wrapLinesWidth)
+        let validTextDrawingRect = CGRect(
+            x: layoutManager.edgeInsets.left,
+            y: rect.minY,
+            width: maxWidth,
+            height: rect.height
+        ).intersection(rect)
 
-        fillRects.append(contentsOf: firstLineRects + lastLineRects)
-
-        if firstLinePosition.yPos + firstLinePosition.height < lastLinePosition.yPos {
-            fillRects.append(CGRect(
-                x: insetXPos,
-                y: firstLinePosition.yPos + firstLinePosition.height,
-                width: insetWidth,
-                height: lastLinePosition.yPos - (firstLinePosition.yPos + firstLinePosition.height)
-            ))
+        for linePosition in layoutManager.lineStorage.linesInRange(range) {
+            fillRects.append(
+                contentsOf: getFillRects(in: validTextDrawingRect, selectionRange: range, forPosition: linePosition)
+            )
         }
 
         // Pixel align these to avoid aliasing on the edges of each rect that should be a solid box.
-        return fillRects.map { $0.intersection(insetRect).pixelAligned }
+        return fillRects.map { $0.intersection(validTextDrawingRect).pixelAligned }
     }
 
     /// Find fill rects for a specific line position.

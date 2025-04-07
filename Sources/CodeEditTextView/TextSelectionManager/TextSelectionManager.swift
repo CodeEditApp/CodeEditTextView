@@ -38,6 +38,13 @@ public class TextSelectionManager: NSObject {
         }
     }
 
+    /// Determines how far inset to draw selection content.
+    public var edgeInsets: HorizontalEdgeInsets = .zero {
+        didSet {
+            delegate?.setNeedsDisplay()
+        }
+    }
+
     internal(set) public var textSelections: [TextSelection] = []
     weak var layoutManager: TextLayoutManager?
     weak var textStorage: NSTextStorage?
@@ -71,10 +78,9 @@ public class TextSelectionManager: NSObject {
         let selection = TextSelection(range: range)
         selection.suggestedXPos = layoutManager?.rectForOffset(range.location)?.minX
         textSelections = [selection]
-        if textView?.isFirstResponder ?? false {
-            updateSelectionViews()
-            NotificationCenter.default.post(Notification(name: Self.selectionChangedNotification, object: self))
-        }
+        updateSelectionViews()
+        NotificationCenter.default.post(Notification(name: Self.selectionChangedNotification, object: self))
+        delegate?.setNeedsDisplay()
     }
 
     /// Set the selected ranges to new ranges. Overrides any existing selections.
@@ -92,10 +98,9 @@ public class TextSelectionManager: NSObject {
                 selection.suggestedXPos = layoutManager?.rectForOffset($0.location)?.minX
                 return selection
             }
-        if textView?.isFirstResponder ?? false {
-            updateSelectionViews()
-            NotificationCenter.default.post(Notification(name: Self.selectionChangedNotification, object: self))
-        }
+        updateSelectionViews()
+        NotificationCenter.default.post(Notification(name: Self.selectionChangedNotification, object: self))
+        delegate?.setNeedsDisplay()
     }
 
     /// Append a new selected range to the existing ones.
@@ -119,10 +124,9 @@ public class TextSelectionManager: NSObject {
             textSelections.append(newTextSelection)
         }
 
-        if textView?.isFirstResponder ?? false {
-            updateSelectionViews()
-            NotificationCenter.default.post(Notification(name: Self.selectionChangedNotification, object: self))
-        }
+        updateSelectionViews()
+        NotificationCenter.default.post(Notification(name: Self.selectionChangedNotification, object: self))
+        delegate?.setNeedsDisplay()
     }
 
     // MARK: - Selection Views
@@ -130,6 +134,7 @@ public class TextSelectionManager: NSObject {
     /// Update all selection cursors. Placing them in the correct position for each text selection and reseting the
     /// blink timer.
     func updateSelectionViews() {
+        guard textView?.isFirstResponder ?? false else { return }
         var didUpdate: Bool = false
 
         for textSelection in textSelections {
@@ -203,94 +208,26 @@ public class TextSelectionManager: NSObject {
         }
     }
 
+    /// Get the height for a cursor placed at the beginning of the given range.
+    /// - Parameter range: The range the cursor is at.
+    /// - Returns: The height the cursor should be to match the text at that location.
+    fileprivate func heightForCursorAt(_ range: NSRange) -> CGFloat? {
+        guard let selectedLine = layoutManager?.textLineForOffset(range.location) else {
+            return layoutManager?.estimateLineHeight()
+        }
+        return selectedLine
+            .data
+            .lineFragments
+            .getLine(atOffset: range.location - (selectedLine.range.location))?
+            .height
+        ?? layoutManager?.estimateLineHeight()
+    }
+
     /// Removes all cursor views and stops the cursor blink timer.
     func removeCursors() {
         cursorTimer.stopTimer()
         for textSelection in textSelections {
             textSelection.view?.removeFromSuperview()
         }
-    }
-
-    // MARK: - Draw
-
-    /// Draws line backgrounds and selection rects for each selection in the given rect.
-    /// - Parameter rect: The rect to draw in.
-    func drawSelections(in rect: NSRect) {
-        guard let context = NSGraphicsContext.current?.cgContext else { return }
-        context.saveGState()
-        var highlightedLines: Set<UUID> = []
-        // For each selection in the rect
-        for textSelection in textSelections {
-            if textSelection.range.isEmpty {
-                drawHighlightedLine(
-                    in: rect,
-                    for: textSelection,
-                    context: context,
-                    highlightedLines: &highlightedLines
-                )
-            } else {
-                drawSelectedRange(in: rect, for: textSelection, context: context)
-            }
-        }
-        context.restoreGState()
-    }
-
-    /// Draws a highlighted line in the given rect.
-    /// - Parameters:
-    ///   - rect: The rect to draw in.
-    ///   - textSelection: The selection to draw.
-    ///   - context: The context to draw in.
-    ///   - highlightedLines: The set of all lines that have already been highlighted, used to avoid highlighting lines
-    ///                       twice and updated if this function comes across a new line id.
-    private func drawHighlightedLine(
-        in rect: NSRect,
-        for textSelection: TextSelection,
-        context: CGContext,
-        highlightedLines: inout Set<UUID>
-    ) {
-        guard let linePosition = layoutManager?.textLineForOffset(textSelection.range.location),
-              !highlightedLines.contains(linePosition.data.id) else {
-            return
-        }
-        highlightedLines.insert(linePosition.data.id)
-        context.saveGState()
-        let selectionRect = CGRect(
-            x: rect.minX,
-            y: linePosition.yPos,
-            width: rect.width,
-            height: linePosition.height
-        )
-        if selectionRect.intersects(rect) {
-            context.setFillColor(selectedLineBackgroundColor.cgColor)
-            context.fill(selectionRect)
-        }
-        context.restoreGState()
-    }
-
-    /// Draws a selected range in the given context.
-    /// - Parameters:
-    ///   - rect: The rect to draw in.
-    ///   - range: The range to highlight.
-    ///   - context: The context to draw in.
-    private func drawSelectedRange(in rect: NSRect, for textSelection: TextSelection, context: CGContext) {
-        context.saveGState()
-
-        let fillColor = (textView?.isFirstResponder ?? false)
-        ? selectionBackgroundColor.cgColor
-        : selectionBackgroundColor.grayscale.cgColor
-
-        context.setFillColor(fillColor)
-
-        let fillRects = getFillRects(in: rect, for: textSelection)
-
-        let minX = fillRects.min(by: { $0.origin.x < $1.origin.x })?.origin.x ?? 0
-        let minY = fillRects.min(by: { $0.origin.y < $1.origin.y })?.origin.y ?? 0
-        let max = fillRects.max(by: { $0.maxY < $1.maxY }) ?? .zero
-        let origin = CGPoint(x: minX, y: minY)
-        let size = CGSize(width: max.maxX - minX, height: max.maxY - minY)
-        textSelection.boundingRect = CGRect(origin: origin, size: size)
-
-        context.fill(fillRects)
-        context.restoreGState()
     }
 }

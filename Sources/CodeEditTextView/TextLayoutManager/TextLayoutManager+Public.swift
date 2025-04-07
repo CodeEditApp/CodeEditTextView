@@ -159,6 +159,94 @@ extension TextLayoutManager {
         )
     }
 
+    // swiftlint:disable function_body_length
+    /// Creates a smooth bezier path for the specified range.
+    /// If the range exceeds the available text, it uses the maximum available range.
+    /// - Parameter range: The range of text offsets to generate the path for.
+    /// - Returns: An `NSBezierPath` representing the visual shape for the text range, or `nil` if the range is invalid.
+    public func roundedPathForRange(_ range: NSRange) -> NSBezierPath? {
+        // Ensure the range is within the bounds of the text storage
+        let validRange = NSRange(
+            location: range.lowerBound,
+            length: min(range.length, lineStorage.length - range.lowerBound)
+        )
+
+        guard validRange.length > 0 else { return rectForEndOffset().map { NSBezierPath(rect: $0) } }
+
+        var rightSidePoints: [CGPoint] = [] // Points for Bottom-right → Top-right
+        var leftSidePoints: [CGPoint] = []  // Points for Bottom-left → Top-left
+
+        var currentOffset = validRange.lowerBound
+
+        // Process each line fragment within the range
+        while currentOffset < validRange.upperBound {
+            guard let linePosition = lineStorage.getLine(atOffset: currentOffset) else { return nil }
+
+            if linePosition.data.lineFragments.isEmpty {
+                let newHeight = ensureLayoutFor(position: linePosition)
+                if linePosition.height != newHeight {
+                    delegate?.layoutManagerHeightDidUpdate(newHeight: lineStorage.height)
+                }
+            }
+
+            guard let fragmentPosition = linePosition.data.typesetter.lineFragments.getLine(
+                atOffset: currentOffset - linePosition.range.location
+            ) else { break }
+
+            // Calculate the X positions for the range's boundaries within the fragment
+            let realRangeStart = (textStorage?.string as? NSString)?
+                .rangeOfComposedCharacterSequence(at: validRange.lowerBound)
+            ?? NSRange(location: validRange.lowerBound, length: 0)
+
+            let realRangeEnd = (textStorage?.string as? NSString)?
+                .rangeOfComposedCharacterSequence(at: validRange.upperBound - 1)
+            ?? NSRange(location: validRange.upperBound - 1, length: 0)
+
+            let minXPos = CTLineGetOffsetForStringIndex(
+                fragmentPosition.data.ctLine,
+                realRangeStart.location - linePosition.range.location,
+                nil
+            ) + edgeInsets.left
+
+            let maxXPos = CTLineGetOffsetForStringIndex(
+                fragmentPosition.data.ctLine,
+                realRangeEnd.upperBound - linePosition.range.location,
+                nil
+            ) + edgeInsets.left
+
+            // Ensure the fragment has a valid width
+            guard maxXPos > minXPos else { break }
+
+            // Add the Y positions for the fragment
+            let topY = linePosition.yPos + fragmentPosition.yPos + fragmentPosition.data.scaledHeight
+            let bottomY = linePosition.yPos + fragmentPosition.yPos
+
+            // Append points in the correct order
+            rightSidePoints.append(contentsOf: [
+                CGPoint(x: maxXPos, y: bottomY), // Bottom-right
+                CGPoint(x: maxXPos, y: topY)    // Top-right
+            ])
+            leftSidePoints.insert(contentsOf: [
+                CGPoint(x: minXPos, y: topY),   // Top-left
+                CGPoint(x: minXPos, y: bottomY) // Bottom-left
+            ], at: 0)
+
+            // Move to the next fragment
+            currentOffset = min(validRange.upperBound, linePosition.range.upperBound)
+        }
+
+        // Combine the points in clockwise order
+        let points = leftSidePoints + rightSidePoints
+
+        // Close the path
+        if let firstPoint = points.first {
+            return NSBezierPath.smoothPath(points + [firstPoint], radius: 4)
+        }
+
+        return nil
+    }
+    // swiftlint:enable function_body_length
+
     /// Finds a suitable cursor rect for the end position.
     /// - Returns: A CGRect if it could be created.
     private func rectForEndOffset() -> CGRect? {
