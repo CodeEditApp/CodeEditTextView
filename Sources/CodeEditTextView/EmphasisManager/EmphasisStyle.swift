@@ -28,4 +28,13 @@ public enum EmphasisStyle: Equatable {
             return false
         }
     }
+
+    var shapeRadius: CGFloat {
+        switch self {
+        case .standard:
+            4
+        case .underline, .outline:
+            0
+        }
+    }
 }
