@@ -32,13 +32,27 @@ extension TextView: NSDraggingSource {
         }
     }
 
+    /// Adds a gesture for recognizing selection dragging gestures to the text view.
+    /// See ``TextView/DragSelectionGesture`` for details.
     func setUpDragGesture() {
         let dragGesture = DragSelectionGesture(target: self, action: #selector(dragGestureHandler(_:)))
         dragGesture.minimumPressDuration = NSEvent.doubleClickInterval / 3
         dragGesture.isEnabled = isSelectable
         addGestureRecognizer(dragGesture)
     }
-
+    
+    /// Handles state change on the drag and drop gesture recognizer.
+    ///
+    /// This will ignore any gesture state besides `.began`, and will end by setting the state to `.ended`. The gesture
+    /// is only meant to handle *recognizing* the drag, but the system drag interaction handles the rest.
+    ///
+    /// This will create a ``DraggingTextRenderer`` with the contents of the visible text selection. That is converted
+    /// into an image and given to a new dragging session on the text view
+    ///
+    /// The rest of the drag interaction is handled by ``performDragOperation(_:)``, ``draggingUpdated(_:)``,
+    /// ``draggingSession(_:willBeginAt:)`` and family.
+    ///
+    /// - Parameter sender: The gesture that's sending the state change.
     @objc private func dragGestureHandler(_ sender: DragSelectionGesture) {
         guard sender.state == .began else { return }
         defer {
@@ -180,6 +194,18 @@ extension TextView: NSDraggingSource {
         return .move
     }
 
+    // MARK: - Perform Drag
+    
+    /// Performs the final drop operation.
+    ///
+    /// This method accepts a number of items from the dragging info's pasteboard, and cuts them into the
+    /// destination determined by the ``TextView/draggingCursorView``.
+    ///
+    /// If the app's current event has the `option` key pressed, this will only paste the text from the pasteboard,
+    /// and not remove the original dragged text.
+    ///
+    /// - Parameter sender: The dragging info to use.
+    /// - Returns: `true`, if the drag was accepted.
     override public func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
         guard let objects = sender.draggingPasteboard.readObjects(forClasses: pasteboardObjects)?
             .compactMap({ anyObject in
@@ -221,8 +247,9 @@ extension TextView: NSDraggingSource {
             insertText("") // Replace the selected ranges with nothing
         }
 
-        replaceCharacters(in: [NSRange(location: insertionOffset, length: 0)], with: insertionString)
         undoManager?.endUndoGrouping()
+
+        replaceCharacters(in: [NSRange(location: insertionOffset, length: 0)], with: insertionString)
 
         selectionManager.setSelectedRange(
             NSRange(location: insertionOffset, length: NSString(string: insertionString).length)
