@@ -6,7 +6,6 @@
 //
 
 import AppKit
-import CodeEditTextViewObjC
 
 /// Displays a line fragment.
 final class LineFragmentView: NSView {
@@ -40,32 +39,6 @@ final class LineFragmentView: NSView {
         guard let lineFragment, let context = NSGraphicsContext.current?.cgContext else {
             return
         }
-        context.saveGState()
-
-        // Removes jagged edges
-        context.setAllowsAntialiasing(true)
-        context.setShouldAntialias(true)
-
-        // Effectively increases the screen resolution by drawing text in each LED color pixel (R, G, or B), rather than
-        // the triplet of pixels (RGB) for a regular pixel. This can increase text clarity, but loses effectiveness
-        // in low-contrast settings.
-        context.setAllowsFontSubpixelPositioning(true)
-        context.setShouldSubpixelPositionFonts(true)
-
-        // Quantizes the position of each glyph, resulting in slightly less accurate positioning, and gaining higher
-        // quality bitmaps and performance.
-        context.setAllowsFontSubpixelQuantization(true)
-        context.setShouldSubpixelQuantizeFonts(true)
-
-        ContextSetHiddenSmoothingStyle(context, 16)
-
-        context.textMatrix = .init(scaleX: 1, y: -1)
-        context.textPosition = CGPoint(
-            x: 0,
-            y: lineFragment.height - lineFragment.descent + (lineFragment.heightDifference/2)
-        ).pixelAligned
-
-        CTLineDraw(lineFragment.ctLine, context)
-        context.restoreGState()
+        lineFragment.draw(in: context, yPos: 0.0)
     }
 }

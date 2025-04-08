@@ -139,17 +139,19 @@ public class TextSelectionManager: NSObject {
 
         for textSelection in textSelections {
             if textSelection.range.isEmpty {
-                let cursorOrigin = (layoutManager?.rectForOffset(textSelection.range.location) ?? .zero).origin
+                guard let cursorRect = layoutManager?.rectForOffset(textSelection.range.location) else {
+                    continue
+                }
 
                 var doesViewNeedReposition: Bool
 
                 // If using the system cursor, macOS will change the origin and height by about 0.5, so we do an
                 // approximate equals in that case to avoid extra updates.
                 if useSystemCursor, #available(macOS 14.0, *) {
-                    doesViewNeedReposition = !textSelection.boundingRect.origin.approxEqual(cursorOrigin)
+                    doesViewNeedReposition = !textSelection.boundingRect.origin.approxEqual(cursorRect.origin)
                     || !textSelection.boundingRect.height.approxEqual(layoutManager?.estimateLineHeight() ?? 0)
                 } else {
-                    doesViewNeedReposition = textSelection.boundingRect.origin != cursorOrigin
+                    doesViewNeedReposition = textSelection.boundingRect.origin != cursorRect.origin
                     || textSelection.boundingRect.height != layoutManager?.estimateLineHeight() ?? 0
                 }
 
@@ -175,8 +177,8 @@ public class TextSelectionManager: NSObject {
                         textView?.addSubview(cursorView)
                     }
 
-                    cursorView.frame.origin = cursorOrigin
-                    cursorView.frame.size.height = heightForCursorAt(textSelection.range) ?? 0
+                    cursorView.frame.origin = cursorRect.origin
+                    cursorView.frame.size.height = cursorRect.height
 
                     textSelection.view = cursorView
                     textSelection.boundingRect = cursorView.frame

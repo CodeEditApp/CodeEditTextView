@@ -28,14 +28,7 @@ extension TextView {
             break
         }
 
-        mouseDragTimer?.invalidate()
-        // https://cocoadev.github.io/AutoScrolling/ (fired at ~45Hz)
-        mouseDragTimer = Timer.scheduledTimer(withTimeInterval: 0.022, repeats: true) { [weak self] _ in
-            if let event = self?.window?.currentEvent, event.type == .leftMouseDragged {
-                self?.mouseDragged(with: event)
-                self?.autoscroll(with: event)
-            }
-        }
+        setUpMouseAutoscrollTimer()
     }
 
     /// Single click, if control-shift we add a cursor
@@ -84,13 +77,12 @@ extension TextView {
 
     override public func mouseUp(with event: NSEvent) {
         mouseDragAnchor = nil
-        mouseDragTimer?.invalidate()
-        mouseDragTimer = nil
+        disableMouseAutoscrollTimer()
         super.mouseUp(with: event)
     }
 
     override public func mouseDragged(with event: NSEvent) {
-        guard !(inputContext?.handleEvent(event) ?? false) && isSelectable else {
+        guard !(inputContext?.handleEvent(event) ?? false) && isSelectable && !isDragging else {
             return
         }
 
@@ -170,5 +162,24 @@ extension TextView {
         }
         selectionManager.setSelectedRange(selectedRange)
         setNeedsDisplay()
+    }
+
+    /// Sets up a timer that fires at a predetermined period to autoscroll the text view.
+    /// Ensure the timer is disabled using ``disableMouseAutoscrollTimer``.
+    func setUpMouseAutoscrollTimer() {
+        mouseDragTimer?.invalidate()
+        // https://cocoadev.github.io/AutoScrolling/ (fired at ~45Hz)
+        mouseDragTimer = Timer.scheduledTimer(withTimeInterval: 0.022, repeats: true) { [weak self] _ in
+            if let event = self?.window?.currentEvent, event.type == .leftMouseDragged {
+                self?.mouseDragged(with: event)
+                self?.autoscroll(with: event)
+            }
+        }
+    }
+
+    /// Disables the mouse drag timer started by ``setUpMouseAutoscrollTimer``
+    func disableMouseAutoscrollTimer() {
+        mouseDragTimer?.invalidate()
+        mouseDragTimer = nil
     }
 }

@@ -1,5 +1,5 @@
 //
-//  TextLayoutManger+ensureLayout.swift
+//  TextLayoutManager+ensureLayout.swift
 //  CodeEditTextView
 //
 //  Created by Khan Winter on 4/7/25.
