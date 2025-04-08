@@ -6,22 +6,24 @@
 //
 
 import Foundation
+import AppKit
 
-extension TextSelectionManager {
-    public func didReplaceCharacters(in range: NSRange, replacementLength: Int) {
-        let delta = replacementLength == 0 ? -range.length : replacementLength
+extension TextSelectionManager: NSTextStorageDelegate {
+    public func textStorage(
+        _ textStorage: NSTextStorage,
+        didProcessEditing editedMask: NSTextStorageEditActions,
+        range editedRange: NSRange,
+        changeInLength delta: Int
+    ) {
+        guard editedMask.contains(.editedCharacters) else { return }
+
         for textSelection in self.textSelections {
-            if textSelection.range.location > range.max {
-                textSelection.range.location = max(0, textSelection.range.location + delta)
+            // If the text selection is ahead of the edited range, move it back by the range's length
+            if textSelection.range.location > editedRange.max {
+                textSelection.range.location += delta
                 textSelection.range.length = 0
-            } else if textSelection.range.intersection(range) != nil
-                        || textSelection.range == range
-                        || (textSelection.range.isEmpty && textSelection.range.location == range.max) {
-                if replacementLength > 0 {
-                    textSelection.range.location = range.location + replacementLength
-                } else {
-                    textSelection.range.location = range.location
-                }
+            } else if textSelection.range.intersection(editedRange) != nil {
+                textSelection.range.location = editedRange.max
                 textSelection.range.length = 0
             } else {
                 textSelection.range.length = 0
@@ -37,6 +39,8 @@ extension TextSelectionManager {
                 allRanges.insert(selection.range)
             }
         }
+
+        notifyAfterEdit()
     }
 
     func notifyAfterEdit() {

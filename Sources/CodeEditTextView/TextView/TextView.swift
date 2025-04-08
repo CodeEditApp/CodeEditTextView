@@ -58,7 +58,6 @@ public class TextView: NSView, NSTextContent {
             textStorage.string
         }
         set {
-            layoutManager.willReplaceCharactersInRange(range: documentRange, with: newValue)
             textStorage.setAttributedString(NSAttributedString(string: newValue, attributes: typingAttributes))
         }
     }
@@ -339,8 +338,10 @@ public class TextView: NSView, NSTextContent {
 
         layoutManager = setUpLayoutManager(lineHeightMultiplier: lineHeightMultiplier, wrapLines: wrapLines)
         storageDelegate.addDelegate(layoutManager)
+
         selectionManager = setUpSelectionManager()
         selectionManager.useSystemCursor = useSystemCursor
+        storageDelegate.addDelegate(selectionManager)
 
         _undoManager = CEUndoManager(textView: self)
 

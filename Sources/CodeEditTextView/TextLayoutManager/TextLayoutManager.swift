@@ -211,15 +211,15 @@ public class TextLayoutManager: NSObject {
 
     /// Lays out all visible lines
     func layoutLines(in rect: NSRect? = nil) { // swiftlint:disable:this function_body_length
-        assertNotInLayout()
+//        assertNotInLayout()
         guard let visibleRect = rect ?? delegate?.visibleRect,
               !isInTransaction,
               let textStorage else {
             return
         }
-        #if DEBUG
-        isInLayout = true
-        #endif
+//        #if DEBUG
+//        isInLayout = true
+//        #endif
         let minY = max(visibleRect.minY - verticalLayoutPadding, 0)
         let maxY = max(visibleRect.maxY + verticalLayoutPadding, 0)
         let originalHeight = lineStorage.height
@@ -271,9 +271,9 @@ public class TextLayoutManager: NSObject {
         // Update the visible lines with the new set.
         visibleLineIds = newVisibleLines
 
-        #if DEBUG
-        isInLayout = false
-        #endif
+//        #if DEBUG
+//        isInLayout = false
+//        #endif
 
         // These are fine to update outside of `isInLayout` as our internal data structures are finalized at this point
         // so laying out again won't break our line storage or visible line.

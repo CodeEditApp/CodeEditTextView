@@ -121,7 +121,7 @@ extension TextLayoutManager {
             return nil
         }
         if linePosition.data.lineFragments.isEmpty {
-            let newHeight = ensureLayoutFor(position: linePosition)
+            let newHeight = preparePositionForDisplay(linePosition)
             if linePosition.height != newHeight {
                 delegate?.layoutManagerHeightDidUpdate(newHeight: lineStorage.height)
             }
@@ -165,7 +165,8 @@ extension TextLayoutManager {
     ///   - line: The line to calculate rects for.
     /// - Returns: Multiple bounding rects. Will return one rect for each line fragment that overlaps the given range.
     public func rectsFor(range: NSRange) -> [CGRect] {
-        lineStorage.linesInRange(range).flatMap { self.rectsFor(range: range, in: $0) }
+        ensureLayoutUntil(range.max)
+        return lineStorage.linesInRange(range).flatMap { self.rectsFor(range: range, in: $0) }
     }
 
     /// Calculates all text bounding rects that intersect with a given range, with a given line position.
@@ -175,6 +176,8 @@ extension TextLayoutManager {
     /// - Returns: Multiple bounding rects. Will return one rect for each line fragment that overlaps the given range.
     private func rectsFor(range: NSRange, in line: borrowing TextLineStorage<TextLine>.TextLinePosition) -> [CGRect] {
         guard let textStorage = (textStorage?.string as? NSString) else { return [] }
+
+        _ = preparePositionForDisplay(line)
 
         // Don't make rects in between characters
         let realRangeStart = textStorage.rangeOfComposedCharacterSequence(at: range.lowerBound)
@@ -239,6 +242,8 @@ extension TextLayoutManager {
         // Combine the points in clockwise order
         let points = leftSidePoints + rightSidePoints
 
+        guard points.allSatisfy({ $0.x.isFinite && $0.y.isFinite }) else { return nil }
+
         // Close the path
         if let firstPoint = points.first {
             return NSBezierPath.smoothPath(points + [firstPoint], radius: cornerRadius)
@@ -286,7 +291,7 @@ extension TextLayoutManager {
         for linePosition in lineStorage.linesInRange(
             NSRange(start: startingLinePosition.range.location, end: linePosition.range.max)
         ) {
-            let height = ensureLayoutFor(position: linePosition)
+            let height = preparePositionForDisplay(linePosition)
             if height != linePosition.height {
                 lineStorage.update(
                     atIndex: linePosition.range.location,

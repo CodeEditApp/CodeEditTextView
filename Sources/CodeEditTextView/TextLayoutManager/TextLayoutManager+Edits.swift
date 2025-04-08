@@ -10,17 +10,50 @@ import AppKit
 // MARK: - Edits
 
 extension TextLayoutManager: NSTextStorageDelegate {
-    /// Notifies the layout manager of an edit.
+    /// Receives edit notifications from the text storage and updates internal data structures to stay in sync with
+    /// text content.
     ///
-    /// Used by the `TextView` to tell the layout manager about any edits that will happen.
-    /// Use this to keep the layout manager's line storage in sync with the text storage.
+    /// If the changes are only attribute changes, this method invalidates layout for the edited range and returns.
     ///
-    /// - Parameters:
-    ///   - range: The range of the edit.
-    ///   - string: The string to replace in the given range.
-    public func willReplaceCharactersInRange(range: NSRange, with string: String) {
+    /// Otherwise, any lines that were removed or replaced by the edit are first removed from the text line layout
+    /// storage. Then, any new lines are inserted into the same storage.
+    ///
+    /// For instance, if inserting a newline this method will:
+    /// - Remove no lines (none were replaced)
+    /// - Update the current line's range to contain the newline character.
+    /// - Insert a new line after the current line.
+    ///
+    /// If a selection containing a newline is deleted and replaced with two more newlines this method will:
+    /// - Delete the original line.
+    /// - Insert two lines.
+    ///
+    /// - Note: This method *does not* cause a layout calculation. If a method is finding `NaN` values for line
+    ///         fragments, ensure `layout` or `ensureLayoutUntil` are called on the subject ranges.
+    public func textStorage(
+        _ textStorage: NSTextStorage,
+        didProcessEditing editedMask: NSTextStorageEditActions,
+        range editedRange: NSRange,
+        changeInLength delta: Int
+    ) {
+        guard editedMask.contains(.editedCharacters) else {
+            if editedMask.contains(.editedAttributes) && delta == 0 {
+                invalidateLayoutForRange(editedRange)
+            }
+            return
+        }
+
+        let insertedStringRange = NSRange(location: editedRange.location, length: editedRange.length - delta)
+        removeLayoutLinesIn(range: insertedStringRange)
+        insertNewLines(for: editedRange)
+        invalidateLayoutForRange(editedRange)
+    }
+
+    /// Removes all lines in the range, as if they were deleted. This is a setup for inserting the lines back in on an
+    /// edit.
+    /// - Parameter range: The range that was deleted.
+    private func removeLayoutLinesIn(range: NSRange) {
         // Loop through each line being replaced in reverse, updating and removing where necessary.
-         for linePosition in lineStorage.linesInRange(range).reversed() {
+        for linePosition in lineStorage.linesInRange(range).reversed() {
             // Two cases: Updated line, deleted line entirely
             guard let intersection = linePosition.range.intersection(range), !intersection.isEmpty else { continue }
             if intersection == linePosition.range && linePosition.range.max != lineStorage.length {
@@ -38,25 +71,24 @@ extension TextLayoutManager: NSTextStorageDelegate {
                 lineStorage.update(atIndex: linePosition.range.location, delta: -intersection.length, deltaHeight: 0)
             }
         }
-
+    }
+    
+    /// Inserts any newly inserted lines into the line layout storage. Exits early if the range is empty.
+    /// - Parameter range: The range of the string that was inserted into the text storage.
+    private func insertNewLines(for range: NSRange) {
+        guard !range.isEmpty, let string = textStorage?.substring(from: range) as? NSString else { return }
         // Loop through each line being inserted, inserting & splitting where necessary
-        if !string.isEmpty {
-            var index = 0
-            while let nextLine = (string as NSString).getNextLine(startingAt: index) {
-                let lineRange = NSRange(start: index, end: nextLine.max)
-                applyLineInsert((string as NSString).substring(with: lineRange) as NSString, at: range.location + index)
-                index = nextLine.max
-            }
-
-            if index < (string as NSString).length {
-                // Get the last line.
-                applyLineInsert(
-                    (string as NSString).substring(from: index) as NSString,
-                    at: range.location + index
-                )
-            }
+        var index = 0
+        while let nextLine = string.getNextLine(startingAt: index) {
+            let lineRange = NSRange(start: index, end: nextLine.max)
+            applyLineInsert(string.substring(with: lineRange) as NSString, at: range.location + index)
+            index = nextLine.max
         }
-        setNeedsLayout()
+
+        if index < string.length {
+            // Get the last line.
+            applyLineInsert(string.substring(from: index) as NSString, at: range.location + index)
+        }
     }
 
     /// Applies a line insert to the internal line storage tree.
@@ -94,20 +126,6 @@ extension TextLayoutManager: NSTextStorageDelegate {
             }
         } else {
             lineStorage.update(atIndex: location, delta: insertedString.length, deltaHeight: 0.0)
-        }
-    }
-
-    /// This method is to simplify keeping the layout manager in sync with attribute changes in the storage object.
-    /// This does not handle cases where characters have been inserted or removed from the storage.
-    /// For that, see the `willPerformEdit` method.
-    public func textStorage(
-        _ textStorage: NSTextStorage,
-        didProcessEditing editedMask: NSTextStorageEditActions,
-        range editedRange: NSRange,
-        changeInLength delta: Int
-    ) {
-        if editedMask.contains(.editedAttributes) && delta == 0 {
-            invalidateLayoutForRange(editedRange)
         }
     }
 }
