@@ -40,7 +40,7 @@ extension TextView: NSDraggingSource {
         dragGesture.isEnabled = isSelectable
         addGestureRecognizer(dragGesture)
     }
-    
+
     /// Handles state change on the drag and drop gesture recognizer.
     ///
     /// This will ignore any gesture state besides `.began`, and will end by setting the state to `.ended`. The gesture
@@ -120,7 +120,7 @@ extension TextView: NSDraggingSource {
         isDragging = true
         setUpMouseAutoscrollTimer()
     }
-    
+
     /// Updates the text view about a dragging session. The text view will update the ``TextView/draggingCursorView``
     /// cursor to match the drop destination depending on where the drag is on the text view.
     ///
@@ -203,7 +203,7 @@ extension TextView: NSDraggingSource {
     }
 
     // MARK: - Perform Drag
-    
+
     /// Performs the final drop operation.
     ///
     /// This method accepts a number of items from the dragging info's pasteboard, and cuts them into the
