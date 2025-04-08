@@ -120,7 +120,15 @@ extension TextView: NSDraggingSource {
         isDragging = true
         setUpMouseAutoscrollTimer()
     }
-
+    
+    /// Updates the text view about a dragging session. The text view will update the ``TextView/draggingCursorView``
+    /// cursor to match the drop destination depending on where the drag is on the text view.
+    ///
+    /// The text view will not place a dragging cursor view when the dragging destination is in an existing
+    /// text selection.
+    /// - Parameters:
+    ///   - session: The dragging session that was updated.
+    ///   - screenPoint: The position on the screen where the drag exists.
     public func draggingSession(_ session: NSDraggingSession, movedTo screenPoint: NSPoint) {
         guard let windowCoordinates = self.window?.convertPoint(fromScreen: screenPoint) else {
             return
