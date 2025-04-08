@@ -83,6 +83,11 @@ public class CEUndoManager {
 
     private weak var textView: TextView?
     private(set) public var isGrouping: Bool = false
+
+    /// After ``endUndoGrouping`` is called, we'd expect the next mutation to be exclusive no matter what. This
+    /// flag facilitates that, and is set by ``endUndoGrouping``
+    private var shouldBreakNextGroup: Bool = false
+
     /// True when the manager is ignoring mutations.
     private var isDisabled: Bool = false
 
@@ -154,18 +159,19 @@ public class CEUndoManager {
             return
         }
         let newMutation = Mutation(mutation: mutation, inverse: textStorage.inverseMutation(for: mutation))
-        if !undoStack.isEmpty, let lastMutation = undoStack.last?.mutations.last {
-            if isGrouping || shouldContinueGroup(newMutation, lastMutation: lastMutation) {
-                undoStack[undoStack.count - 1].mutations.append(newMutation)
-            } else {
-                undoStack.append(UndoGroup(mutations: [newMutation]))
-            }
+        // We can continue a group if:
+        // - A group exists
+        // - We're not direct to break the current group
+        // - We're forced grouping OR we automagically detect we can group.
+        if !undoStack.isEmpty,
+            let lastMutation = undoStack.last?.mutations.last,
+           !shouldBreakNextGroup,
+           isGrouping || shouldContinueGroup(newMutation, lastMutation: lastMutation) {
+            undoStack[undoStack.count - 1].mutations.append(newMutation)
         } else {
-            undoStack.append(
-                UndoGroup(mutations: [newMutation])
-            )
+            undoStack.append(UndoGroup(mutations: [newMutation]))
+            shouldBreakNextGroup = false
         }
-
         redoStack.removeAll()
     }
 
@@ -178,6 +184,8 @@ public class CEUndoManager {
             return
         }
         isGrouping = true
+        // This is a new undo group, break for it.
+        shouldBreakNextGroup = true
     }
 
     /// Stops grouping all incoming mutations.
@@ -187,6 +195,8 @@ public class CEUndoManager {
             return
         }
         isGrouping = false
+        // We just ended a group, do not allow the next mutation to be added to the group we just made.
+        shouldBreakNextGroup = true
     }
 
     /// Determines whether or not two mutations should be grouped.
