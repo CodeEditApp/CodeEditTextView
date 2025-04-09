@@ -67,10 +67,6 @@ extension NSBezierPath {
             let unitVector1 = distance1 > 0 ? NSPoint(x: vector1.x / distance1, y: vector1.y / distance1) : NSPoint.zero
             let unitVector2 = distance2 > 0 ? NSPoint(x: vector2.x / distance2, y: vector2.y / distance2) : NSPoint.zero
 
-            // This uses the dot product formula: cos(θ) = (u1 • u2),
-            // where u1 and u2 are unit vectors. The result will range from -1 to 1:
-            let angleCosine = unitVector1.x * unitVector2.x + unitVector1.y * unitVector2.y
-
             // Calculate the corner start and end
             let cornerStart = NSPoint(x: p1.x - unitVector1.x * radius, y: p1.y - unitVector1.y * radius)
             let cornerEnd = NSPoint(x: p1.x + unitVector2.x * radius, y: p1.y + unitVector2.y * radius)
