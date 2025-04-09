@@ -102,8 +102,8 @@ struct TextLayoutManagerTests {
     }
 
     /// # 04/09/25
-    /// This ensures that getting line rect info does not invalidate layout. The issue was previously caused by a call to
-    /// ``TextLayoutManager/preparePositionForDisplay``.
+    /// This ensures that getting line rect info does not invalidate layout. The issue was previously caused by a
+    /// call to ``TextLayoutManager/preparePositionForDisplay``.
     @Test
     func getRectsDoesNotRemoveLayoutInfo() {
         layoutManager.layoutLines(in: NSRect(x: 0, y: 0, width: 1000, height: 1000))
