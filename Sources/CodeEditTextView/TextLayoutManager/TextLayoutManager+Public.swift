@@ -177,8 +177,6 @@ extension TextLayoutManager {
     private func rectsFor(range: NSRange, in line: borrowing TextLineStorage<TextLine>.TextLinePosition) -> [CGRect] {
         guard let textStorage = (textStorage?.string as? NSString) else { return [] }
 
-        _ = preparePositionForDisplay(line)
-
         // Don't make rects in between characters
         let realRangeStart = textStorage.rangeOfComposedCharacterSequence(at: range.lowerBound)
         let realRangeEnd = textStorage.rangeOfComposedCharacterSequence(at: range.upperBound - 1)
