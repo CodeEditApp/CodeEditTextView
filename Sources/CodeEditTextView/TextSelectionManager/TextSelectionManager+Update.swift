@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import AppKit
 
 extension TextSelectionManager {
     public func didReplaceCharacters(in range: NSRange, replacementLength: Int) {
@@ -14,7 +13,6 @@ extension TextSelectionManager {
         for textSelection in self.textSelections {
             if textSelection.range.location > range.max {
                 textSelection.range.location = max(0, textSelection.range.location + delta)
-
                 textSelection.range.length = 0
             } else if textSelection.range.intersection(range) != nil
                         || textSelection.range == range
