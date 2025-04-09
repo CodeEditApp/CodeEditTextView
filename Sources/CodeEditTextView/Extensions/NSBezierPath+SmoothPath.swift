@@ -60,18 +60,16 @@ extension NSBezierPath {
             let distance1 = sqrt(vector1.x * vector1.x + vector1.y * vector1.y)
             let distance2 = sqrt(vector2.x * vector2.x + vector2.y * vector2.y)
 
-            // TODO: Check if .zero should get used or just skipped
-            if distance1.isZero || distance2.isZero { continue }
+            if distance1.isZero || distance2.isZero {
+                // Dividing by 0 will result in `NaN` points.
+                continue
+            }
             let unitVector1 = distance1 > 0 ? NSPoint(x: vector1.x / distance1, y: vector1.y / distance1) : NSPoint.zero
             let unitVector2 = distance2 > 0 ? NSPoint(x: vector2.x / distance2, y: vector2.y / distance2) : NSPoint.zero
 
             // This uses the dot product formula: cos(θ) = (u1 • u2),
             // where u1 and u2 are unit vectors. The result will range from -1 to 1:
             let angleCosine = unitVector1.x * unitVector2.x + unitVector1.y * unitVector2.y
-
-            // If the cosine of the angle is less than 0.5 (i.e., angle > ~60 degrees),
-            // the radius is reduced to half to avoid overlapping or excessive smoothing.
-            let clampedRadius = angleCosine < 0.5 ? radius /** 0.5 */: radius  // Adjust for sharp angles
 
             // Calculate the corner start and end
             let cornerStart = NSPoint(x: p1.x - unitVector1.x * radius, y: p1.y - unitVector1.y * radius)
@@ -95,6 +93,14 @@ extension NSBezierPath {
             // Calculate the vectors and unit vectors
             let finalVector = NSPoint(x: firstPoint.x - lastPoint.x, y: firstPoint.y - lastPoint.y)
             let distance = sqrt(finalVector.x * finalVector.x + finalVector.y * finalVector.y)
+
+            // Dividing by 0 after this will cause an assertion failure. Something went wrong with the given points
+            // this could mean we're rounding a 0-width and 0-height rect.
+            guard distance != 0 else {
+                path.line(to: lastPoint)
+                return path
+            }
+
             let unitVector = NSPoint(x: finalVector.x / distance, y: finalVector.y / distance)
 
             // Calculate the final corner start and initial corner end
