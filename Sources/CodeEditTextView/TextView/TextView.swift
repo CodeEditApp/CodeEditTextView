@@ -341,7 +341,6 @@ public class TextView: NSView, NSTextContent {
 
         selectionManager = setUpSelectionManager()
         selectionManager.useSystemCursor = useSystemCursor
-        storageDelegate.addDelegate(selectionManager)
 
         _undoManager = CEUndoManager(textView: self)
 
