@@ -42,6 +42,7 @@ struct TextLayoutManagerTests {
 
     init() throws {
         textView = TextView(string: "A\nB\nC\nD")
+        textView.frame = NSRect(x: 0, y: 0, width: 1000, height: 1000)
         textStorage = textView.textStorage
         layoutManager = try #require(textView.layoutManager)
     }
@@ -97,6 +98,36 @@ struct TextLayoutManagerTests {
 
         #expect(layoutManager.lineCount == lineCount)
         #expect(layoutManager.lineStorage.length == textStorage.length)
+        layoutManager.lineStorage.validateInternalState()
+    }
+
+    /// # 04/09/25
+    /// This ensures that getting line rect info does not invalidate layout. The issue was previously caused by a call to
+    /// ``TextLayoutManager/preparePositionForDisplay``.
+    @Test
+    func getRectsDoesNotRemoveLayoutInfo() {
+        layoutManager.layoutLines(in: NSRect(x: 0, y: 0, width: 1000, height: 1000))
+        let lineFragmentIDs = Set(
+            layoutManager.lineStorage
+                .linesInRange(NSRange(location: 0, length: 7))
+                .flatMap(\.data.lineFragments)
+                .map(\.data.id)
+        )
+
+        _ = layoutManager.rectsFor(range: NSRange(start: 0, end: 7))
+
+        #expect(
+            layoutManager.lineStorage.linesInRange(NSRange(location: 0, length: 7)).allSatisfy({ position in
+                !position.data.lineFragments.isEmpty
+            })
+        )
+        let afterLineFragmentIDs = Set(
+            layoutManager.lineStorage
+                .linesInRange(NSRange(location: 0, length: 7))
+                .flatMap(\.data.lineFragments)
+                .map(\.data.id)
+        )
+        #expect(lineFragmentIDs == afterLineFragmentIDs, "Line fragments were invalidated by `rectsFor(range:)` call.")
         layoutManager.lineStorage.validateInternalState()
     }
 }

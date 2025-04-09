@@ -4,7 +4,8 @@ import Foundation
 
 @Suite()
 struct EmphasisManagerTests {
-    @Test() @MainActor
+    @Test()
+    @MainActor
     func testFlashEmphasisLayersNotLeaked() {
         // Ensure layers are not leaked when switching from flash emphasis to any other emphasis type.
         let textView = TextView(string: "Lorem Ipsum")
