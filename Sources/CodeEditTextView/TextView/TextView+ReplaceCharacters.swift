@@ -16,7 +16,6 @@ extension TextView {
     public func replaceCharacters(in ranges: [NSRange], with string: String) {
         guard isEditable else { return }
         NotificationCenter.default.post(name: Self.textWillChangeNotification, object: self)
-        layoutManager.beginTransaction()
         textStorage.beginEditing()
 
         // Can't insert an empty string into an empty range. One must be not empty
@@ -25,7 +24,6 @@ extension TextView {
         (delegate?.textView(self, shouldReplaceContentsIn: range, with: string) ?? true) {
             delegate?.textView(self, willReplaceContentsIn: range, with: string)
 
-            layoutManager.willReplaceCharactersInRange(range: range, with: string)
             _undoManager?.registerMutation(
                 TextMutation(string: string as String, range: range, limit: textStorage.length)
             )
@@ -39,7 +37,6 @@ extension TextView {
         }
 
         textStorage.endEditing()
-        layoutManager.endTransaction()
         selectionManager.notifyAfterEdit()
         NotificationCenter.default.post(name: Self.textDidChangeNotification, object: self)
 

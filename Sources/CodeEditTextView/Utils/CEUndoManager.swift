@@ -179,10 +179,7 @@ public class CEUndoManager {
 
     /// Groups all incoming mutations.
     public func beginUndoGrouping() {
-        guard !isGrouping else {
-            assertionFailure("UndoManager already in a group. Call `beginUndoGrouping` before this can be called.")
-            return
-        }
+        guard !isGrouping else { return }
         isGrouping = true
         // This is a new undo group, break for it.
         shouldBreakNextGroup = true
@@ -190,10 +187,7 @@ public class CEUndoManager {
 
     /// Stops grouping all incoming mutations.
     public func endUndoGrouping() {
-        guard isGrouping else {
-            assertionFailure("UndoManager not in a group. Call `endUndoGrouping` before this can be called.")
-            return
-        }
+        guard isGrouping else { return }
         isGrouping = false
         // We just ended a group, do not allow the next mutation to be added to the group we just made.
         shouldBreakNextGroup = true

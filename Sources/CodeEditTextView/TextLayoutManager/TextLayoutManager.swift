@@ -199,8 +199,6 @@ public class TextLayoutManager: NSObject {
     /// ``TextLayoutManager/estimateLineHeight()`` is called.
     private var _estimateLineHeight: CGFloat?
 
-    // MARK: - Layout
-
     /// Asserts that the caller is not in an active layout pass.
     /// See docs on ``isInLayout`` for more details.
     private func assertNotInLayout() {
@@ -208,6 +206,8 @@ public class TextLayoutManager: NSObject {
         assert(!isInLayout, "layoutLines called while already in a layout pass. This is a programmer error.")
         #endif
     }
+
+    // MARK: - Layout
 
     /// Lays out all visible lines
     func layoutLines(in rect: NSRect? = nil) { // swiftlint:disable:this function_body_length
@@ -217,9 +217,15 @@ public class TextLayoutManager: NSObject {
               let textStorage else {
             return
         }
+
+        // The macOS may call `layout` on the textView while we're laying out fragment views. This ensures the view
+        // tree modifications caused by this method are atomic, so macOS won't call `layout` while we're already doing
+        // that
+        CATransaction.begin()
         #if DEBUG
         isInLayout = true
         #endif
+
         let minY = max(visibleRect.minY - verticalLayoutPadding, 0)
         let maxY = max(visibleRect.maxY + verticalLayoutPadding, 0)
         let originalHeight = lineStorage.height
@@ -265,15 +271,16 @@ public class TextLayoutManager: NSObject {
             newVisibleLines.insert(linePosition.data.id)
         }
 
+        #if DEBUG
+        isInLayout = false
+        #endif
+        CATransaction.commit()
+
         // Enqueue any lines not used in this layout pass.
         viewReuseQueue.enqueueViews(notInSet: usedFragmentIDs)
 
         // Update the visible lines with the new set.
         visibleLineIds = newVisibleLines
-
-        #if DEBUG
-        isInLayout = false
-        #endif
 
         // These are fine to update outside of `isInLayout` as our internal data structures are finalized at this point
         // so laying out again won't break our line storage or visible line.

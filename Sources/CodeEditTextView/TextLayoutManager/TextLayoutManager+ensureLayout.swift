@@ -8,9 +8,10 @@
 import Foundation
 
 extension TextLayoutManager {
-    /// Forces layout calculation for all lines up to and including the given offset.
-    /// - Parameter offset: The offset to ensure layout until.
-    package func ensureLayoutFor(position: TextLineStorage<TextLine>.TextLinePosition) -> CGFloat {
+    /// Invalidates and prepares a line position for display.
+    /// - Parameter position: The line position to prepare.
+    /// - Returns: The height of the newly laid out line and all it's fragments.
+    package func preparePositionForDisplay(_ position: TextLineStorage<TextLine>.TextLinePosition) -> CGFloat {
         guard let textStorage else { return 0 }
         let displayData = TextLine.DisplayData(
             maxWidth: maxLineLayoutWidth,
