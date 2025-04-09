@@ -86,6 +86,8 @@ public class TextSelectionManager: NSObject {
     /// Set the selected ranges to new ranges. Overrides any existing selections.
     /// - Parameter range: The selected ranges to set.
     public func setSelectedRanges(_ ranges: [NSRange]) {
+        let oldRanges = textSelections.map(\.range)
+
         textSelections.forEach { $0.view?.removeFromSuperview() }
         // Remove duplicates, invalid ranges, update suggested X position.
         textSelections = Set(ranges)
@@ -99,8 +101,11 @@ public class TextSelectionManager: NSObject {
                 return selection
             }
         updateSelectionViews()
-        NotificationCenter.default.post(Notification(name: Self.selectionChangedNotification, object: self))
         delegate?.setNeedsDisplay()
+
+        if oldRanges != textSelections.map(\.range) {
+            NotificationCenter.default.post(Notification(name: Self.selectionChangedNotification, object: self))
+        }
     }
 
     /// Append a new selected range to the existing ones.

@@ -191,6 +191,7 @@ extension TextLayoutManager {
         for fragmentPosition in line.data.lineFragments.linesInRange(relativeRange) {
             guard let intersectingRange = fragmentPosition.range.intersection(relativeRange) else { continue }
             let fragmentRect = fragmentPosition.data.rectFor(range: intersectingRange)
+            guard fragmentRect.width > 0 else { continue }
             rects.append(
                 CGRect(
                     x: fragmentRect.minX + edgeInsets.left,
