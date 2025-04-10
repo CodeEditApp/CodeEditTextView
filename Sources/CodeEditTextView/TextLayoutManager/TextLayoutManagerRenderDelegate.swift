@@ -20,10 +20,11 @@ public protocol TextLayoutManagerRenderDelegate: AnyObject {
         markedRanges: MarkedRanges?,
         breakStrategy: LineBreakStrategy
     )
-    func drawLineFragment(fragment: LineFragment, in context: CGContext)
+
+    func lineFragmentView(for lineFragment: LineFragment) -> LineFragmentView
 }
 
-extension TextLayoutManagerRenderDelegate {
+public extension TextLayoutManagerRenderDelegate {
     func prepareForDisplay( // swiftlint:disable:this function_parameter_count
         textLine: TextLine,
         displayData: TextLine.DisplayData,
@@ -41,7 +42,7 @@ extension TextLayoutManagerRenderDelegate {
         )
     }
 
-    func drawLineFragment(fragment: LineFragment, in context: CGContext) {
-        fragment.draw(in: context, yPos: 0.0)
+    func lineFragmentView(for lineFragment: LineFragment) -> LineFragmentView {
+        LineFragmentView()
     }
 }

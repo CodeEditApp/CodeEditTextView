@@ -11,6 +11,7 @@ import CoreText
 final public class Typesetter {
     public var typesetter: CTTypesetter?
     public var string: NSAttributedString!
+    public var documentRange: NSRange?
     public var lineFragments = TextLineStorage<LineFragment>()
 
     // MARK: - Init & Prepare
@@ -19,10 +20,12 @@ final public class Typesetter {
 
     public func typeset(
         _ string: NSAttributedString,
+        documentRange: NSRange,
         displayData: TextLine.DisplayData,
         breakStrategy: LineBreakStrategy,
         markedRanges: MarkedRanges?
     ) {
+        self.documentRange = documentRange
         lineFragments.removeAll()
         if let markedRanges {
             let mutableString = NSMutableAttributedString(attributedString: string)
@@ -62,6 +65,7 @@ final public class Typesetter {
             // Insert an empty fragment
             let ctLine = CTTypesetterCreateLine(typesetter, CFRangeMake(0, 0))
             let fragment = LineFragment(
+                documentRange: NSRange(location: (documentRange ?? .notFound).location, length: 0),
                 ctLine: ctLine,
                 width: 0,
                 height: estimatedLineHeight/lineHeightMultiplier,
@@ -107,7 +111,9 @@ final public class Typesetter {
         var leading: CGFloat = 0
         let width = CGFloat(CTLineGetTypographicBounds(ctLine, &ascent, &descent, &leading))
         let height = ascent + descent + leading
+        let range = NSRange(location: (documentRange ?? .notFound).location + range.location, length: range.length)
         return LineFragment(
+            documentRange: range,
             ctLine: ctLine,
             width: width,
             height: height,

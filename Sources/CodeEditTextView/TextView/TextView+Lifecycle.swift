@@ -8,11 +8,6 @@
 import AppKit
 
 extension TextView {
-    override public func layout() {
-        layoutManager.layoutLines()
-        super.layout()
-    }
-
     override public func viewWillMove(toWindow newWindow: NSWindow?) {
         super.viewWillMove(toWindow: newWindow)
         layoutManager.layoutLines()

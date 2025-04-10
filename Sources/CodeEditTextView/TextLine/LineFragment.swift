@@ -12,6 +12,7 @@ import CodeEditTextViewObjC
 /// fragments, and any lines that need to be broken due to width constraints will contain more than one fragment.
 public final class LineFragment: Identifiable, Equatable {
     public let id = UUID()
+    public let documentRange: NSRange
     public var ctLine: CTLine
     public var width: CGFloat
     public var height: CGFloat
@@ -23,13 +24,15 @@ public final class LineFragment: Identifiable, Equatable {
         scaledHeight - height
     }
 
-    public init(
+    init(
+        documentRange: NSRange,
         ctLine: CTLine,
         width: CGFloat,
         height: CGFloat,
         descent: CGFloat,
         lineHeightMultiplier: CGFloat
     ) {
+        self.documentRange = documentRange
         self.ctLine = ctLine
         self.width = width
         self.height = height

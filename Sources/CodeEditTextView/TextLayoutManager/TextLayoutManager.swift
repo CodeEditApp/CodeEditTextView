@@ -117,18 +117,20 @@ public class TextLayoutManager: NSObject {
     ///   - wrapLines: Set to true to wrap lines to the visible editor width.
     ///   - textView: The view to layout text fragments in.
     ///   - delegate: A delegate for the layout manager.
-    init(
+    public init(
         textStorage: NSTextStorage,
         lineHeightMultiplier: CGFloat,
         wrapLines: Bool,
         textView: NSView,
-        delegate: TextLayoutManagerDelegate?
+        delegate: TextLayoutManagerDelegate?,
+        renderDelegate: TextLayoutManagerRenderDelegate? = nil
     ) {
         self.textStorage = textStorage
         self.lineHeightMultiplier = lineHeightMultiplier
         self.wrapLines = wrapLines
         self.layoutView = textView
         self.delegate = delegate
+        self.renderDelegate = renderDelegate
         super.init()
         prepareTextLines()
     }

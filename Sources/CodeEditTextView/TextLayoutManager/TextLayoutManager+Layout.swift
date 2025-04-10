@@ -19,7 +19,9 @@ extension TextLayoutManager {
     // MARK: - Layout Lines
 
     /// Lays out all visible lines
-    func layoutLines(in rect: NSRect? = nil) { // swiftlint:disable:this function_body_length
+    /// - Warning: This is probably not what you're looking for. If you need to invalidate layout, or update lines, this
+    ///            is not the way to do so. This should only be called when macOS performs layout.
+    public func layoutLines(in rect: NSRect? = nil) { // swiftlint:disable:this function_body_length
         assertNotInLayout()
         guard let visibleRect = rect ?? delegate?.visibleRect,
               !isInTransaction,
@@ -185,11 +187,37 @@ extension TextLayoutManager {
         for lineFragment: TextLineStorage<LineFragment>.TextLinePosition,
         at yPos: CGFloat
     ) {
-        let view = viewReuseQueue.getOrCreateView(forKey: lineFragment.data.id)
+        let view = viewReuseQueue.getOrCreateView(forKey: lineFragment.data.id) {
+            renderDelegate?.lineFragmentView(for: lineFragment.data) ?? LineFragmentView()
+        }
+        view.translatesAutoresizingMaskIntoConstraints = false
         view.setLineFragment(lineFragment.data)
-        view.renderDelegate = renderDelegate
         view.frame.origin = CGPoint(x: edgeInsets.left, y: yPos)
         layoutView?.addSubview(view)
         view.needsDisplay = true
+    }
+
+    /// Invalidates and prepares a line position for display.
+    /// - Parameter position: The line position to prepare.
+    /// - Returns: The height of the newly laid out line and all it's fragments.
+    package func preparePositionForDisplay(_ position: TextLineStorage<TextLine>.TextLinePosition) -> CGFloat {
+        guard let textStorage else { return 0 }
+        let displayData = TextLine.DisplayData(
+            maxWidth: maxLineLayoutWidth,
+            lineHeightMultiplier: lineHeightMultiplier,
+            estimatedLineHeight: estimateLineHeight()
+        )
+        position.data.prepareForDisplay(
+            displayData: displayData,
+            range: position.range,
+            stringRef: textStorage,
+            markedRanges: markedTextManager.markedRanges(in: position.range),
+            breakStrategy: lineBreakStrategy
+        )
+        var height: CGFloat = 0
+        for fragmentPosition in position.data.lineFragments {
+            height += fragmentPosition.data.scaledHeight
+        }
+        return height
     }
 }
