@@ -1,5 +1,5 @@
 //
-//  TextLayoutManagerLayoutDelegate.swift
+//  TextLayoutManagerRenderDelegate.swift
 //  CodeEditTextView
 //
 //  Created by Khan Winter on 4/10/25.
