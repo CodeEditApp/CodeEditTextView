@@ -45,7 +45,7 @@ public final class TextLine: Identifiable, Equatable {
         displayData: DisplayData,
         range: NSRange,
         stringRef: NSTextStorage,
-        markedRanges: MarkedTextManager.MarkedRanges?,
+        markedRanges: MarkedRanges?,
         breakStrategy: LineBreakStrategy
     ) {
         let string = stringRef.attributedSubstring(from: range)
@@ -64,7 +64,7 @@ public final class TextLine: Identifiable, Equatable {
     }
 
     /// Contains all required data to perform a typeset and layout operation on a text line.
-    struct DisplayData {
+    public struct DisplayData {
         let maxWidth: CGFloat
         let lineHeightMultiplier: CGFloat
         let estimatedLineHeight: CGFloat

@@ -8,20 +8,20 @@
 import Foundation
 import CoreText
 
-final class Typesetter {
-    var typesetter: CTTypesetter?
-    var string: NSAttributedString!
-    var lineFragments = TextLineStorage<LineFragment>()
+final public class Typesetter {
+    public var typesetter: CTTypesetter?
+    public var string: NSAttributedString!
+    public var lineFragments = TextLineStorage<LineFragment>()
 
     // MARK: - Init & Prepare
 
-    init() { }
+    public init() { }
 
-    func typeset(
+    public func typeset(
         _ string: NSAttributedString,
         displayData: TextLine.DisplayData,
         breakStrategy: LineBreakStrategy,
-        markedRanges: MarkedTextManager.MarkedRanges?
+        markedRanges: MarkedRanges?
     ) {
         lineFragments.removeAll()
         if let markedRanges {

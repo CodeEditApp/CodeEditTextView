@@ -11,6 +11,8 @@ import AppKit
 final class LineFragmentView: NSView {
     private weak var lineFragment: LineFragment?
 
+    weak var renderDelegate: TextLayoutManagerRenderDelegate?
+
     override var isFlipped: Bool {
         true
     }
@@ -39,6 +41,11 @@ final class LineFragmentView: NSView {
         guard let lineFragment, let context = NSGraphicsContext.current?.cgContext else {
             return
         }
-        lineFragment.draw(in: context, yPos: 0.0)
+
+        if let renderDelegate {
+            renderDelegate.drawLineFragment(fragment: lineFragment, in: context)
+        } else {
+            lineFragment.draw(in: context, yPos: 0.0)
+        }
     }
 }

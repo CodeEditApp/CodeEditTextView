@@ -8,16 +8,6 @@
 import Foundation
 import AppKit
 
-public protocol TextLayoutManagerDelegate: AnyObject {
-    func layoutManagerHeightDidUpdate(newHeight: CGFloat)
-    func layoutManagerMaxWidthDidChange(newWidth: CGFloat)
-    func layoutManagerTypingAttributes() -> [NSAttributedString.Key: Any]
-    func textViewportSize() -> CGSize
-    func layoutManagerYAdjustment(_ yAdjustment: CGFloat)
-
-    var visibleRect: NSRect { get }
-}
-
 /// The text layout manager manages laying out lines in a code document.
 public class TextLayoutManager: NSObject {
     // MARK: - Public Properties
@@ -64,6 +54,8 @@ public class TextLayoutManager: NSObject {
             setNeedsLayout()
         }
     }
+
+    public weak var renderDelegate: TextLayoutManagerRenderDelegate?
 
     // MARK: - Internal
 
@@ -207,7 +199,7 @@ public class TextLayoutManager: NSObject {
         #endif
     }
 
-    // MARK: - Layout
+    // MARK: - Layout Lines
 
     /// Lays out all visible lines
     func layoutLines(in rect: NSRect? = nil) { // swiftlint:disable:this function_body_length
@@ -300,6 +292,8 @@ public class TextLayoutManager: NSObject {
         needsLayout = false
     }
 
+    // MARK: - Layout Single Line
+
     /// Lays out a single text line.
     /// - Parameters:
     ///   - position: The line position from storage to use for layout.
@@ -320,13 +314,24 @@ public class TextLayoutManager: NSObject {
         )
 
         let line = position.data
-        line.prepareForDisplay(
-            displayData: lineDisplayData,
-            range: position.range,
-            stringRef: textStorage,
-            markedRanges: markedTextManager.markedRanges(in: position.range),
-            breakStrategy: lineBreakStrategy
-        )
+        if let renderDelegate {
+            renderDelegate.prepareForDisplay(
+                textLine: line,
+                displayData: lineDisplayData,
+                range: position.range,
+                stringRef: textStorage,
+                markedRanges: markedTextManager.markedRanges(in: position.range),
+                breakStrategy: lineBreakStrategy
+            )
+        } else {
+            line.prepareForDisplay(
+                displayData: lineDisplayData,
+                range: position.range,
+                stringRef: textStorage,
+                markedRanges: markedTextManager.markedRanges(in: position.range),
+                breakStrategy: lineBreakStrategy
+            )
+        }
 
         if position.range.isEmpty {
             return CGSize(width: 0, height: estimateLineHeight())
@@ -353,6 +358,8 @@ public class TextLayoutManager: NSObject {
         return CGSize(width: width, height: height)
     }
 
+    // MARK: - Layout Fragment
+
     /// Lays out a line fragment view for the given line fragment at the specified y value.
     /// - Parameters:
     ///   - lineFragment: The line fragment position to lay out a view for.
@@ -363,6 +370,7 @@ public class TextLayoutManager: NSObject {
     ) {
         let view = viewReuseQueue.getOrCreateView(forKey: lineFragment.data.id)
         view.setLineFragment(lineFragment.data)
+        view.renderDelegate = renderDelegate
         view.frame.origin = CGPoint(x: edgeInsets.left, y: yPos)
         layoutView?.addSubview(view)
         view.needsDisplay = true
