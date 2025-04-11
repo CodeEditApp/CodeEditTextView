@@ -121,10 +121,7 @@ extension TextLayoutManager {
             return nil
         }
         if linePosition.data.lineFragments.isEmpty {
-            let newHeight = preparePositionForDisplay(linePosition)
-            if linePosition.height != newHeight {
-                delegate?.layoutManagerHeightDidUpdate(newHeight: lineStorage.height)
-            }
+            ensureLayoutUntil(offset)
         }
 
         guard let fragmentPosition = linePosition.data.typesetter.lineFragments.getLine(
@@ -293,7 +290,7 @@ extension TextLayoutManager {
             let height = preparePositionForDisplay(linePosition)
             if height != linePosition.height {
                 lineStorage.update(
-                    atIndex: linePosition.range.location,
+                    atOffset: linePosition.range.location,
                     delta: 0,
                     deltaHeight: height - linePosition.height
                 )

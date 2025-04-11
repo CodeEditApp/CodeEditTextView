@@ -14,7 +14,8 @@ extension TextLayoutManager {
         for linePosition in lineStorage.linesStartingAt(rect.minY, until: rect.maxY) {
             linePosition.data.setNeedsLayout()
         }
-        layoutLines()
+
+        layoutView?.needsLayout = true
     }
 
     /// Invalidates layout for the given range of text.
@@ -24,11 +25,12 @@ extension TextLayoutManager {
             linePosition.data.setNeedsLayout()
         }
 
-        layoutLines()
+        layoutView?.needsLayout = true
     }
 
     public func setNeedsLayout() {
         needsLayout = true
         visibleLineIds.removeAll(keepingCapacity: true)
+        layoutView?.needsLayout = true
     }
 }

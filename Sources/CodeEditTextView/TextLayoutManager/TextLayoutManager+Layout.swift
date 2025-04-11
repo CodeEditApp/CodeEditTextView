@@ -1,13 +1,20 @@
 //
-//  File.swift
+//  TextLayoutManager+ensureLayout.swift
 //  CodeEditTextView
 //
-//  Created by Khan Winter on 4/10/25.
+//  Created by Khan Winter on 4/7/25.
 //
 
 import AppKit
 
 extension TextLayoutManager {
+    /// Contains all data required to perform layout on a text line.
+    private struct LineLayoutData {
+        let minY: CGFloat
+        let maxY: CGFloat
+        let maxWidth: CGFloat
+    }
+
     /// Asserts that the caller is not in an active layout pass.
     /// See docs on ``isInLayout`` for more details.
     private func assertNotInLayout() {
@@ -60,7 +67,7 @@ extension TextLayoutManager {
                 )
                 if lineSize.height != linePosition.height {
                     lineStorage.update(
-                        atIndex: linePosition.range.location,
+                        atOffset: linePosition.range.location,
                         delta: 0,
                         deltaHeight: lineSize.height - linePosition.height
                     )
@@ -200,7 +207,7 @@ extension TextLayoutManager {
     /// Invalidates and prepares a line position for display.
     /// - Parameter position: The line position to prepare.
     /// - Returns: The height of the newly laid out line and all it's fragments.
-    package func preparePositionForDisplay(_ position: TextLineStorage<TextLine>.TextLinePosition) -> CGFloat {
+    func preparePositionForDisplay(_ position: TextLineStorage<TextLine>.TextLinePosition) -> CGFloat {
         guard let textStorage else { return 0 }
         let displayData = TextLine.DisplayData(
             maxWidth: maxLineLayoutWidth,

@@ -101,13 +101,6 @@ public class TextLayoutManager: NSObject {
         (delegate?.textViewportSize().width ?? .greatestFiniteMagnitude) - edgeInsets.horizontal
     }
 
-    /// Contains all data required to perform layout on a text line.
-    struct LineLayoutData {
-        let minY: CGFloat
-        let maxY: CGFloat
-        let maxWidth: CGFloat
-    }
-
     // MARK: - Init
 
     /// Initialize a text layout manager and prepare it for use.

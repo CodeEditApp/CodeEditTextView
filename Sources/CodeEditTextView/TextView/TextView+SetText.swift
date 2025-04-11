@@ -27,9 +27,16 @@ extension TextView {
         textStorage.addAttributes(typingAttributes, range: documentRange)
         layoutManager.textStorage = textStorage
         layoutManager.reset()
+        storageDelegate.addDelegate(layoutManager)
 
         selectionManager.textStorage = textStorage
         selectionManager.setSelectedRanges(selectionManager.textSelections.map { $0.range })
+        NotificationCenter.default.post(
+            Notification(
+                name: TextSelectionManager.selectionChangedNotification,
+                object: selectionManager
+            )
+        )
 
         _undoManager?.clearStack()
 
