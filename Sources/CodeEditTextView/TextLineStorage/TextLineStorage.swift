@@ -194,7 +194,10 @@ public final class TextLineStorage<Data: Identifiable> {
     ///   - delta: The change in length of the document. Negative for deletes, positive for insertions.
     ///   - deltaHeight: The change in height of the document.
     public func update(atOffset offset: Int, delta: Int, deltaHeight: CGFloat) {
-        assert(offset >= 0 && offset <= self.length, "Invalid index, expected between 0 and \(self.length). Got \(offset)")
+        assert(
+            offset >= 0 && offset <= self.length,
+            "Invalid index, expected between 0 and \(self.length). Got \(offset)"
+        )
         assert(delta != 0 || deltaHeight != 0, "Delta must be non-0")
         let position: NodePosition?
         if offset == self.length { // Updates at the end of the document are valid
