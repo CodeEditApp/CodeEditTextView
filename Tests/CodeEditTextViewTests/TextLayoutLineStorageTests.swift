@@ -89,7 +89,7 @@ final class TextLayoutLineStorageTests: XCTestCase {
 
         // Single Element
         tree.insert(line: TextLine(), atOffset: 0, length: 1, height: 1.0)
-        tree.update(atIndex: 0, delta: 20, deltaHeight: 5.0)
+        tree.update(atOffset: 0, delta: 20, deltaHeight: 5.0)
         XCTAssertEqual(tree.length, 21, "Tree length incorrect")
         XCTAssertEqual(tree.count, 1, "Tree count incorrect")
         XCTAssertEqual(tree.height, 6, "Tree height incorrect")
@@ -98,7 +98,7 @@ final class TextLayoutLineStorageTests: XCTestCase {
 
         // Update First
         tree = createBalancedTree()
-        tree.update(atIndex: 0, delta: 12, deltaHeight: -0.5)
+        tree.update(atOffset: 0, delta: 12, deltaHeight: -0.5)
         XCTAssertEqual(tree.height, 14.5, "Tree height incorrect")
         XCTAssertEqual(tree.count, 15, "Tree count changed")
         XCTAssertEqual(tree.length, 132, "Tree length incorrect")
@@ -107,7 +107,7 @@ final class TextLayoutLineStorageTests: XCTestCase {
 
         // Update Last
         tree = createBalancedTree()
-        tree.update(atIndex: tree.length - 1, delta: -14, deltaHeight: 1.75)
+        tree.update(atOffset: tree.length - 1, delta: -14, deltaHeight: 1.75)
         XCTAssertEqual(tree.height, 16.75, "Tree height incorrect")
         XCTAssertEqual(tree.count, 15, "Tree count changed")
         XCTAssertEqual(tree.length, 106, "Tree length incorrect")
@@ -116,7 +116,7 @@ final class TextLayoutLineStorageTests: XCTestCase {
 
         // Update middle
         tree = createBalancedTree()
-        tree.update(atIndex: 45, delta: -9, deltaHeight: 1.0)
+        tree.update(atOffset: 45, delta: -9, deltaHeight: 1.0)
         XCTAssertEqual(tree.height, 16.0, "Tree height incorrect")
         XCTAssertEqual(tree.count, 15, "Tree count changed")
         XCTAssertEqual(tree.length, 111, "Tree length incorrect")
@@ -131,7 +131,7 @@ final class TextLayoutLineStorageTests: XCTestCase {
             let originalHeight = tree.height
             let originalCount = tree.count
             let originalLength = tree.length
-            tree.update(atIndex: Int.random(in: 0..<tree.length), delta: delta, deltaHeight: deltaHeight)
+            tree.update(atOffset: Int.random(in: 0..<tree.length), delta: delta, deltaHeight: deltaHeight)
             XCTAssert(originalCount == tree.count, "Tree count should not change on update")
             XCTAssert(originalHeight + deltaHeight == tree.height, "Tree height incorrect")
             XCTAssert(originalLength + delta == tree.length, "Tree length incorrect")

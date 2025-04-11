@@ -8,6 +8,11 @@
 import Foundation
 
 extension TextView {
+    override public func layout() {
+        super.layout()
+        layoutManager.layoutLines()
+    }
+
     open override class var isCompatibleWithResponsiveScrolling: Bool {
         true
     }

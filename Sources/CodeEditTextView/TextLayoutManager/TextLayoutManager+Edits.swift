@@ -45,7 +45,8 @@ extension TextLayoutManager: NSTextStorageDelegate {
         let insertedStringRange = NSRange(location: editedRange.location, length: editedRange.length - delta)
         removeLayoutLinesIn(range: insertedStringRange)
         insertNewLines(for: editedRange)
-        invalidateLayoutForRange(editedRange)
+
+        setNeedsLayout()
     }
 
     /// Removes all lines in the range, as if they were deleted. This is a setup for inserting the lines back in on an
@@ -65,10 +66,10 @@ extension TextLayoutManager: NSTextStorageDelegate {
                 lineStorage.delete(lineAt: nextLine.range.location)
                 let delta = -intersection.length + nextLine.range.length
                 if delta != 0 {
-                    lineStorage.update(atIndex: linePosition.range.location, delta: delta, deltaHeight: 0)
+                    lineStorage.update(atOffset: linePosition.range.location, delta: delta, deltaHeight: 0)
                 }
             } else {
-                lineStorage.update(atIndex: linePosition.range.location, delta: -intersection.length, deltaHeight: 0)
+                lineStorage.update(atOffset: linePosition.range.location, delta: -intersection.length, deltaHeight: 0)
             }
         }
     }
@@ -100,7 +101,7 @@ extension TextLayoutManager: NSTextStorageDelegate {
             if location == lineStorage.length {
                 // Insert a new line at the end of the document, need to insert a new line 'cause there's nothing to
                 // split. Also, append the new text to the last line.
-                lineStorage.update(atIndex: location, delta: insertedString.length, deltaHeight: 0.0)
+                lineStorage.update(atOffset: location, delta: insertedString.length, deltaHeight: 0.0)
                 lineStorage.insert(
                     line: TextLine(),
                     atOffset: location + insertedString.length,
@@ -114,7 +115,7 @@ extension TextLayoutManager: NSTextStorageDelegate {
                 let splitLength = linePosition.range.max - location
                 let lineDelta = insertedString.length - splitLength // The difference in the line being edited
                 if lineDelta != 0 {
-                    lineStorage.update(atIndex: location, delta: lineDelta, deltaHeight: 0.0)
+                    lineStorage.update(atOffset: location, delta: lineDelta, deltaHeight: 0.0)
                 }
 
                 lineStorage.insert(
@@ -125,7 +126,7 @@ extension TextLayoutManager: NSTextStorageDelegate {
                 )
             }
         } else {
-            lineStorage.update(atIndex: location, delta: insertedString.length, deltaHeight: 0.0)
+            lineStorage.update(atOffset: location, delta: insertedString.length, deltaHeight: 0.0)
         }
     }
 }
