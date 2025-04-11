@@ -190,26 +190,26 @@ public final class TextLineStorage<Data: Identifiable> {
     /// - Complexity `O(m log n)` where `m` is the number of lines that need to be deleted as a result of this update.
     ///              and `n` is the number of lines stored in the tree.
     /// - Parameters:
-    ///   - index: The index where the edit began
+    ///   - offset: The offset where the edit began
     ///   - delta: The change in length of the document. Negative for deletes, positive for insertions.
     ///   - deltaHeight: The change in height of the document.
-    public func update(atIndex index: Int, delta: Int, deltaHeight: CGFloat) {
-        assert(index >= 0 && index <= self.length, "Invalid index, expected between 0 and \(self.length). Got \(index)")
+    public func update(atOffset offset: Int, delta: Int, deltaHeight: CGFloat) {
+        assert(offset >= 0 && offset <= self.length, "Invalid index, expected between 0 and \(self.length). Got \(offset)")
         assert(delta != 0 || deltaHeight != 0, "Delta must be non-0")
         let position: NodePosition?
-        if index == self.length { // Updates at the end of the document are valid
+        if offset == self.length { // Updates at the end of the document are valid
             position = lastNode
         } else {
-            position = search(for: index)
+            position = search(for: offset)
         }
         guard let position else {
-            assertionFailure("No line found at index \(index)")
+            assertionFailure("No line found at index \(offset)")
             return
         }
         if delta < 0 {
             assert(
-                index - position.textPos > delta,
-                "Delta too large. Deleting \(-delta) from line at position \(index) extends beyond the line's range."
+                offset - position.textPos > delta,
+                "Delta too large. Deleting \(-delta) from line at position \(offset) extends beyond the line's range."
             )
         }
         length += delta
