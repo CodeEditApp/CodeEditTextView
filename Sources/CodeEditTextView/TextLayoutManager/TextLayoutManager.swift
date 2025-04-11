@@ -8,16 +8,6 @@
 import Foundation
 import AppKit
 
-public protocol TextLayoutManagerDelegate: AnyObject {
-    func layoutManagerHeightDidUpdate(newHeight: CGFloat)
-    func layoutManagerMaxWidthDidChange(newWidth: CGFloat)
-    func layoutManagerTypingAttributes() -> [NSAttributedString.Key: Any]
-    func textViewportSize() -> CGSize
-    func layoutManagerYAdjustment(_ yAdjustment: CGFloat)
-
-    var visibleRect: NSRect { get }
-}
-
 /// The text layout manager manages laying out lines in a code document.
 public class TextLayoutManager: NSObject {
     // MARK: - Public Properties
@@ -64,6 +54,8 @@ public class TextLayoutManager: NSObject {
             setNeedsLayout()
         }
     }
+
+    public weak var renderDelegate: TextLayoutManagerRenderDelegate?
 
     // MARK: - Internal
 
@@ -118,18 +110,20 @@ public class TextLayoutManager: NSObject {
     ///   - wrapLines: Set to true to wrap lines to the visible editor width.
     ///   - textView: The view to layout text fragments in.
     ///   - delegate: A delegate for the layout manager.
-    init(
+    public init(
         textStorage: NSTextStorage,
         lineHeightMultiplier: CGFloat,
         wrapLines: Bool,
         textView: NSView,
-        delegate: TextLayoutManagerDelegate?
+        delegate: TextLayoutManagerDelegate?,
+        renderDelegate: TextLayoutManagerRenderDelegate? = nil
     ) {
         self.textStorage = textStorage
         self.lineHeightMultiplier = lineHeightMultiplier
         self.wrapLines = wrapLines
         self.layoutView = textView
         self.delegate = delegate
+        self.renderDelegate = renderDelegate
         super.init()
         prepareTextLines()
     }

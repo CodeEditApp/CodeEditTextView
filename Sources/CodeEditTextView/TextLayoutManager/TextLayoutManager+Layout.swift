@@ -23,10 +23,12 @@ extension TextLayoutManager {
 #endif
     }
 
-    // MARK: - Layout
+    // MARK: - Layout Lines
 
     /// Lays out all visible lines
-    func layoutLines(in rect: NSRect? = nil) { // swiftlint:disable:this function_body_length
+    /// - Warning: This is probably not what you're looking for. If you need to invalidate layout, or update lines, this
+    ///            is not the way to do so. This should only be called when macOS performs layout.
+    public func layoutLines(in rect: NSRect? = nil) { // swiftlint:disable:this function_body_length
         assertNotInLayout()
         guard let visibleRect = rect ?? delegate?.visibleRect,
               !isInTransaction,
@@ -116,6 +118,8 @@ extension TextLayoutManager {
         needsLayout = false
     }
 
+    // MARK: - Layout Single Line
+
     /// Lays out a single text line.
     /// - Parameters:
     ///   - position: The line position from storage to use for layout.
@@ -136,13 +140,24 @@ extension TextLayoutManager {
         )
 
         let line = position.data
-        line.prepareForDisplay(
-            displayData: lineDisplayData,
-            range: position.range,
-            stringRef: textStorage,
-            markedRanges: markedTextManager.markedRanges(in: position.range),
-            breakStrategy: lineBreakStrategy
-        )
+        if let renderDelegate {
+            renderDelegate.prepareForDisplay(
+                textLine: line,
+                displayData: lineDisplayData,
+                range: position.range,
+                stringRef: textStorage,
+                markedRanges: markedTextManager.markedRanges(in: position.range),
+                breakStrategy: lineBreakStrategy
+            )
+        } else {
+            line.prepareForDisplay(
+                displayData: lineDisplayData,
+                range: position.range,
+                stringRef: textStorage,
+                markedRanges: markedTextManager.markedRanges(in: position.range),
+                breakStrategy: lineBreakStrategy
+            )
+        }
 
         if position.range.isEmpty {
             return CGSize(width: 0, height: estimateLineHeight())
@@ -169,6 +184,8 @@ extension TextLayoutManager {
         return CGSize(width: width, height: height)
     }
 
+    // MARK: - Layout Fragment
+
     /// Lays out a line fragment view for the given line fragment at the specified y value.
     /// - Parameters:
     ///   - lineFragment: The line fragment position to lay out a view for.
@@ -177,7 +194,10 @@ extension TextLayoutManager {
         for lineFragment: TextLineStorage<LineFragment>.TextLinePosition,
         at yPos: CGFloat
     ) {
-        let view = viewReuseQueue.getOrCreateView(forKey: lineFragment.data.id)
+        let view = viewReuseQueue.getOrCreateView(forKey: lineFragment.data.id) {
+            renderDelegate?.lineFragmentView(for: lineFragment.data) ?? LineFragmentView()
+        }
+        view.translatesAutoresizingMaskIntoConstraints = false
         view.setLineFragment(lineFragment.data)
         view.frame.origin = CGPoint(x: edgeInsets.left, y: yPos)
         layoutView?.addSubview(view)

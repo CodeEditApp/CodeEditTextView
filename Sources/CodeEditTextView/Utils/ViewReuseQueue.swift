@@ -24,14 +24,16 @@ public class ViewReuseQueue<View: NSView, Key: Hashable> {
     /// If there was no view dequeued for the given key, the returned view will either be a view queued for reuse or a
     /// new view object.
     ///
-    /// - Parameter key: The key for the view to find.
+    /// - Parameters:
+    ///   - key: The key for the view to find.
+    ///   - createView: A callback that is called to create a new instance of the queued view types.
     /// - Returns: A view for the given key.
-    public func getOrCreateView(forKey key: Key) -> View {
+    public func getOrCreateView(forKey key: Key, createView: () -> View) -> View {
         let view: View
         if let usedView = usedViews[key] {
             view = usedView
         } else {
-            view = queuedViews.popFirst() ?? View()
+            view = queuedViews.popFirst() ?? createView()
             view.prepareForReuse()
             usedViews[key] = view
         }

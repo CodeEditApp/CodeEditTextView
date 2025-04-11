@@ -41,17 +41,18 @@ public final class TextLine: Identifiable, Equatable {
     ///   - stringRef: A reference to the string storage for the document.
     ///   - markedRanges: Any marked ranges in the line.
     ///   - breakStrategy: Determines how line breaks are calculated.
-    func prepareForDisplay(
+    public func prepareForDisplay(
         displayData: DisplayData,
         range: NSRange,
         stringRef: NSTextStorage,
-        markedRanges: MarkedTextManager.MarkedRanges?,
+        markedRanges: MarkedRanges?,
         breakStrategy: LineBreakStrategy
     ) {
         let string = stringRef.attributedSubstring(from: range)
         self.maxWidth = displayData.maxWidth
         typesetter.typeset(
             string,
+            documentRange: range,
             displayData: displayData,
             breakStrategy: breakStrategy,
             markedRanges: markedRanges
@@ -64,9 +65,15 @@ public final class TextLine: Identifiable, Equatable {
     }
 
     /// Contains all required data to perform a typeset and layout operation on a text line.
-    struct DisplayData {
-        let maxWidth: CGFloat
-        let lineHeightMultiplier: CGFloat
-        let estimatedLineHeight: CGFloat
+    public struct DisplayData {
+        public let maxWidth: CGFloat
+        public let lineHeightMultiplier: CGFloat
+        public let estimatedLineHeight: CGFloat
+
+        public init(maxWidth: CGFloat, lineHeightMultiplier: CGFloat, estimatedLineHeight: CGFloat) {
+            self.maxWidth = maxWidth
+            self.lineHeightMultiplier = lineHeightMultiplier
+            self.estimatedLineHeight = estimatedLineHeight
+        }
     }
 }
