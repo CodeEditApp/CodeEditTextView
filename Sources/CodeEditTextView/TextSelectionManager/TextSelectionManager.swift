@@ -138,7 +138,7 @@ public class TextSelectionManager: NSObject {
 
     /// Update all selection cursors. Placing them in the correct position for each text selection and reseting the
     /// blink timer.
-    func updateSelectionViews() {
+    func updateSelectionViews(force: Bool = false) {
         guard textView?.isFirstResponder ?? false else { return }
         var didUpdate: Bool = false
 
@@ -197,7 +197,7 @@ public class TextSelectionManager: NSObject {
             }
         }
 
-        if didUpdate {
+        if didUpdate || force {
             delegate?.setNeedsDisplay()
             cursorTimer.resetTimer()
             resetSystemCursorTimers()
