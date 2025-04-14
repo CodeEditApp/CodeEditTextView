@@ -58,6 +58,13 @@ public final class TextLineStorage<Data: Identifiable> {
 
     public init() { }
 
+    init(root: Node<Data>, count: Int, length: Int, height: CGFloat) {
+        self.root = root
+        self.count = count
+        self.length = length
+        self.height = height
+    }
+
     // MARK: - Public Methods
 
     /// Inserts a new line for the given range.
@@ -408,9 +415,9 @@ private extension TextLineStorage {
             } else {
                 transplant(nodeY, with: nodeY.right)
 
-                nodeY.right?.leftSubtreeCount = nodeY.leftSubtreeCount
-                nodeY.right?.leftSubtreeHeight = nodeY.leftSubtreeHeight
-                nodeY.right?.leftSubtreeOffset = nodeY.leftSubtreeOffset
+                nodeY.right?.leftSubtreeCount += nodeY.leftSubtreeCount
+                nodeY.right?.leftSubtreeHeight += nodeY.leftSubtreeHeight
+                nodeY.right?.leftSubtreeOffset += nodeY.leftSubtreeOffset
 
                 nodeY.right = nodeZ.right
                 nodeY.right?.parent = nodeY
