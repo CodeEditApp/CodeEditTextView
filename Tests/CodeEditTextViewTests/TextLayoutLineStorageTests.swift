@@ -11,7 +11,7 @@ extension UUID: @retroactive Identifiable {
     public var id: UUID { self }
 }
 
-final class TextLayoutLineStorageTests: XCTestCase {
+final class TextLayoutLineStorageTests: XCTestCase { // swiftlint:disable:this type_body_length
 
     /// Creates a balanced height=3 tree useful for testing and debugging.
     /// - Returns: A new tree.
