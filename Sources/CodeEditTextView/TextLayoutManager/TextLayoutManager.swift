@@ -92,12 +92,12 @@ public class TextLayoutManager: NSObject {
 
     /// The maximum width available to lay out lines in, used to determine how much space is available for laying out
     /// lines. Evals to `.greatestFiniteMagnitude` when ``wrapLines`` is `false`.
-    var maxLineLayoutWidth: CGFloat {
+    public var maxLineLayoutWidth: CGFloat {
         wrapLines ? wrapLinesWidth : .greatestFiniteMagnitude
     }
 
     /// The width of the space available to draw text fragments when wrapping lines.
-    var wrapLinesWidth: CGFloat {
+    public var wrapLinesWidth: CGFloat {
         (delegate?.textViewportSize().width ?? .greatestFiniteMagnitude) - edgeInsets.horizontal
     }
 
@@ -169,6 +169,9 @@ public class TextLayoutManager: NSObject {
     public func estimateLineHeight() -> CGFloat {
         if let _estimateLineHeight {
             return _estimateLineHeight
+        } else if let estimate = renderDelegate?.estimatedLineHeight() {
+            _estimateLineHeight = estimate
+            return estimate
         } else {
             let string = NSAttributedString(string: "0", attributes: delegate?.layoutManagerTypingAttributes() ?? [:])
             let typesetter = CTTypesetterCreateWithAttributedString(string)
@@ -177,8 +180,9 @@ public class TextLayoutManager: NSObject {
             var descent: CGFloat = 0
             var leading: CGFloat = 0
             CTLineGetTypographicBounds(ctLine, &ascent, &descent, &leading)
-            _estimateLineHeight = (ascent + descent + leading) * lineHeightMultiplier
-            return _estimateLineHeight!
+            let height = (ascent + descent + leading) * lineHeightMultiplier
+            _estimateLineHeight = height
+            return height
         }
     }
 

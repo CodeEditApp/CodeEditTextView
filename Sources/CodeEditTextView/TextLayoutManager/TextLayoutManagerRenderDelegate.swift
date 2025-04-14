@@ -21,6 +21,8 @@ public protocol TextLayoutManagerRenderDelegate: AnyObject {
         breakStrategy: LineBreakStrategy
     )
 
+    func estimatedLineHeight() -> CGFloat?
+
     func lineFragmentView(for lineFragment: LineFragment) -> LineFragmentView
 }
 
@@ -40,6 +42,10 @@ public extension TextLayoutManagerRenderDelegate {
             markedRanges: markedRanges,
             breakStrategy: breakStrategy
         )
+    }
+
+    func estimatedLineHeight() -> CGFloat? {
+        nil
     }
 
     func lineFragmentView(for lineFragment: LineFragment) -> LineFragmentView {
