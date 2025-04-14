@@ -7,7 +7,12 @@ fileprivate extension CGFloat {
     }
 }
 
+extension UUID: @retroactive Identifiable {
+    public var id: UUID { self }
+}
+
 final class TextLayoutLineStorageTests: XCTestCase {
+
     /// Creates a balanced height=3 tree useful for testing and debugging.
     /// - Returns: A new tree.
     fileprivate func createBalancedTree() -> TextLineStorage<TextLine> {
@@ -20,16 +25,16 @@ final class TextLayoutLineStorageTests: XCTestCase {
         return tree
     }
 
+    struct ChildData {
+        let length: Int
+        let count: Int
+        let height: CGFloat
+    }
+
     /// Recursively checks that the given tree has the correct metadata everywhere.
     /// - Parameter tree: The tree to check.
-    fileprivate func assertTreeMetadataCorrect(_ tree: TextLineStorage<TextLine>) throws {
-        struct ChildData {
-            let length: Int
-            let count: Int
-            let height: CGFloat
-        }
-
-        func checkChildren(_ node: TextLineStorage<TextLine>.Node<TextLine>?) -> ChildData {
+    fileprivate func assertTreeMetadataCorrect<T: Identifiable>(_ tree: TextLineStorage<T>) throws {
+        func checkChildren(_ node: TextLineStorage<T>.Node<T>?) -> ChildData {
             guard let node else { return ChildData(length: 0, count: 0, height: 0.0) }
             let leftSubtreeData = checkChildren(node.left)
             let rightSubtreeData = checkChildren(node.right)
@@ -271,5 +276,112 @@ final class TextLayoutLineStorageTests: XCTestCase {
                 _ = line
             }
         }
+    }
+
+    func test_transplantWithExistingLeftNodes() throws { // swiftlint:disable:this function_body_length
+        typealias Storage = TextLineStorage<UUID>
+        typealias Node = TextLineStorage<UUID>.Node
+        // Test that when transplanting a node with no left nodes, with a node with left nodes, that
+        // the resulting tree has valid 'left_' metadata
+        //         1
+        //       /    \
+        //     7        2
+        //            /
+        //           3     ← this will be moved, this test ensures 4 retains it's left subtree count
+        //             \
+        //              4
+        //             | |
+        //             5 6
+
+        let node5 = Node(
+            length: 5,
+            data: UUID(),
+            leftSubtreeOffset: 0,
+            leftSubtreeHeight: 0,
+            leftSubtreeCount: 0,
+            height: 1,
+            left: nil,
+            right: nil,
+            parent: nil,
+            color: .black
+        )
+
+        let node6 = Node(
+            length: 6,
+            data: UUID(),
+            leftSubtreeOffset: 0,
+            leftSubtreeHeight: 0,
+            leftSubtreeCount: 0,
+            height: 1,
+            left: nil,
+            right: nil,
+            parent: nil,
+            color: .black
+        )
+
+        let node4 = Node(
+            length: 4,
+            data: UUID(),
+            leftSubtreeOffset: 5,
+            leftSubtreeHeight: 1,
+            leftSubtreeCount: 1, // node5 is on the left
+            height: 1,
+            left: node5,
+            right: node6,
+            parent: nil,
+            color: .black
+        )
+        node5.parent = node4
+        node6.parent = node4
+
+        let node3 = Node(
+            length: 3,
+            data: UUID(),
+            leftSubtreeOffset: 0,
+            leftSubtreeHeight: 0,
+            leftSubtreeCount: 0,
+            height: 1,
+            left: nil,
+            right: node4,
+            parent: nil,
+            color: .black
+        )
+        node4.parent = node3
+
+        let node2 = Node(
+            length: 2,
+            data: UUID(),
+            leftSubtreeOffset: 18,
+            leftSubtreeHeight: 4,
+            leftSubtreeCount: 4, // node3 is on the left
+            height: 1,
+            left: node3,
+            right: nil,
+            parent: nil,
+            color: .black
+        )
+        node3.parent = node2
+
+        let node7 = Node(length: 7, data: UUID(), height: 1)
+
+        let node1 = Node(
+            length: 1,
+            data: UUID(),
+            leftSubtreeOffset: 7,
+            leftSubtreeHeight: 1,
+            leftSubtreeCount: 1,
+            height: 1,
+            left: node7,
+            right: node2,
+            parent: nil,
+            color: .black
+        )
+        node2.parent = node1
+
+        let storage = Storage(root: node1, count: 7, length: 28, height: 7)
+
+        storage.delete(lineAt: 7) // Delete the root
+
+        try assertTreeMetadataCorrect(storage)
     }
 }
