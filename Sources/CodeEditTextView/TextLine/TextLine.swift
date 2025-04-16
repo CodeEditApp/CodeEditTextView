@@ -36,8 +36,9 @@ public final class TextLine: Identifiable, Equatable {
             // Both max widths we're comparing are finite
             maxWidth.isFinite
             && (self.maxWidth ?? 0.0).isFinite
-            // The new max width is less than the required space, so we need to layout again.
-            && maxWidth < (self.maxWidth ?? 0.0)
+            // We can't use `<` here because we want to calculate layout again if this was previously constrained to a
+            // small layout size and needs to grow.
+            && maxWidth != (self.maxWidth ?? 0.0)
         )
     }
 
