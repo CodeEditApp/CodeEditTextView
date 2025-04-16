@@ -92,13 +92,18 @@ extension TextLayoutManager {
 #if DEBUG
         isInLayout = false
 #endif
-        CATransaction.commit()
-
         // Enqueue any lines not used in this layout pass.
         viewReuseQueue.enqueueViews(notInSet: usedFragmentIDs)
 
         // Update the visible lines with the new set.
         visibleLineIds = newVisibleLines
+
+        // The delegate methods below may call another layout pass, make sure we don't send it into a loop of forced
+        // layout.
+        needsLayout = false
+
+        // Commit the view tree changes we just made.
+        CATransaction.commit()
 
         // These are fine to update outside of `isInLayout` as our internal data structures are finalized at this point
         // so laying out again won't break our line storage or visible line.
@@ -114,8 +119,6 @@ extension TextLayoutManager {
         if originalHeight != lineStorage.height || layoutView?.frame.size.height != lineStorage.height {
             delegate?.layoutManagerHeightDidUpdate(newHeight: lineStorage.height)
         }
-
-        needsLayout = false
     }
 
     // MARK: - Layout Single Line

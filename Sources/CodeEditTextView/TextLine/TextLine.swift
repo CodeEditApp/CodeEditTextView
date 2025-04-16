@@ -31,7 +31,14 @@ public final class TextLine: Identifiable, Equatable {
     /// - Returns: True, if this line has been marked as needing layout using ``TextLine/setNeedsLayout()`` or if the
     ///            line needs to find new line breaks due to a new constraining width.
     func needsLayout(maxWidth: CGFloat) -> Bool {
-        needsLayout || maxWidth != self.maxWidth
+        needsLayout // Force layout
+        || (
+            // Both max widths we're comparing are finite
+            maxWidth.isFinite
+            && (self.maxWidth ?? 0.0).isFinite
+            // The new max width is less than the required space, so we need to layout again.
+            && maxWidth < (self.maxWidth ?? 0.0)
+        )
     }
 
     /// Prepares the line for display, generating all potential line breaks and calculating the real height of the line.
