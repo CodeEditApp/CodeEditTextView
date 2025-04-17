@@ -81,7 +81,7 @@ class DraggingTextRenderer: NSView {
             // Clear text that's not selected
             if fragmentRange.contains(selectedRange.lowerBound) {
                 let relativeOffset = selectedRange.lowerBound - line.range.lowerBound
-                let selectionXPos = fragment.data.xPos(for: relativeOffset)
+                let selectionXPos = layoutManager.characterXPosition(in: fragment.data, for: relativeOffset)
                 context.clear(
                     CGRect(
                         x: 0.0,
@@ -94,7 +94,7 @@ class DraggingTextRenderer: NSView {
 
             if fragmentRange.contains(selectedRange.upperBound) {
                 let relativeOffset = selectedRange.upperBound - line.range.lowerBound
-                let selectionXPos = fragment.data.xPos(for: relativeOffset)
+                let selectionXPos = layoutManager.characterXPosition(in: fragment.data, for: relativeOffset)
                 context.clear(
                     CGRect(
                         x: selectionXPos,

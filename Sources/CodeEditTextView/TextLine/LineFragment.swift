@@ -47,7 +47,17 @@ public final class LineFragment: Identifiable, Equatable {
     /// Finds the x position of the offset in the string the fragment represents.
     /// - Parameter offset: The offset, relative to the start of the *line*.
     /// - Returns: The x position of the character in the drawn line, from the left.
-    public func xPos(for offset: Int) -> CGFloat {
+    @available(*, deprecated, renamed: "layoutManager.characterXPosition(in:)", message: "Moved to layout manager")
+    public func xPos(for offset: Int) -> CGFloat { _xPos(for: offset) }
+
+    /// Finds the x position of the offset in the string the fragment represents.
+    ///
+    /// Underscored, because although this needs to be accessible outside this class, the relevant layout manager method
+    /// should be used.
+    ///
+    /// - Parameter offset: The offset, relative to the start of the *line*.
+    /// - Returns: The x position of the character in the drawn line, from the left.
+    func _xPos(for offset: Int) -> CGFloat {
         return CTLineGetOffsetForStringIndex(ctLine, offset, nil)
     }
 
@@ -84,6 +94,7 @@ public final class LineFragment: Identifiable, Equatable {
     /// Calculates the drawing rect for a given range.
     /// - Parameter range: The range to calculate the bounds for, relative to the line.
     /// - Returns: A rect that contains the text contents in the given range.
+    @available(*, deprecated, renamed: "layoutManager.characterRect(in:)", message: "Moved to layout manager")
     public func rectFor(range: NSRange) -> CGRect {
         let minXPos = CTLineGetOffsetForStringIndex(ctLine, range.lowerBound, nil)
         let maxXPos = CTLineGetOffsetForStringIndex(ctLine, range.upperBound, nil)

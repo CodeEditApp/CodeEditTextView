@@ -24,6 +24,8 @@ public protocol TextLayoutManagerRenderDelegate: AnyObject {
     func estimatedLineHeight() -> CGFloat?
 
     func lineFragmentView(for lineFragment: LineFragment) -> LineFragmentView
+
+    func characterXPosition(in lineFragment: LineFragment, for offset: Int) -> CGFloat
 }
 
 public extension TextLayoutManagerRenderDelegate {
@@ -50,5 +52,9 @@ public extension TextLayoutManagerRenderDelegate {
 
     func lineFragmentView(for lineFragment: LineFragment) -> LineFragmentView {
         LineFragmentView()
+    }
+
+    func characterXPosition(in lineFragment: LineFragment, for offset: Int) -> CGFloat {
+        lineFragment._xPos(for: offset)
     }
 }

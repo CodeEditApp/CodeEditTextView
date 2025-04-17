@@ -10,7 +10,7 @@ import AppKit
 extension TextSelectionManager {
     /// Draws line backgrounds and selection rects for each selection in the given rect.
     /// - Parameter rect: The rect to draw in.
-    func drawSelections(in rect: NSRect) {
+    public func drawSelections(in rect: NSRect) {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         context.saveGState()
         var highlightedLines: Set<UUID> = []

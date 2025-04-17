@@ -55,10 +55,13 @@ extension TextLayoutManager {
 
         // Layout all lines, fetching lines lazily as they are laid out.
         for linePosition in lineStorage.linesStartingAt(minY, until: maxY).lazy {
-            guard linePosition.yPos < maxY else { break }
-            if forceLayout
-                || linePosition.data.needsLayout(maxWidth: maxLineLayoutWidth)
-                || !visibleLineIds.contains(linePosition.data.id) {
+            guard linePosition.yPos < maxY else { continue }
+            // Three ways to determine if a line needs to be re-calculated.
+            let changedWidth = linePosition.data.needsLayout(maxWidth: maxLineLayoutWidth)
+            let wasNotVisible = !visibleLineIds.contains(linePosition.data.id)
+            let lineNotEntirelyLaidOut = linePosition.height != linePosition.data.lineFragments.height
+
+            if forceLayout || changedWidth || wasNotVisible || lineNotEntirelyLaidOut {
                 let lineSize = layoutLine(
                     linePosition,
                     textStorage: textStorage,
