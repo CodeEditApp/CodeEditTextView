@@ -120,9 +120,6 @@ extension TextLayoutManager {
         guard let linePosition = lineStorage.getLine(atOffset: offset) else {
             return nil
         }
-        if linePosition.data.lineFragments.isEmpty {
-            ensureLayoutUntil(offset)
-        }
 
         guard let fragmentPosition = linePosition.data.typesetter.lineFragments.getLine(
             atOffset: offset - linePosition.range.location
@@ -160,7 +157,6 @@ extension TextLayoutManager {
     ///   - line: The line to calculate rects for.
     /// - Returns: Multiple bounding rects. Will return one rect for each line fragment that overlaps the given range.
     public func rectsFor(range: NSRange) -> [CGRect] {
-        ensureLayoutUntil(range.max)
         return lineStorage.linesInRange(range).flatMap { self.rectsFor(range: range, in: $0) }
     }
 
@@ -288,37 +284,5 @@ extension TextLayoutManager {
             width: maxXPos - minXPos,
             height: lineFragment.scaledHeight
         ).pixelAligned
-    }
-
-    // MARK: - Ensure Layout
-
-    /// Forces layout calculation for all lines up to and including the given offset.
-    /// - Parameter offset: The offset to ensure layout until.
-    public func ensureLayoutUntil(_ offset: Int) {
-        guard let linePosition = lineStorage.getLine(atOffset: offset),
-              let visibleRect = delegate?.visibleRect,
-              visibleRect.maxY < linePosition.yPos + linePosition.height,
-              let startingLinePosition = lineStorage.getLine(atPosition: visibleRect.minY)
-        else {
-            return
-        }
-        let originalHeight = lineStorage.height
-
-        for linePosition in lineStorage.linesInRange(
-            NSRange(start: startingLinePosition.range.location, end: linePosition.range.max)
-        ) {
-            let height = preparePositionForDisplay(linePosition)
-            if height != linePosition.height {
-                lineStorage.update(
-                    atOffset: linePosition.range.location,
-                    delta: 0,
-                    deltaHeight: height - linePosition.height
-                )
-            }
-        }
-
-        if originalHeight != lineStorage.height || layoutView?.frame.size.height != lineStorage.height {
-            delegate?.layoutManagerHeightDidUpdate(newHeight: lineStorage.height)
-        }
     }
 }
