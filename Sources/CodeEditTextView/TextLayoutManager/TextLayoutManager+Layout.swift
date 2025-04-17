@@ -26,6 +26,47 @@ extension TextLayoutManager {
     // MARK: - Layout Lines
 
     /// Lays out all visible lines
+    ///
+    /// ## Overview Of The Layout Routine
+    ///
+    /// The basic premise of this method is that it loops over all lines in the given rect (defaults to the visible
+    /// rect), checks if the line needs a layout calculation, and performs layout on the line if it does.
+    ///
+    /// The thing that makes this layout method so fast is the second point, checking if a line needs layout. To
+    /// determine if a line needs a layout pass, the layout manager can check three things:
+    /// - **1** Was the line laid out under the assumption of a different maximum layout width?
+    ///   Eg: If wrapping is toggled, and a line was initially long but now needs to be broken, this triggers that
+    ///   layout pass.
+    /// - **2** Was the line previously not visible? This is determined by keeping a set of visible line IDs. If the
+    ///   line does not appear in that set, we can assume it was previously off screen and may need layout.
+    /// - **3** Was the line entirely laid out? We break up lines into line fragments. When we do layout, we determine
+    ///   all line fragments but don't necessarily place them all in the view. This checks if all line fragments have
+    ///   been placed in the view. If not, we need to place them.
+    ///
+    /// Once it has been determined that a line needs layout, we perform layout by recalculating it's line fragments,
+    /// removing all old line fragment views, and creating new ones for the line.
+    ///
+    /// ## Laziness
+    ///
+    /// At the end of the layout pass, we clean up any old lines by updating the set of visible line IDs and fragment
+    /// IDs. Any IDs that no longer appear in those sets are removed to save resources. This facilitates the text view's
+    /// ability to only render text that is visible and saves tons of resources (similar to the lazy loading of
+    /// collection or table views).
+    ///
+    /// The other important lazy attribute is the line iteration. Line iteration is done lazily. As we iterate
+    /// through lines and potentially update their heights, the next line is only queried for *after* the updates are
+    /// finished.
+    ///
+    /// ## Reentry
+    ///
+    /// An important thing to note is that this method cannot be reentered. If a layout pass is begun while a layout
+    /// pass is already ongoing, internal data structures will be broken. In debug builds, this is checked with a simple
+    /// boolean and assertion.
+    ///
+    /// To help ensure this property, all view modifications are done in a `CATransaction`. This ensures that only after
+    /// we're done inserting and removing line fragment views, does macOS call `layout` on any related views. Otherwise,
+    /// we may cause a layout pass when a line fragment view is inserted and cause a reentrance in this method.
+    ///
     /// - Warning: This is probably not what you're looking for. If you need to invalidate layout, or update lines, this
     ///            is not the way to do so. This should only be called when macOS performs layout.
     public func layoutLines(in rect: NSRect? = nil) { // swiftlint:disable:this function_body_length
