@@ -68,7 +68,7 @@ struct OverridingLayoutManagerRenderingTests {
             textLine.lineFragments.forEach { fragmentPosition in
                 let idealHeight: CGFloat = 2.0
                 textLine.lineFragments.update(
-                    atIndex: fragmentPosition.index,
+                    atOffset: fragmentPosition.index,
                     delta: 0,
                     deltaHeight: -(fragmentPosition.height - idealHeight)
                 )
@@ -86,6 +86,7 @@ struct OverridingLayoutManagerRenderingTests {
         // Edit some text
 
         textStorage.replaceCharacters(in: NSRange(location: 0, length: 0), with: "0\n1\r\n2\r")
+        layoutManager.layoutLines(in: NSRect(x: 0, y: 0, width: 1000, height: 1000))
 
         #expect(layoutManager.lineCount == 7)
         #expect(layoutManager.lineStorage.height == 14.0)

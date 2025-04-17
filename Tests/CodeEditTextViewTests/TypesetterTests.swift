@@ -11,6 +11,7 @@ class TypesetterTests: XCTestCase {
         let typesetter = Typesetter()
         typesetter.typeset(
             NSAttributedString(string: "testline\n"),
+            documentRange: NSRange(location: 0, length: 9),
             displayData: unlimitedLineWidthDisplayData,
             breakStrategy: .word,
             markedRanges: nil
@@ -20,6 +21,7 @@ class TypesetterTests: XCTestCase {
 
         typesetter.typeset(
             NSAttributedString(string: "testline\n"),
+            documentRange: NSRange(location: 0, length: 9),
             displayData: unlimitedLineWidthDisplayData,
             breakStrategy: .character,
             markedRanges: nil
@@ -32,6 +34,7 @@ class TypesetterTests: XCTestCase {
         let typesetter = Typesetter()
         typesetter.typeset(
             NSAttributedString(string: "testline\r"),
+            documentRange: NSRange(location: 0, length: 9),
             displayData: unlimitedLineWidthDisplayData,
             breakStrategy: .word,
             markedRanges: nil
@@ -41,6 +44,7 @@ class TypesetterTests: XCTestCase {
 
         typesetter.typeset(
             NSAttributedString(string: "testline\r"),
+            documentRange: NSRange(location: 0, length: 9),
             displayData: unlimitedLineWidthDisplayData,
             breakStrategy: .character,
             markedRanges: nil
@@ -53,6 +57,7 @@ class TypesetterTests: XCTestCase {
         let typesetter = Typesetter()
         typesetter.typeset(
             NSAttributedString(string: "testline\r\n"),
+            documentRange: NSRange(location: 0, length: 10),
             displayData: unlimitedLineWidthDisplayData,
             breakStrategy: .word,
             markedRanges: nil
@@ -62,6 +67,7 @@ class TypesetterTests: XCTestCase {
 
         typesetter.typeset(
             NSAttributedString(string: "testline\r\n"),
+            documentRange: NSRange(location: 0, length: 10),
             displayData: unlimitedLineWidthDisplayData,
             breakStrategy: .character,
             markedRanges: nil

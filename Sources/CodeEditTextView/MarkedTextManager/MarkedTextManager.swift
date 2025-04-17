@@ -7,13 +7,6 @@
 
 import AppKit
 
-/// Struct for passing attribute and range information easily down into line fragments, typesetters w/o
-/// requiring a reference to the marked text manager.
-public struct MarkedRanges {
-    let ranges: [NSRange]
-    let attributes: [NSAttributedString.Key: Any]
-}
-
 /// Manages marked ranges. Not a public API.
 class MarkedTextManager {
     /// All marked ranges being tracked.
