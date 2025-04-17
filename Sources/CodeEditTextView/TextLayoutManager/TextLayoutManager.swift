@@ -55,7 +55,14 @@ public class TextLayoutManager: NSObject {
         }
     }
 
-    public weak var renderDelegate: TextLayoutManagerRenderDelegate?
+    public weak var renderDelegate: TextLayoutManagerRenderDelegate? {
+        didSet {
+            // Rebuild using potentially overridden behavior.
+            _estimateLineHeight = nil
+            lineStorage.removeAll()
+            prepareTextLines()
+        }
+    }
 
     // MARK: - Internal
 

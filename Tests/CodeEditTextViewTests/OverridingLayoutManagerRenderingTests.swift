@@ -12,6 +12,8 @@ class MockRenderDelegate: TextLayoutManagerRenderDelegate {
         _ breakStrategy: LineBreakStrategy
     ) -> Void)?
 
+    var estimatedLineHeightOverride: (() -> CGFloat)?
+
     func prepareForDisplay( // swiftlint:disable:this function_parameter_count
         textLine: TextLine,
         displayData: TextLine.DisplayData,
@@ -34,6 +36,10 @@ class MockRenderDelegate: TextLayoutManagerRenderDelegate {
             markedRanges: markedRanges,
             breakStrategy: breakStrategy
         )
+    }
+
+    func estimatedLineHeight() -> CGFloat? {
+        estimatedLineHeightOverride?()
     }
 }
 
@@ -91,5 +97,18 @@ struct OverridingLayoutManagerRenderingTests {
         #expect(layoutManager.lineCount == 7)
         #expect(layoutManager.lineStorage.height == 14.0)
         layoutManager.lineStorage.validateInternalState()
+    }
+
+    @Test
+    func overriddenEstimatedLineHeight() {
+        // The layout manager should use the estimation from the render delegate, not the font size.
+        mockDelegate.estimatedLineHeightOverride = {
+            1.0
+        }
+
+        layoutManager.renderDelegate = mockDelegate
+
+        #expect(layoutManager.estimateLineHeight() == 1.0)
+        #expect(layoutManager.estimatedHeight() == 4.0) // 4 lines, each 1 high
     }
 }
