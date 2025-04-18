@@ -78,13 +78,10 @@ public class TextLayoutManager: NSObject {
     public var isInTransaction: Bool {
         transactionCounter > 0
     }
-    #if DEBUG
+
     /// Guard variable for an assertion check in debug builds.
     /// Ensures that layout calls are not overlapping, potentially causing layout issues.
-    /// This is used over a lock, as locks in performant code such as this would be detrimental to performance.
-    /// Also only included in debug builds. DO NOT USE for checking if layout is active or not. That is an anti-pattern.
-    var isInLayout: Bool = false
-    #endif
+    var layoutLock: NSLock = NSLock()
 
     weak var layoutView: NSView?
 

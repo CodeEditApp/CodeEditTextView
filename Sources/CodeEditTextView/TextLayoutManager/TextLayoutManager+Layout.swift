@@ -15,14 +15,6 @@ extension TextLayoutManager {
         let maxWidth: CGFloat
     }
 
-    /// Asserts that the caller is not in an active layout pass.
-    /// See docs on ``isInLayout`` for more details.
-    private func assertNotInLayout() {
-#if DEBUG // This is redundant, but it keeps the flag debug-only too which helps prevent misuse.
-        assert(!isInLayout, "layoutLines called while already in a layout pass. This is a programmer error.")
-#endif
-    }
-
     // MARK: - Layout Lines
 
     /// Lays out all visible lines
@@ -63,14 +55,14 @@ extension TextLayoutManager {
     /// pass is already ongoing, internal data structures will be broken. In debug builds, this is checked with a simple
     /// boolean and assertion.
     ///
-    /// To help ensure this property, all view modifications are performed within a `CATransaction`. This guarantees that macOS calls
-    ///  `layout` on any related views only after we’ve finished inserting and removing line fragment views. Otherwise,
-    /// inserting a line fragment view could trigger a layout pass prematurely and cause this method to re-enter.
-    ///
+    /// To help ensure this property, all view modifications are performed within a `CATransaction`. This guarantees
+    /// that macOS calls `layout` on any related views only after we’ve finished inserting and removing line fragment
+    /// views. Otherwise, inserting a line fragment view could trigger a layout pass prematurely and cause this method
+    /// to re-enter.
     /// - Warning: This is probably not what you're looking for. If you need to invalidate layout, or update lines, this
     ///            is not the way to do so. This should only be called when macOS performs layout.
     public func layoutLines(in rect: NSRect? = nil) { // swiftlint:disable:this function_body_length
-        assertNotInLayout()
+        layoutLock.lock()
         guard let visibleRect = rect ?? delegate?.visibleRect,
               !isInTransaction,
               let textStorage else {
@@ -81,9 +73,6 @@ extension TextLayoutManager {
         // tree modifications caused by this method are atomic, so macOS won't call `layout` while we're already doing
         // that
         CATransaction.begin()
-#if DEBUG
-        isInLayout = true
-#endif
 
         let minY = max(visibleRect.minY - verticalLayoutPadding, 0)
         let maxY = max(visibleRect.maxY + verticalLayoutPadding, 0)
@@ -133,9 +122,6 @@ extension TextLayoutManager {
             newVisibleLines.insert(linePosition.data.id)
         }
 
-#if DEBUG
-        isInLayout = false
-#endif
         // Enqueue any lines not used in this layout pass.
         viewReuseQueue.enqueueViews(notInSet: usedFragmentIDs)
 
@@ -149,9 +135,6 @@ extension TextLayoutManager {
         // Commit the view tree changes we just made.
         CATransaction.commit()
 
-        // These are fine to update outside of `isInLayout` as our internal data structures are finalized at this point
-        // so laying out again won't break our line storage or visible line.
-
         if maxFoundLineWidth > maxLineWidth {
             maxLineWidth = maxFoundLineWidth
         }
@@ -163,6 +146,7 @@ extension TextLayoutManager {
         if originalHeight != lineStorage.height || layoutView?.frame.size.height != lineStorage.height {
             delegate?.layoutManagerHeightDidUpdate(newHeight: lineStorage.height)
         }
+        layoutLock.unlock()
     }
 
     // MARK: - Layout Single Line
@@ -215,10 +199,11 @@ extension TextLayoutManager {
         let relativeMinY = max(layoutData.minY - position.yPos, 0)
         let relativeMaxY = max(layoutData.maxY - position.yPos, relativeMinY)
 
-        for lineFragmentPosition in line.lineFragments.linesStartingAt(
-            relativeMinY,
-            until: relativeMaxY
-        ) {
+//        for lineFragmentPosition in line.lineFragments.linesStartingAt(
+//            relativeMinY,
+//            until: relativeMaxY
+//        ) {
+        for lineFragmentPosition in line.lineFragments {
             let lineFragment = lineFragmentPosition.data
 
             layoutFragmentView(for: lineFragmentPosition, at: position.yPos + lineFragmentPosition.yPos)
