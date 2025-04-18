@@ -48,11 +48,6 @@ extension TextView {
 
         textStorage.endEditing()
 
-        // Cause a layout pass now that we've finished editing, if there were any edits.
-        if !ranges.isEmpty {
-            layout()
-        }
-
         if !skipUpdateSelection {
             selectionManager.notifyAfterEdit()
         }
