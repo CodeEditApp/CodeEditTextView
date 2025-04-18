@@ -27,8 +27,8 @@ extension TextLayoutManager {
     /// The thing that makes this layout method so fast is the second point, checking if a line needs layout. To
     /// determine if a line needs a layout pass, the layout manager can check three things:
     /// - **1** Was the line laid out under the assumption of a different maximum layout width?
-    ///   Eg: If wrapping is toggled, and a line was initially long but now needs to be broken, this triggers that
-    ///   layout pass.
+    ///   For instance, if a line was previously broken by the line wrapping setting, it won’t need to wrap once the
+    ///   line wrapping is disabled. This will detect that, and cause the lines to be recalculated.
     /// - **2** Was the line previously not visible? This is determined by keeping a set of visible line IDs. If the
     ///   line does not appear in that set, we can assume it was previously off screen and may need layout.
     /// - **3** Was the line entirely laid out? We break up lines into line fragments. When we do layout, we determine
