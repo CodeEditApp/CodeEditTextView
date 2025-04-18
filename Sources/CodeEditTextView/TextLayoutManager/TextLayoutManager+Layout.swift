@@ -62,7 +62,6 @@ extension TextLayoutManager {
     /// - Warning: This is probably not what you're looking for. If you need to invalidate layout, or update lines, this
     ///            is not the way to do so. This should only be called when macOS performs layout.
     public func layoutLines(in rect: NSRect? = nil) { // swiftlint:disable:this function_body_length
-        layoutLock.lock()
         guard let visibleRect = rect ?? delegate?.visibleRect,
               !isInTransaction,
               let textStorage else {
@@ -73,6 +72,7 @@ extension TextLayoutManager {
         // tree modifications caused by this method are atomic, so macOS won't call `layout` while we're already doing
         // that
         CATransaction.begin()
+        layoutLock.lock()
 
         let minY = max(visibleRect.minY - verticalLayoutPadding, 0)
         let maxY = max(visibleRect.maxY + verticalLayoutPadding, 0)
@@ -133,6 +133,7 @@ extension TextLayoutManager {
         needsLayout = false
 
         // Commit the view tree changes we just made.
+        layoutLock.unlock()
         CATransaction.commit()
 
         if maxFoundLineWidth > maxLineWidth {
@@ -146,7 +147,6 @@ extension TextLayoutManager {
         if originalHeight != lineStorage.height || layoutView?.frame.size.height != lineStorage.height {
             delegate?.layoutManagerHeightDidUpdate(newHeight: lineStorage.height)
         }
-        layoutLock.unlock()
     }
 
     // MARK: - Layout Single Line
