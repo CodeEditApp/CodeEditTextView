@@ -63,9 +63,9 @@ extension TextLayoutManager {
     /// pass is already ongoing, internal data structures will be broken. In debug builds, this is checked with a simple
     /// boolean and assertion.
     ///
-    /// To help ensure this property, all view modifications are done in a `CATransaction`. This ensures that only after
-    /// we're done inserting and removing line fragment views, does macOS call `layout` on any related views. Otherwise,
-    /// we may cause a layout pass when a line fragment view is inserted and cause a reentrance in this method.
+    /// To help ensure this property, all view modifications are performed within a `CATransaction`. This guarantees that macOS calls
+    ///  `layout` on any related views only after we’ve finished inserting and removing line fragment views. Otherwise,
+    /// inserting a line fragment view could trigger a layout pass prematurely and cause this method to re-enter.
     ///
     /// - Warning: This is probably not what you're looking for. If you need to invalidate layout, or update lines, this
     ///            is not the way to do so. This should only be called when macOS performs layout.
