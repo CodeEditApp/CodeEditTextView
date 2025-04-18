@@ -7,7 +7,7 @@
 
 import AppKit
 
-/// Struct for passing attribute and range information easily down into line fragments, typesetters w/o
+/// Struct for passing attribute and range information easily down into line fragments, typesetters without
 /// requiring a reference to the marked text manager.
 public struct MarkedRanges {
     let ranges: [NSRange]
