@@ -59,7 +59,7 @@ extension TextLayoutManager {
     ///
     /// ## Reentry
     ///
-    /// An important thing to note is that this method cannot be reentered. If a layout pass is begun while a layout
+    /// An important thing to note is that this method cannot be reentered. If a layout pass has begun while a layout
     /// pass is already ongoing, internal data structures will be broken. In debug builds, this is checked with a simple
     /// boolean and assertion.
     ///
