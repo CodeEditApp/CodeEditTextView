@@ -120,9 +120,6 @@ extension TextLayoutManager {
         guard let linePosition = lineStorage.getLine(atOffset: offset) else {
             return nil
         }
-        if linePosition.data.lineFragments.isEmpty {
-            ensureLayoutUntil(offset)
-        }
 
         guard let fragmentPosition = linePosition.data.typesetter.lineFragments.getLine(
             atOffset: offset - linePosition.range.location
@@ -137,15 +134,13 @@ extension TextLayoutManager {
         : (textStorage?.string as? NSString)?.rangeOfComposedCharacterSequence(at: offset)
         ?? NSRange(location: offset, length: 0)
 
-        let minXPos = CTLineGetOffsetForStringIndex(
-            fragmentPosition.data.ctLine,
-            realRange.location - linePosition.range.location, // CTLines have the same relative range as the line
-            nil
+        let minXPos = characterXPosition(
+            in: fragmentPosition.data,
+            for: realRange.location - linePosition.range.location
         )
-        let maxXPos = CTLineGetOffsetForStringIndex(
-            fragmentPosition.data.ctLine,
-            realRange.max - linePosition.range.location,
-            nil
+        let maxXPos = characterXPosition(
+            in: fragmentPosition.data,
+            for: realRange.max - linePosition.range.location
         )
 
         return CGRect(
@@ -162,7 +157,6 @@ extension TextLayoutManager {
     ///   - line: The line to calculate rects for.
     /// - Returns: Multiple bounding rects. Will return one rect for each line fragment that overlaps the given range.
     public func rectsFor(range: NSRange) -> [CGRect] {
-        ensureLayoutUntil(range.max)
         return lineStorage.linesInRange(range).flatMap { self.rectsFor(range: range, in: $0) }
     }
 
@@ -187,7 +181,7 @@ extension TextLayoutManager {
         var rects: [CGRect] = []
         for fragmentPosition in line.data.lineFragments.linesInRange(relativeRange) {
             guard let intersectingRange = fragmentPosition.range.intersection(relativeRange) else { continue }
-            let fragmentRect = fragmentPosition.data.rectFor(range: intersectingRange)
+            let fragmentRect = characterRect(in: fragmentPosition.data, for: intersectingRange)
             guard fragmentRect.width > 0 else { continue }
             rects.append(
                 CGRect(
@@ -270,35 +264,25 @@ extension TextLayoutManager {
         return nil
     }
 
-    // MARK: - Ensure Layout
+    // MARK: - Line Fragment Rects
 
-    /// Forces layout calculation for all lines up to and including the given offset.
-    /// - Parameter offset: The offset to ensure layout until.
-    public func ensureLayoutUntil(_ offset: Int) {
-        guard let linePosition = lineStorage.getLine(atOffset: offset),
-              let visibleRect = delegate?.visibleRect,
-              visibleRect.maxY < linePosition.yPos + linePosition.height,
-              let startingLinePosition = lineStorage.getLine(atPosition: visibleRect.minY)
-        else {
-            return
-        }
-        let originalHeight = lineStorage.height
+    /// Finds the x position of the offset in the string the fragment represents.
+    /// - Parameters:
+    ///   - lineFragment: The line fragment to calculate for.
+    ///   - offset: The offset, relative to the start of the *line*.
+    /// - Returns: The x position of the character in the drawn line, from the left.
+    public func characterXPosition(in lineFragment: LineFragment, for offset: Int) -> CGFloat {
+        renderDelegate?.characterXPosition(in: lineFragment, for: offset) ?? lineFragment._xPos(for: offset)
+    }
 
-        for linePosition in lineStorage.linesInRange(
-            NSRange(start: startingLinePosition.range.location, end: linePosition.range.max)
-        ) {
-            let height = preparePositionForDisplay(linePosition)
-            if height != linePosition.height {
-                lineStorage.update(
-                    atOffset: linePosition.range.location,
-                    delta: 0,
-                    deltaHeight: height - linePosition.height
-                )
-            }
-        }
-
-        if originalHeight != lineStorage.height || layoutView?.frame.size.height != lineStorage.height {
-            delegate?.layoutManagerHeightDidUpdate(newHeight: lineStorage.height)
-        }
+    public func characterRect(in lineFragment: LineFragment, for range: NSRange) -> CGRect {
+        let minXPos = characterXPosition(in: lineFragment, for: range.lowerBound)
+        let maxXPos = characterXPosition(in: lineFragment, for: range.upperBound)
+        return CGRect(
+            x: minXPos,
+            y: 0,
+            width: maxXPos - minXPos,
+            height: lineFragment.scaledHeight
+        ).pixelAligned
     }
 }

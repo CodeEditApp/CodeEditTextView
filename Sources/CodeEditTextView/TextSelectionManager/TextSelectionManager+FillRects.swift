@@ -18,7 +18,7 @@ extension TextSelectionManager {
     /// - Returns: An array of rects that the selection overlaps.
     func getFillRects(in rect: NSRect, for textSelection: TextSelection) -> [CGRect] {
         guard let layoutManager,
-                let range = textSelection.range.intersection(textView?.visibleTextRange ?? .zero) else {
+              let range = textSelection.range.intersection(delegate?.visibleTextRange ?? .zero) else {
             return []
         }
 

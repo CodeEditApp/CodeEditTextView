@@ -8,16 +8,6 @@
 import Foundation
 import AppKit
 
-public protocol TextLayoutManagerDelegate: AnyObject {
-    func layoutManagerHeightDidUpdate(newHeight: CGFloat)
-    func layoutManagerMaxWidthDidChange(newWidth: CGFloat)
-    func layoutManagerTypingAttributes() -> [NSAttributedString.Key: Any]
-    func textViewportSize() -> CGSize
-    func layoutManagerYAdjustment(_ yAdjustment: CGFloat)
-
-    var visibleRect: NSRect { get }
-}
-
 /// The text layout manager manages laying out lines in a code document.
 public class TextLayoutManager: NSObject {
     // MARK: - Public Properties
@@ -65,6 +55,15 @@ public class TextLayoutManager: NSObject {
         }
     }
 
+    public weak var renderDelegate: TextLayoutManagerRenderDelegate? {
+        didSet {
+            // Rebuild using potentially overridden behavior.
+            _estimateLineHeight = nil
+            lineStorage.removeAll()
+            prepareTextLines()
+        }
+    }
+
     // MARK: - Internal
 
     weak var textStorage: NSTextStorage?
@@ -79,13 +78,10 @@ public class TextLayoutManager: NSObject {
     public var isInTransaction: Bool {
         transactionCounter > 0
     }
-    #if DEBUG
+
     /// Guard variable for an assertion check in debug builds.
     /// Ensures that layout calls are not overlapping, potentially causing layout issues.
-    /// This is used over a lock, as locks in performant code such as this would be detrimental to performance.
-    /// Also only included in debug builds. DO NOT USE for checking if layout is active or not. That is an anti-pattern.
-    var isInLayout: Bool = false
-    #endif
+    var layoutLock: NSLock = NSLock()
 
     weak var layoutView: NSView?
 
@@ -100,12 +96,12 @@ public class TextLayoutManager: NSObject {
 
     /// The maximum width available to lay out lines in, used to determine how much space is available for laying out
     /// lines. Evals to `.greatestFiniteMagnitude` when ``wrapLines`` is `false`.
-    var maxLineLayoutWidth: CGFloat {
+    public var maxLineLayoutWidth: CGFloat {
         wrapLines ? wrapLinesWidth : .greatestFiniteMagnitude
     }
 
     /// The width of the space available to draw text fragments when wrapping lines.
-    var wrapLinesWidth: CGFloat {
+    public var wrapLinesWidth: CGFloat {
         (delegate?.textViewportSize().width ?? .greatestFiniteMagnitude) - edgeInsets.horizontal
     }
 
@@ -118,18 +114,20 @@ public class TextLayoutManager: NSObject {
     ///   - wrapLines: Set to true to wrap lines to the visible editor width.
     ///   - textView: The view to layout text fragments in.
     ///   - delegate: A delegate for the layout manager.
-    init(
+    public init(
         textStorage: NSTextStorage,
         lineHeightMultiplier: CGFloat,
         wrapLines: Bool,
         textView: NSView,
-        delegate: TextLayoutManagerDelegate?
+        delegate: TextLayoutManagerDelegate?,
+        renderDelegate: TextLayoutManagerRenderDelegate? = nil
     ) {
         self.textStorage = textStorage
         self.lineHeightMultiplier = lineHeightMultiplier
         self.wrapLines = wrapLines
         self.layoutView = textView
         self.delegate = delegate
+        self.renderDelegate = renderDelegate
         super.init()
         prepareTextLines()
     }
@@ -175,6 +173,9 @@ public class TextLayoutManager: NSObject {
     public func estimateLineHeight() -> CGFloat {
         if let _estimateLineHeight {
             return _estimateLineHeight
+        } else if let estimate = renderDelegate?.estimatedLineHeight() {
+            _estimateLineHeight = estimate
+            return estimate
         } else {
             let string = NSAttributedString(string: "0", attributes: delegate?.layoutManagerTypingAttributes() ?? [:])
             let typesetter = CTTypesetterCreateWithAttributedString(string)
@@ -183,8 +184,9 @@ public class TextLayoutManager: NSObject {
             var descent: CGFloat = 0
             var leading: CGFloat = 0
             CTLineGetTypographicBounds(ctLine, &ascent, &descent, &leading)
-            _estimateLineHeight = (ascent + descent + leading) * lineHeightMultiplier
-            return _estimateLineHeight!
+            let height = (ascent + descent + leading) * lineHeightMultiplier
+            _estimateLineHeight = height
+            return height
         }
     }
 

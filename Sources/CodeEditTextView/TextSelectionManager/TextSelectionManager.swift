@@ -52,7 +52,7 @@ public class TextSelectionManager: NSObject {
     weak var delegate: TextSelectionManagerDelegate?
     var cursorTimer: CursorTimer
 
-    init(
+    public init(
         layoutManager: TextLayoutManager,
         textStorage: NSTextStorage,
         textView: TextView?,

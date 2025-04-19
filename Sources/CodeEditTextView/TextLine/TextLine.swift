@@ -31,7 +31,15 @@ public final class TextLine: Identifiable, Equatable {
     /// - Returns: True, if this line has been marked as needing layout using ``TextLine/setNeedsLayout()`` or if the
     ///            line needs to find new line breaks due to a new constraining width.
     func needsLayout(maxWidth: CGFloat) -> Bool {
-        needsLayout || maxWidth != self.maxWidth
+        needsLayout // Force layout
+        || (
+            // Both max widths we're comparing are finite
+            maxWidth.isFinite
+            && (self.maxWidth ?? 0.0).isFinite
+            // We can't use `<` here because we want to calculate layout again if this was previously constrained to a
+            // small layout size and needs to grow.
+            && maxWidth != (self.maxWidth ?? 0.0)
+        )
     }
 
     /// Prepares the line for display, generating all potential line breaks and calculating the real height of the line.
@@ -41,17 +49,18 @@ public final class TextLine: Identifiable, Equatable {
     ///   - stringRef: A reference to the string storage for the document.
     ///   - markedRanges: Any marked ranges in the line.
     ///   - breakStrategy: Determines how line breaks are calculated.
-    func prepareForDisplay(
+    public func prepareForDisplay(
         displayData: DisplayData,
         range: NSRange,
         stringRef: NSTextStorage,
-        markedRanges: MarkedTextManager.MarkedRanges?,
+        markedRanges: MarkedRanges?,
         breakStrategy: LineBreakStrategy
     ) {
         let string = stringRef.attributedSubstring(from: range)
         self.maxWidth = displayData.maxWidth
         typesetter.typeset(
             string,
+            documentRange: range,
             displayData: displayData,
             breakStrategy: breakStrategy,
             markedRanges: markedRanges
@@ -64,9 +73,15 @@ public final class TextLine: Identifiable, Equatable {
     }
 
     /// Contains all required data to perform a typeset and layout operation on a text line.
-    struct DisplayData {
-        let maxWidth: CGFloat
-        let lineHeightMultiplier: CGFloat
-        let estimatedLineHeight: CGFloat
+    public struct DisplayData {
+        public let maxWidth: CGFloat
+        public let lineHeightMultiplier: CGFloat
+        public let estimatedLineHeight: CGFloat
+
+        public init(maxWidth: CGFloat, lineHeightMultiplier: CGFloat, estimatedLineHeight: CGFloat) {
+            self.maxWidth = maxWidth
+            self.lineHeightMultiplier = lineHeightMultiplier
+            self.estimatedLineHeight = estimatedLineHeight
+        }
     }
 }

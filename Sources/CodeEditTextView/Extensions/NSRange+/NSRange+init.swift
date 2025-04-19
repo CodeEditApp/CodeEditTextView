@@ -7,7 +7,7 @@
 
 import Foundation
 
-extension NSRange {
+public extension NSRange {
     @inline(__always)
     init(start: Int, end: Int) {
         self.init(location: start, length: end - start)
