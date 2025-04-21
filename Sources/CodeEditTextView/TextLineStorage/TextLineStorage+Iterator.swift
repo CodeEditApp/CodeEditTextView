@@ -21,7 +21,7 @@ public extension TextLineStorage {
     func linesStartingAt(_ minY: CGFloat, until maxY: CGFloat) -> TextLineStorageYIterator {
         TextLineStorageYIterator(storage: self, minY: minY, maxY: maxY)
     }
-    
+
     /// Iterate over all lines overlapping a range in the document.
     /// - Parameter range: The range to query.
     /// - Returns: A lazy iterator for retrieving lines.
