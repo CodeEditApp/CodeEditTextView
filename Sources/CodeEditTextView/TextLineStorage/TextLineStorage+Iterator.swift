@@ -7,11 +7,24 @@
 
 import Foundation
 
+/// # Dev Note
+///
+/// For these iterators, prefer `.getLine(atIndex: )` for finding the next item in the iteration.
+/// Using plain indexes instead of y positions or ranges has led to far fewer edge cases.
 public extension TextLineStorage {
+    /// Iterate over all lines overlapping a range of `y` positions. Positions in the middle of line contents will
+    /// return that line.
+    /// - Parameters:
+    ///   - minY: The minimum y position to start at.
+    ///   - maxY: The maximum y position to stop at.
+    /// - Returns: A lazy iterator for retrieving lines.
     func linesStartingAt(_ minY: CGFloat, until maxY: CGFloat) -> TextLineStorageYIterator {
         TextLineStorageYIterator(storage: self, minY: minY, maxY: maxY)
     }
 
+    /// Iterate over all lines overlapping a range in the document.
+    /// - Parameter range: The range to query.
+    /// - Returns: A lazy iterator for retrieving lines.
     func linesInRange(_ range: NSRange) -> TextLineStorageRangeIterator {
         TextLineStorageRangeIterator(storage: self, range: range)
     }
@@ -36,7 +49,7 @@ public extension TextLineStorage {
                     return nil
                 }
                 self.currentPosition = nextPosition
-                return self.currentPosition!
+                return nextPosition
             } else if let nextPosition = storage.getLine(atPosition: minY) {
                 self.currentPosition = nextPosition
                 return nextPosition
@@ -60,11 +73,11 @@ public extension TextLineStorage {
         public mutating func next() -> TextLinePosition? {
             if let currentPosition {
                 guard currentPosition.range.max < range.max,
-                      let nextPosition = storage.getLine(atOffset: currentPosition.range.max) else {
+                      let nextPosition = storage.getLine(atIndex: currentPosition.index + 1) else {
                     return nil
                 }
                 self.currentPosition = nextPosition
-                return self.currentPosition!
+                return nextPosition
             } else if let nextPosition = storage.getLine(atOffset: range.location) {
                 self.currentPosition = nextPosition
                 return nextPosition
@@ -92,11 +105,11 @@ extension TextLineStorage: LazySequenceProtocol {
         public mutating func next() -> TextLinePosition? {
             if let currentPosition {
                 guard currentPosition.range.max < storage.length,
-                      let nextPosition = storage.getLine(atOffset: currentPosition.range.max) else {
+                      let nextPosition = storage.getLine(atIndex: currentPosition.index + 1) else {
                     return nil
                 }
                 self.currentPosition = nextPosition
-                return self.currentPosition!
+                return nextPosition
             } else if let nextPosition = storage.getLine(atOffset: 0) {
                 self.currentPosition = nextPosition
                 return nextPosition
