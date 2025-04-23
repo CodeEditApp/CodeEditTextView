@@ -320,7 +320,11 @@ public class TextView: NSView, NSTextContent {
         super.init(frame: .zero)
 
         self.emphasisManager = EmphasisManager(textView: self)
-        self.storageDelegate = MultiStorageDelegate()
+        if let storageDelegate = textStorage.delegate as? MultiStorageDelegate {
+            self.storageDelegate = storageDelegate
+        } else {
+            self.storageDelegate = MultiStorageDelegate()
+        }
 
         wantsLayer = true
         postsFrameChangedNotifications = true

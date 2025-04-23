@@ -20,6 +20,11 @@ extension TextView {
     public func setTextStorage(_ textStorage: NSTextStorage) {
         self.textStorage = textStorage
 
+        if let storageDelegate = textStorage.delegate as? MultiStorageDelegate {
+            self.storageDelegate = nil
+            self.storageDelegate = storageDelegate
+        }
+
         subviews.forEach { view in
             view.removeFromSuperview()
         }
