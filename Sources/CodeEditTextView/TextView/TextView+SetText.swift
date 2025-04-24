@@ -21,7 +21,6 @@ extension TextView {
         self.textStorage = textStorage
 
         if let storageDelegate = textStorage.delegate as? MultiStorageDelegate {
-            self.storageDelegate = nil
             self.storageDelegate = storageDelegate
         }
 
