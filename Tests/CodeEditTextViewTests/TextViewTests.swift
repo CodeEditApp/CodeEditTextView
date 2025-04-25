@@ -40,4 +40,28 @@ struct TextViewTests {
         // available in test module
         textView.layoutManager.lineStorage.validateInternalState()
     }
+
+    @Test
+    func sharedTextStorage() {
+        let storage = NSTextStorage(string: "Hello world")
+
+        let textView1 = TextView(string: "")
+        textView1.frame = NSRect(x: 0, y: 0, width: 100, height: 100)
+        textView1.layoutSubtreeIfNeeded()
+        textView1.setTextStorage(storage)
+
+        let textView2 = TextView(string: "")
+        textView2.frame = NSRect(x: 0, y: 0, width: 100, height: 100)
+        textView2.layoutSubtreeIfNeeded()
+        textView2.setTextStorage(storage)
+
+        // Expect both text views to receive edited events from the storage
+        #expect(textView1.layoutManager.lineCount == 1)
+        #expect(textView2.layoutManager.lineCount == 1)
+
+        storage.replaceCharacters(in: NSRange(location: 11, length: 0), with: "\nMore Lines\n")
+
+        #expect(textView1.layoutManager.lineCount == 3)
+        #expect(textView2.layoutManager.lineCount == 3)
+    }
 }
