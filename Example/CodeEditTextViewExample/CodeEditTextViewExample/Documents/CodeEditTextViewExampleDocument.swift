@@ -8,11 +8,11 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-struct CodeEditTextViewExampleDocument: FileDocument {
-    var text: String
+struct CodeEditTextViewExampleDocument: FileDocument, @unchecked Sendable {
+    var text: NSTextStorage
 
     init(text: String = "") {
-        self.text = text
+        self.text = NSTextStorage(string: text)
     }
 
     static var readableContentTypes: [UTType] {
@@ -25,11 +25,28 @@ struct CodeEditTextViewExampleDocument: FileDocument {
         guard let data = configuration.file.regularFileContents else {
             throw CocoaError(.fileReadCorruptFile)
         }
-        text = String(bytes: data, encoding: .utf8) ?? ""
+        text = try NSTextStorage(
+            data: data,
+            options: [.characterEncoding: NSUTF8StringEncoding, .fileType: NSAttributedString.DocumentType.plain],
+            documentAttributes: nil
+        )
+        print(String(decoding: data, as: UTF8.self), text.string)
     }
 
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
-        let data = Data(text.utf8)
+        let data = try text.data(for: NSRange(location: 0, length: text.length))
         return .init(regularFileWithContents: data)
+    }
+}
+
+extension NSAttributedString {
+    func data(for range: NSRange) throws -> Data {
+        try data(
+            from: range,
+            documentAttributes: [
+                .documentType: NSAttributedString.DocumentType.plain,
+                .characterEncoding: NSUTF8StringEncoding
+            ]
+        )
     }
 }

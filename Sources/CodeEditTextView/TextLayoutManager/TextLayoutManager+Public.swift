@@ -69,40 +69,42 @@ extension TextLayoutManager {
         guard point.y <= estimatedHeight() else { // End position is a special case.
             return textStorage?.length
         }
-        guard let position = lineStorage.getLine(atPosition: point.y),
-              let fragmentPosition = position.data.typesetter.lineFragments.getLine(
-                atPosition: point.y - position.yPos
+        guard let linePosition = lineStorage.getLine(atPosition: point.y),
+              let fragmentPosition = linePosition.data.typesetter.lineFragments.getLine(
+                atPosition: point.y - linePosition.yPos
               ) else {
             return nil
         }
         let fragment = fragmentPosition.data
 
         if fragment.width == 0 {
-            return position.range.location + fragmentPosition.range.location
+            return linePosition.range.location + fragmentPosition.range.location
         } else if fragment.width < point.x - edgeInsets.left {
-            let fragmentRange = CTLineGetStringRange(fragment.ctLine)
-            let globalFragmentRange = NSRange(
-                location: position.range.location + fragmentRange.location,
-                length: fragmentRange.length
-            )
-            let endPosition = position.range.location + fragmentRange.location + fragmentRange.length
+            let fragmentRange = fragment.documentRange
+            let endPosition = linePosition.range.location + fragmentRange.location + fragmentRange.length
 
             // If the endPosition is at the end of the line, and the line ends with a line ending character
             // return the index before the eol.
-            if endPosition == position.range.max,
-               let lineEnding = LineEnding(line: textStorage?.substring(from: globalFragmentRange) ?? "") {
+            if endPosition == linePosition.range.max,
+               let lineEnding = LineEnding(line: textStorage?.substring(from: fragmentRange) ?? "") {
                 return endPosition - lineEnding.length
             } else {
                 return endPosition
             }
-        } else {
-            // Somewhere in the fragment
-            let fragmentIndex = CTLineGetStringIndexForPosition(
-                fragment.ctLine,
-                CGPoint(x: point.x - edgeInsets.left, y: fragment.height/2)
-            )
-            return position.range.location + fragmentIndex
+        } else if let (content, contentPosition) = fragment.findContent(atX: point.x) {
+            switch content.data {
+            case .text(let ctLine):
+                let fragmentIndex = CTLineGetStringIndexForPosition(
+                    ctLine,
+                    CGPoint(x: point.x - edgeInsets.left - contentPosition.xPos, y: fragment.height/2)
+                )
+                return fragmentIndex + contentPosition.offset + linePosition.range.location
+            case .attachment:
+                return contentPosition.offset + linePosition.range.location
+            }
         }
+
+        return nil
     }
 
     // MARK: - Rect For Offset
