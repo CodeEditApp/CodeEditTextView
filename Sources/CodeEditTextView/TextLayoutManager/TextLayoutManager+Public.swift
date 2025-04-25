@@ -80,13 +80,12 @@ extension TextLayoutManager {
         if fragment.width == 0 {
             return linePosition.range.location + fragmentPosition.range.location
         } else if fragment.width < point.x - edgeInsets.left {
-            let fragmentRange = fragment.documentRange
-            let endPosition = linePosition.range.location + fragmentRange.location + fragmentRange.length
+            let endPosition = fragment.documentRange.max
 
             // If the endPosition is at the end of the line, and the line ends with a line ending character
             // return the index before the eol.
             if endPosition == linePosition.range.max,
-               let lineEnding = LineEnding(line: textStorage?.substring(from: fragmentRange) ?? "") {
+               let lineEnding = LineEnding(line: textStorage?.substring(from: fragment.documentRange) ?? "") {
                 return endPosition - lineEnding.length
             } else {
                 return endPosition

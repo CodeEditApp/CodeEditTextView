@@ -162,9 +162,9 @@ final public class Typesetter {
             let lineBreak = typesetter.suggestLineBreak(
                 using: string,
                 strategy: breakStrategy,
-                startingOffset: context.currentPosition - range.location,
+                startingOffset: context.currentPosition,
                 constrainingWidth: displayData.maxWidth - context.fragmentContext.width
-            )
+            ) - range.location
 
             let typesetData = typesetLine(
                 typesetter: typesetter,

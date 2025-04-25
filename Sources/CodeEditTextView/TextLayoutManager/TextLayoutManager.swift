@@ -64,6 +64,8 @@ public class TextLayoutManager: NSObject {
         }
     }
 
+    public var attachments: TextAttachmentManager = TextAttachmentManager()
+
     // MARK: - Internal
 
     weak var textStorage: NSTextStorage?
@@ -130,6 +132,7 @@ public class TextLayoutManager: NSObject {
         self.renderDelegate = renderDelegate
         super.init()
         prepareTextLines()
+        attachments.layoutManager = self
     }
 
     /// Prepares the layout manager for use.

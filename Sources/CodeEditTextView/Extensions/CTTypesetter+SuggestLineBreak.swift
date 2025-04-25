@@ -1,5 +1,5 @@
 //
-//  File.swift
+//  CTTypesetter+SuggestLineBreak.swift
 //  CodeEditTextView
 //
 //  Created by Khan Winter on 4/24/25.
@@ -126,5 +126,4 @@ extension CTTypesetter {
 
         return substring == LineEnding.carriageReturnLineFeed.rawValue
     }
-
 }

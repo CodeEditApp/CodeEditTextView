@@ -178,7 +178,8 @@ extension TextLayoutManager {
                 range: position.range,
                 stringRef: textStorage,
                 markedRanges: markedTextManager.markedRanges(in: position.range),
-                breakStrategy: lineBreakStrategy
+                breakStrategy: lineBreakStrategy,
+                attachments: attachments.attachments(in: position.range)
             )
         } else {
             line.prepareForDisplay(
@@ -186,7 +187,8 @@ extension TextLayoutManager {
                 range: position.range,
                 stringRef: textStorage,
                 markedRanges: markedTextManager.markedRanges(in: position.range),
-                breakStrategy: lineBreakStrategy
+                breakStrategy: lineBreakStrategy,
+                attachments: attachments.attachments(in: position.range)
             )
         }
 

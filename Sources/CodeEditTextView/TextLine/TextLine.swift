@@ -54,7 +54,8 @@ public final class TextLine: Identifiable, Equatable {
         range: NSRange,
         stringRef: NSTextStorage,
         markedRanges: MarkedRanges?,
-        breakStrategy: LineBreakStrategy
+        breakStrategy: LineBreakStrategy,
+        attachments: [TextAttachmentBox]
     ) {
         let string = stringRef.attributedSubstring(from: range)
         self.maxWidth = displayData.maxWidth
@@ -63,7 +64,8 @@ public final class TextLine: Identifiable, Equatable {
             documentRange: range,
             displayData: displayData,
             breakStrategy: breakStrategy,
-            markedRanges: markedRanges
+            markedRanges: markedRanges,
+            attachments: attachments
         )
         needsLayout = false
     }

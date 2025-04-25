@@ -34,7 +34,8 @@ class MockRenderDelegate: TextLayoutManagerRenderDelegate {
             range: range,
             stringRef: stringRef,
             markedRanges: markedRanges,
-            breakStrategy: breakStrategy
+            breakStrategy: breakStrategy,
+            attachments: []
         )
     }
 
@@ -68,7 +69,8 @@ struct OverridingLayoutManagerRenderingTests {
                 range: range,
                 stringRef: stringRef,
                 markedRanges: markedRanges,
-                breakStrategy: breakStrategy
+                breakStrategy: breakStrategy,
+                attachments: []
             )
             // Update all text fragments to be height = 2.0
             textLine.lineFragments.forEach { fragmentPosition in

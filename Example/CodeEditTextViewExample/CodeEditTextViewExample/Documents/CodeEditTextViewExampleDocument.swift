@@ -30,7 +30,6 @@ struct CodeEditTextViewExampleDocument: FileDocument, @unchecked Sendable {
             options: [.characterEncoding: NSUTF8StringEncoding, .fileType: NSAttributedString.DocumentType.plain],
             documentAttributes: nil
         )
-        print(String(decoding: data, as: UTF8.self), text.string)
     }
 
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
