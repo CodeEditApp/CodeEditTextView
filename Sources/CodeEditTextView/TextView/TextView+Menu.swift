@@ -33,6 +33,12 @@ extension TextView {
     }
 
     @objc func buh() {
-        layoutManager.attachments.add(Buh(), for: selectedRange())
+        if layoutManager.attachments.attachments(
+            startingIn: selectedRange()
+        ).first?.range.location == selectedRange().location {
+            layoutManager.attachments.remove(atOffset: selectedRange().location)
+        } else {
+            layoutManager.attachments.add(Buh(), for: selectedRange())
+        }
     }
 }

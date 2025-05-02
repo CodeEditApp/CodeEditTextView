@@ -28,9 +28,6 @@ extension TextView {
     }
 
     func setUpScrollListeners(scrollView: NSScrollView) {
-        NotificationCenter.default.removeObserver(self, name: NSScrollView.willStartLiveScrollNotification, object: nil)
-        NotificationCenter.default.removeObserver(self, name: NSScrollView.didEndLiveScrollNotification, object: nil)
-
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(scrollViewWillStartScroll),
@@ -44,6 +41,22 @@ extension TextView {
             name: NSScrollView.didEndLiveScrollNotification,
             object: scrollView
         )
+
+        NotificationCenter.default.addObserver(
+            forName: NSView.boundsDidChangeNotification,
+            object: scrollView.contentView,
+            queue: .main
+        ) { [weak self] _ in
+            self?.updatedViewport(self?.visibleRect ?? .zero)
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: NSView.frameDidChangeNotification,
+            object: scrollView.contentView,
+            queue: .main
+        ) { [weak self] _ in
+            self?.updatedViewport(self?.visibleRect ?? .zero)
+        }
     }
 
     @objc func scrollViewWillStartScroll() {

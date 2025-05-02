@@ -14,7 +14,9 @@ extension TextView {
     }
 
     override public func viewWillMove(toSuperview newSuperview: NSView?) {
-        guard let scrollView = enclosingScrollView else {
+        super.viewWillMove(toSuperview: newSuperview)
+        guard let clipView = newSuperview as? NSClipView,
+              let scrollView = enclosingScrollView ?? clipView.enclosingScrollView else {
             return
         }
 

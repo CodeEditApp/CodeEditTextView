@@ -84,7 +84,7 @@ extension TextLayoutManager {
         var maxFoundLineWidth = maxLineWidth
 
         // Layout all lines, fetching lines lazily as they are laid out.
-        for linePosition in lineStorage.linesStartingAt(minY, until: maxY).lazy {
+        for linePosition in linesStartingAt(minY, until: maxY).lazy {
             guard linePosition.yPos < maxY else { continue }
             // Three ways to determine if a line needs to be re-calculated.
             let changedWidth = linePosition.data.needsLayout(maxWidth: maxLineLayoutWidth)
@@ -179,7 +179,7 @@ extension TextLayoutManager {
                 stringRef: textStorage,
                 markedRanges: markedTextManager.markedRanges(in: position.range),
                 breakStrategy: lineBreakStrategy,
-                attachments: attachments.attachments(in: position.range)
+                attachments: attachments.attachments(startingIn: position.range)
             )
         } else {
             line.prepareForDisplay(
@@ -188,7 +188,7 @@ extension TextLayoutManager {
                 stringRef: textStorage,
                 markedRanges: markedTextManager.markedRanges(in: position.range),
                 breakStrategy: lineBreakStrategy,
-                attachments: attachments.attachments(in: position.range)
+                attachments: attachments.attachments(startingIn: position.range)
             )
         }
 

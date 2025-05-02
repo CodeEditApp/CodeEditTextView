@@ -76,7 +76,6 @@ extension CTTypesetter {
         constrainingWidth: CGFloat
     ) -> Int {
         var breakIndex = startingOffset + CTTypesetterSuggestClusterBreak(self, startingOffset, constrainingWidth)
-
         let isBreakAtEndOfString = breakIndex >= string.length
 
         let isNextCharacterCarriageReturn = checkIfLineBreakOnCRLF(breakIndex, for: string)

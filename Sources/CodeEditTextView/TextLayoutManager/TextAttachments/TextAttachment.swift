@@ -15,7 +15,7 @@ public struct TextAttachmentBox: Equatable {
         attachment.width
     }
 
-    public static func ==(_ lhs: TextAttachmentBox, _ rhs: TextAttachmentBox) -> Bool {
+    public static func == (_ lhs: TextAttachmentBox, _ rhs: TextAttachmentBox) -> Bool {
         lhs.range == rhs.range && lhs.attachment === rhs.attachment
     }
 }

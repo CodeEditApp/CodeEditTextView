@@ -50,6 +50,7 @@ final public class Typesetter {
             attachments: attachments
         )
         lineFragments.build(from: lines, estimatedLineHeight: maxHeight)
+
     }
 
     private func makeString(string: NSAttributedString, markedRanges: MarkedRanges?) {
@@ -162,9 +163,9 @@ final public class Typesetter {
             let lineBreak = typesetter.suggestLineBreak(
                 using: string,
                 strategy: breakStrategy,
-                startingOffset: context.currentPosition,
+                startingOffset: context.currentPosition - range.location,
                 constrainingWidth: displayData.maxWidth - context.fragmentContext.width
-            ) - range.location
+            )
 
             let typesetData = typesetLine(
                 typesetter: typesetter,
@@ -181,7 +182,7 @@ final public class Typesetter {
             // Amend the current line data to include this line, popping the current line afterwards
             context.appendText(lineBreak: lineBreak, typesetData: typesetData)
 
-            if lineBreak != range.length {
+            if context.currentPosition != range.max {
                 context.popCurrentData()
             }
         }

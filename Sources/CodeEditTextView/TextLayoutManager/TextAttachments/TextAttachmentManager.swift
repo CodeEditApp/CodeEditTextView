@@ -23,26 +23,28 @@ public final class TextAttachmentManager {
         let box = TextAttachmentBox(range: range, attachment: attachment)
         let insertIndex = findInsertionIndex(for: range.location)
         orderedAttachments.insert(box, at: insertIndex)
+        layoutManager?.lineStorage.linesInRange(range).dropFirst().forEach {
+            layoutManager?.lineStorage.update(atOffset: $0.range.location, delta: 0, deltaHeight: -$0.height)
+        }
         layoutManager?.invalidateLayoutForRange(range)
     }
 
     public func remove(atOffset offset: Int) {
         let index = findInsertionIndex(for: offset)
 
-        // Check if the attachment at this index starts exactly at the offset
-        if index < orderedAttachments.count,
-           orderedAttachments[index].range.location == offset {
-            let invalidatedRange = orderedAttachments.remove(at: index).range
-            layoutManager?.invalidateLayoutForRange(invalidatedRange)
-        } else {
+        guard index < orderedAttachments.count && orderedAttachments[index].range.location == offset else {
             assertionFailure("No attachment found at offset \(offset)")
+            return
         }
+
+        let attachment = orderedAttachments.remove(at: index)
+        layoutManager?.invalidateLayoutForRange(attachment.range)
     }
 
-    /// Finds attachments for the given line range, and returns them as an array.
+    /// Finds attachments starting in the given line range, and returns them as an array.
     /// Returned attachment's ranges will be relative to the _document_, not the line.
     /// - Complexity: `O(n log(n))`, ideally `O(log(n))`
-    public func attachments(in range: NSRange) -> [TextAttachmentBox] {
+    public func attachments(startingIn range: NSRange) -> [TextAttachmentBox] {
         var results: [TextAttachmentBox] = []
         var idx = findInsertionIndex(for: range.location)
         while idx < orderedAttachments.count {
@@ -52,10 +54,43 @@ public final class TextAttachmentManager {
                 break
             }
             if range.contains(loc) {
+                if let lastResult = results.last, !lastResult.range.contains(box.range.location) {
+                    results.append(box)
+                } else if results.isEmpty {
+                    results.append(box)
+                }
+            }
+            idx += 1
+        }
+        return results
+    }
+
+    /// Returns all attachments whose ranges overlap the given query range.
+    ///
+    /// - Parameter query: The `NSRange` to test for overlap.
+    /// - Returns: An array of `TextAttachmentBox` instances whose ranges intersect `query`.
+    func attachments(overlapping query: NSRange) -> [TextAttachmentBox] {
+        // Find the first attachment whose end is beyond the start of the query.
+        guard let startIdx = firstIndex(where: { $0.range.upperBound > query.location }) else {
+            return []
+        }
+
+        var results: [TextAttachmentBox] = []
+        var idx = startIdx
+
+        // Collect every subsequent attachment that truly overlaps the query.
+        while idx < orderedAttachments.count {
+            let box = orderedAttachments[idx]
+            if box.range.location >= query.upperBound {
+                break
+            }
+            if NSIntersectionRange(box.range, query).length > 0,
+               results.last?.range != box.range {
                 results.append(box)
             }
             idx += 1
         }
+
         return results
     }
 }
@@ -76,5 +111,22 @@ private extension TextAttachmentManager {
             }
         }
         return low
+    }
+    
+    /// Finds the first index that matches a callback.
+    /// - Parameter predicate: The query predicate.
+    /// - Returns: The first index that matches the given predicate.
+    func firstIndex(where predicate: (TextAttachmentBox) -> Bool) -> Int? {
+        var low = 0
+        var high = orderedAttachments.count
+        while low < high {
+            let mid = (low + high) / 2
+            if predicate(orderedAttachments[mid]) {
+                high = mid
+            } else {
+                low = mid + 1
+            }
+        }
+        return low < orderedAttachments.count ? low : nil
     }
 }
