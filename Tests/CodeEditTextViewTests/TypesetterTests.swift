@@ -103,6 +103,28 @@ class TypesetterTests: XCTestCase {
         XCTAssertEqual(typesetter.lineFragments.count, 1, "Typesetter typeset incorrect number of lines.")
     }
 
+    func test_wrapLinesReturnsValidFragmentRanges() throws {
+        // Ensure that when wrapping, each wrapped line fragment has correct ranges.
+        typesetter.typeset(
+            NSAttributedString(string: String(repeating: "A", count: 1000), attributes: attributes),
+            documentRange: NSRange(location: 0, length: 1000),
+            displayData: limitedLineWidthDisplayData, // 150 px
+            breakStrategy: .character,
+            markedRanges: nil,
+            attachments: []
+        )
+
+        let firstFragment = try XCTUnwrap(typesetter.lineFragments.first)
+
+        for fragment in typesetter.lineFragments {
+            // The end of the fragment shouldn't extend beyond the valid document range
+            XCTAssertLessThanOrEqual(fragment.range.max, 1000)
+            // Because we're breaking on characters, and filling each line with the same char
+            // Each fragment should be as long or shorter than the first fragment.
+            XCTAssertLessThanOrEqual(fragment.range.length, firstFragment.range.length)
+        }
+    }
+
     // MARK: - Attachments
 
     func test_layoutSingleFragmentWithAttachment() throws {

@@ -160,6 +160,8 @@ final public class Typesetter {
     ) {
         // Layout as many fragments as possible in this content run
         while context.currentPosition < range.max {
+            // The line break indicates the distance from the range we’re typesetting on that should be broken at.
+            // It's relative to the range being typeset, not the line
             let lineBreak = typesetter.suggestLineBreak(
                 using: string,
                 strategy: breakStrategy,
@@ -167,10 +169,9 @@ final public class Typesetter {
                 constrainingWidth: displayData.maxWidth - context.fragmentContext.width
             )
 
-            let typesetData = typesetLine(
-                typesetter: typesetter,
-                range: NSRange(location: context.currentPosition - range.location, length: lineBreak)
-            )
+            // Indicates the subrange on the range that the typesetter knows about. This may not be the entire line
+            let typesetSubrange = NSRange(location: context.currentPosition - range.location, length: lineBreak)
+            let typesetData = typesetLine(typesetter: typesetter, range: typesetSubrange)
 
             // The typesetter won't tell us if 0 characters can fit in the constrained space. This checks to
             // make sure we can fit something. If not, we pop and continue
@@ -180,8 +181,9 @@ final public class Typesetter {
             }
 
             // Amend the current line data to include this line, popping the current line afterwards
-            context.appendText(lineBreak: lineBreak, typesetData: typesetData)
+            context.appendText(typesettingRange: range, lineBreak: lineBreak, typesetData: typesetData)
 
+            // If this isn't the end of the line, we should break so we pop the context and start a new fragment.
             if context.currentPosition != range.max {
                 context.popCurrentData()
             }

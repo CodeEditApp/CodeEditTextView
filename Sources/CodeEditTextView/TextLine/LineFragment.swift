@@ -92,7 +92,11 @@ public final class LineFragment: Identifiable, Equatable {
         }
         switch content.data {
         case .text(let ctLine):
-            return CTLineGetOffsetForStringIndex(ctLine, offset - position.offset, nil) + position.xPos
+            return CTLineGetOffsetForStringIndex(
+                ctLine,
+                CTLineGetStringRange(ctLine).location + offset - position.offset,
+                nil
+            ) + position.xPos
         case .attachment:
             return position.xPos
         }

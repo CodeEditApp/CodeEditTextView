@@ -51,11 +51,13 @@ public extension TextLayoutManager {
             // Determine the 'visible' line at the next position. This iterator may skip lines that are covered by
             // attachments, so we use the line position's range to get the next position. Once we have the position,
             // we'll create a new one that reflects what we actually want to display.
-            // Eg for the following setup:
+            // For example, with the following setup: ([ == Attachment start, ] == Attachment end)
+            //
             // Line 1
-            // Line[ 2 <- Attachment start
+            // Line[ 2
             // Line 3
-            // Line] 4 <- Attachment end
+            // Line] 4
+            //
             // The iterator will first return the line 1 position, then, line 2 is queried but has an attachment.
             // So, we extend the line until the end of the attachment (line 4), and return the position extended that
             // far.
@@ -67,35 +69,58 @@ public extension TextLayoutManager {
                 ), nextPosition.yPos < maxY else {
                     return nil
                 }
-                self.currentPosition = determineVisiblePosition(for: nextPosition)
+                self.currentPosition = layoutManager?.determineVisiblePosition(for: nextPosition)
                 return self.currentPosition
             } else if let position = layoutManager?.lineStorage.getLine(atPosition: minY) {
-                currentPosition = determineVisiblePosition(for: position)
+                currentPosition = layoutManager?.determineVisiblePosition(for: position)
                 return currentPosition
             }
 
             return nil
         }
+    }
 
-        private func determineVisiblePosition(for originalPosition: TextLinePosition) -> TextLinePosition {
-            guard let attachment = layoutManager?.attachments.attachments(startingIn: originalPosition.range).last,
-                  attachment.range.max > originalPosition.range.max else {
-                // No change, either no attachments or attachment doesn't span multiple lines.
-                return originalPosition
-            }
+    // TODO: Docs
 
-            guard let extendedLinePosition = layoutManager?.lineStorage.getLine(atOffset: attachment.range.max) else {
-                return originalPosition
-            }
+    func determineVisiblePosition(
+        for originalPosition: TextLineStorage<TextLine>.TextLinePosition?
+    ) -> TextLineStorage<TextLine>.TextLinePosition? {
+        guard let originalPosition else { return nil}
 
-            let newPosition = TextLinePosition(
-                data: originalPosition.data,
-                range: NSRange(start: originalPosition.range.location, end: extendedLinePosition.range.max),
-                yPos: originalPosition.yPos,
-                height: originalPosition.height,
-                index: originalPosition.index
+        let attachments = attachments.attachments(overlapping: originalPosition.range)
+        guard let firstAttachment = attachments.first, let lastAttachment = attachments.last else {
+            // No change, either no attachments or attachment doesn't span multiple lines.
+            return originalPosition
+        }
+
+        var newPosition = originalPosition
+
+        if firstAttachment.range.location < originalPosition.range.location,
+           let extendedLinePosition = lineStorage.getLine(atOffset: firstAttachment.range.location) {
+            newPosition = TextLineStorage<TextLine>.TextLinePosition(
+                data: extendedLinePosition.data,
+                range: NSRange(start: extendedLinePosition.range.location, end: newPosition.range.max),
+                yPos: extendedLinePosition.yPos,
+                height: extendedLinePosition.height,
+                index: extendedLinePosition.index
             )
+        }
 
+        if lastAttachment.range.max > originalPosition.range.max,
+           let extendedLinePosition = lineStorage.getLine(atOffset: lastAttachment.range.max) {
+            newPosition = TextLineStorage<TextLine>.TextLinePosition(
+                data: newPosition.data,
+                range: NSRange(start: newPosition.range.location, end: extendedLinePosition.range.max),
+                yPos: newPosition.yPos,
+                height: newPosition.height,
+                index: newPosition.index
+            )
+        }
+
+        if newPosition == originalPosition {
+            return newPosition
+        } else {
+            // Recurse, to make sure we combine all necessary lines.
             return determineVisiblePosition(for: newPosition)
         }
     }

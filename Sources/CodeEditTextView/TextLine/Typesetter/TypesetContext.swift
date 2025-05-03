@@ -11,9 +11,12 @@ struct TypesetContext {
     let documentRange: NSRange
     let displayData: TextLine.DisplayData
 
+    /// Accumulated generated line fragments.
     var lines: [TextLineStorage<LineFragment>.BuildItem] = []
     var maxHeight: CGFloat = 0
     var fragmentContext: LineFragmentTypesetContext = .init(start: 0, width: 0.0, height: 0.0, descent: 0.0)
+
+    /// Tracks the current position when laying out runs
     var currentPosition: Int = 0
 
     mutating func appendAttachment(_ attachment: TextAttachmentBox) {
@@ -31,14 +34,14 @@ struct TypesetContext {
         currentPosition += attachment.range.length
     }
 
-    mutating func appendText(lineBreak: Int, typesetData: CTLineTypesetData) {
+    mutating func appendText(typesettingRange: NSRange, lineBreak: Int, typesetData: CTLineTypesetData) {
         fragmentContext.contents.append(
             .init(data: .text(line: typesetData.ctLine), width: typesetData.width)
         )
         fragmentContext.width += typesetData.width
         fragmentContext.height = typesetData.height
         fragmentContext.descent = max(typesetData.descent, fragmentContext.descent)
-        currentPosition += lineBreak
+        currentPosition = lineBreak + typesettingRange.location
     }
 
     mutating func popCurrentData() {

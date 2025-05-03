@@ -29,7 +29,7 @@ extension TextLayoutManager {
     /// - Parameter posY: The y position to find a line for.
     /// - Returns: A text line position, if a line could be found at the given y position.
     public func textLineForPosition(_ posY: CGFloat) -> TextLineStorage<TextLine>.TextLinePosition? {
-        lineStorage.getLine(atPosition: posY)
+        determineVisiblePosition(for: lineStorage.getLine(atPosition: posY))
     }
 
     /// Finds a text line for a given text offset.
@@ -46,7 +46,7 @@ extension TextLayoutManager {
         if offset == lineStorage.length {
             return lineStorage.last
         } else {
-            return lineStorage.getLine(atOffset: offset)
+            return determineVisiblePosition(for: lineStorage.getLine(atOffset: offset))
         }
     }
 
@@ -56,7 +56,7 @@ extension TextLayoutManager {
     /// - Returns: The text line position if any, `nil` if the index is out of bounds.
     public func textLineForIndex(_ index: Int) -> TextLineStorage<TextLine>.TextLinePosition? {
         guard index >= 0 && index < lineStorage.count else { return nil }
-        return lineStorage.getLine(atIndex: index)
+        return determineVisiblePosition(for: lineStorage.getLine(atIndex: index))
     }
 
     /// Calculates the text position at the given point in the view.
@@ -69,7 +69,7 @@ extension TextLayoutManager {
         guard point.y <= estimatedHeight() else { // End position is a special case.
             return textStorage?.length
         }
-        guard let linePosition = lineStorage.getLine(atPosition: point.y),
+        guard let linePosition = determineVisiblePosition(for: lineStorage.getLine(atPosition: point.y)),
               let fragmentPosition = linePosition.data.typesetter.lineFragments.getLine(
                 atPosition: point.y - linePosition.yPos
               ) else {
@@ -80,30 +80,73 @@ extension TextLayoutManager {
         if fragment.width == 0 {
             return linePosition.range.location + fragmentPosition.range.location
         } else if fragment.width < point.x - edgeInsets.left {
-            let endPosition = fragment.documentRange.max
-
-            // If the endPosition is at the end of the line, and the line ends with a line ending character
-            // return the index before the eol.
-            if endPosition == linePosition.range.max,
-               let lineEnding = LineEnding(line: textStorage?.substring(from: fragment.documentRange) ?? "") {
-                return endPosition - lineEnding.length
-            } else {
-                return endPosition
-            }
-        } else if let (content, contentPosition) = fragment.findContent(atX: point.x) {
-            switch content.data {
-            case .text(let ctLine):
-                let fragmentIndex = CTLineGetStringIndexForPosition(
-                    ctLine,
-                    CGPoint(x: point.x - edgeInsets.left - contentPosition.xPos, y: fragment.height/2)
-                )
-                return fragmentIndex + contentPosition.offset + linePosition.range.location
-            case .attachment:
-                return contentPosition.offset + linePosition.range.location
-            }
+            return findOffsetAfterEndOf(fragmentPosition: fragmentPosition, in: linePosition)
+        } else {
+            return findOffsetAtPoint(inFragment: fragment, point: point, inLine: linePosition)
         }
+    }
 
-        return nil
+    /// Finds a document offset after a line fragment. Returns a cursor position.
+    ///
+    /// If the fragment ends the line, return the position before the potential line break. This visually positions the
+    /// cursor at the end of the line, but before the break character. If deleted, it edits the visually selected line.
+    ///
+    /// If not at the line end, do the same with the fragment and respect any composed character sequences at the line
+    /// break.
+    ///
+    /// Return the line end position otherwise.
+    ///
+    /// - Parameters:
+    ///   - fragmentPosition: The fragment position being queried.
+    ///   - linePosition: The line position that contains the `fragment`.
+    /// - Returns: The position visually at the end of the line fragment.
+    private func findOffsetAfterEndOf(
+        fragmentPosition: TextLineStorage<LineFragment>.TextLinePosition,
+        in linePosition: TextLineStorage<TextLine>.TextLinePosition
+    ) -> Int? {
+        let endPosition = fragmentPosition.data.documentRange.max
+
+        // If the endPosition is at the end of the line, and the line ends with a line ending character
+        // return the index before the eol.
+        if fragmentPosition.index == linePosition.data.lineFragments.count - 1,
+           let lineEnding = LineEnding(line: textStorage?.substring(from: fragmentPosition.data.documentRange) ?? "") {
+            return endPosition - lineEnding.length
+        } else if fragmentPosition.index != linePosition.data.lineFragments.count - 1 {
+            // If this isn't the last fragment, we want to place the cursor at the offset right before the break
+            // index, to appear on the end of *this* fragment.
+            let string = (textStorage?.string as? NSString)
+            return string?.rangeOfComposedCharacterSequence(at: endPosition - 1).location
+        } else {
+            // Otherwise, return the end of the fragment (and the end of the line).
+            return endPosition
+        }
+    }
+
+    /// Finds a document offset for a point that lies in a line fragment.
+    /// - Parameters:
+    ///   - fragment: The fragment the point lies in.
+    ///   - point: The point being queried, relative to the text view.
+    ///   - linePosition: The position that contains the `fragment`.
+    /// - Returns: The offset (relative to the document) that's closest to the given point, or `nil` if it could not be
+    ///            found.
+    private func findOffsetAtPoint(
+        inFragment fragment: LineFragment,
+        point: CGPoint,
+        inLine linePosition: TextLineStorage<TextLine>.TextLinePosition
+    ) -> Int? {
+        guard let (content, contentPosition) = fragment.findContent(atX: point.x) else {
+            return nil
+        }
+        switch content.data {
+        case .text(let ctLine):
+            let fragmentIndex = CTLineGetStringIndexForPosition(
+                ctLine,
+                CGPoint(x: point.x - edgeInsets.left - contentPosition.xPos, y: fragment.height/2)
+            )
+            return fragmentIndex + contentPosition.offset + linePosition.range.location
+        case .attachment:
+            return contentPosition.offset + linePosition.range.location
+        }
     }
 
     // MARK: - Rect For Offset
@@ -118,10 +161,9 @@ extension TextLayoutManager {
         guard offset != lineStorage.length else {
             return rectForEndOffset()
         }
-        guard let linePosition = lineStorage.getLine(atOffset: offset) else {
+        guard let linePosition = determineVisiblePosition(for: lineStorage.getLine(atOffset: offset)) else {
             return nil
         }
-
         guard let fragmentPosition = linePosition.data.typesetter.lineFragments.getLine(
             atOffset: offset - linePosition.range.location
         ) else {
@@ -130,18 +172,21 @@ extension TextLayoutManager {
 
         // Get the *real* length of the character at the offset. If this is a surrogate pair it'll return the correct
         // length of the character at the offset.
-        let realRange = textStorage?.length == 0
-        ? NSRange(location: offset, length: 0)
-        : (textStorage?.string as? NSString)?.rangeOfComposedCharacterSequence(at: offset)
-        ?? NSRange(location: offset, length: 0)
+        let realRange = if textStorage?.length == 0 {
+            NSRange(location: offset, length: 0)
+        } else if let string = textStorage?.string as? NSString {
+            string.rangeOfComposedCharacterSequence(at: offset)
+        } else {
+            NSRange(location: offset, length: 0)
+        }
 
         let minXPos = characterXPosition(
             in: fragmentPosition.data,
-            for: realRange.location - linePosition.range.location
+            for: realRange.location - fragmentPosition.data.documentRange.location
         )
         let maxXPos = characterXPosition(
             in: fragmentPosition.data,
-            for: realRange.max - linePosition.range.location
+            for: realRange.max - fragmentPosition.data.documentRange.location
         )
 
         return CGRect(

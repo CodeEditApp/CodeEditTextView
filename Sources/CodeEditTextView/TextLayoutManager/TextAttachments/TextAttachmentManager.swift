@@ -112,7 +112,7 @@ private extension TextAttachmentManager {
         }
         return low
     }
-    
+
     /// Finds the first index that matches a callback.
     /// - Parameter predicate: The query predicate.
     /// - Returns: The first index that matches the given predicate.

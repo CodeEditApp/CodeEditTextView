@@ -8,7 +8,7 @@
 import Foundation
 
 extension TextLineStorage where Data: Identifiable {
-    public struct TextLinePosition {
+    public struct TextLinePosition: Equatable {
         init(data: Data, range: NSRange, yPos: CGFloat, height: CGFloat, index: Int) {
             self.data = data
             self.range = range
@@ -35,6 +35,14 @@ extension TextLineStorage where Data: Identifiable {
         public let height: CGFloat
         /// The index of the position.
         public let index: Int
+
+        public static func == (_ lhs: TextLinePosition, _ rhs: TextLinePosition) -> Bool {
+            lhs.data.id == rhs.data.id &&
+            lhs.range == rhs.range &&
+            lhs.yPos == rhs.yPos &&
+            lhs.height == rhs.height &&
+            lhs.index == rhs.index
+        }
     }
 
     struct NodePosition {
