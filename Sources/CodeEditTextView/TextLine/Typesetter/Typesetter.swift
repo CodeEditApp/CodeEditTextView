@@ -8,6 +8,13 @@
 import AppKit
 import CoreText
 
+/// The `Typesetter` is responsible for producing text fragments from a document range. It transforms a text line
+/// and attachments into a sequence of `LineFragment`s, which reflect the visual structure of the text line.
+///
+/// This class has one primary method: ``typeset(_:documentRange:displayData:markedRanges:attachments:)``, which
+/// performs the typesetting algorithm and breaks content into runs using attachments.
+///
+/// To retrieve the
 final public class Typesetter {
     struct ContentRun {
         let range: NSRange
@@ -19,7 +26,6 @@ final public class Typesetter {
         }
     }
 
-    public var string: NSAttributedString = NSAttributedString(string: "")
     public var documentRange: NSRange?
     public var lineFragments = TextLineStorage<LineFragment>()
 
@@ -34,15 +40,16 @@ final public class Typesetter {
         markedRanges: MarkedRanges?,
         attachments: [AnyTextAttachment] = []
     ) {
-        makeString(string: string, markedRanges: markedRanges)
+        let string = makeString(string: string, markedRanges: markedRanges)
         lineFragments.removeAll()
 
         // Fast path
         if string.length == 0 {
-            typesetEmptyLine(displayData: displayData)
+            typesetEmptyLine(displayData: displayData, string: string)
             return
         }
         let (lines, maxHeight) = typesetLineFragments(
+            string: string,
             documentRange: documentRange,
             displayData: displayData,
             attachments: attachments
@@ -50,26 +57,31 @@ final public class Typesetter {
         lineFragments.build(from: lines, estimatedLineHeight: maxHeight)
     }
 
-    private func makeString(string: NSAttributedString, markedRanges: MarkedRanges?) {
+    private func makeString(string: NSAttributedString, markedRanges: MarkedRanges?) -> NSAttributedString {
         if let markedRanges {
             let mutableString = NSMutableAttributedString(attributedString: string)
             for markedRange in markedRanges.ranges {
                 mutableString.addAttributes(markedRanges.attributes, range: markedRange)
             }
-            self.string = mutableString
-        } else {
-            self.string = string
+            return mutableString
         }
+
+        return string
     }
 
     // MARK: - Create Content Lines
 
     /// Breaks up the string into a series of 'runs' making up the visual content of this text line.
     /// - Parameters:
+    ///   - string: The string reference to use.
     ///   - documentRange: The range in the string reference.
     ///   - attachments: Any text attachments overlapping the string reference.
     /// - Returns: A series of content runs making up this line.
-    func createContentRuns(documentRange: NSRange, attachments: [AnyTextAttachment]) -> [ContentRun] {
+    func createContentRuns(
+        string: NSAttributedString,
+        documentRange: NSRange,
+        attachments: [AnyTextAttachment]
+    ) -> [ContentRun] {
         var attachments = attachments
         var currentPosition = 0
         let maxPosition = documentRange.length
@@ -116,11 +128,12 @@ final public class Typesetter {
     // MARK: - Typeset Content Runs
 
     func typesetLineFragments(
+        string: NSAttributedString,
         documentRange: NSRange,
         displayData: TextLine.DisplayData,
         attachments: [AnyTextAttachment]
     ) -> (lines: [TextLineStorage<LineFragment>.BuildItem], maxHeight: CGFloat) {
-        let contentRuns = createContentRuns(documentRange: documentRange, attachments: attachments)
+        let contentRuns = createContentRuns(string: string, documentRange: documentRange, attachments: attachments)
         var context = TypesetContext(documentRange: documentRange, displayData: displayData)
 
         for run in contentRuns {
@@ -130,6 +143,7 @@ final public class Typesetter {
             case .string(let typesetter):
                 layoutTextUntilLineBreak(
                     context: &context,
+                    string: string,
                     range: run.range,
                     typesetter: typesetter,
                     displayData: displayData
@@ -148,6 +162,7 @@ final public class Typesetter {
 
     func layoutTextUntilLineBreak(
         context: inout TypesetContext,
+        string: NSAttributedString,
         range: NSRange,
         typesetter: CTTypesetter,
         displayData: TextLine.DisplayData
@@ -210,8 +225,8 @@ final public class Typesetter {
 
     /// Typesets a single, 0-length line fragment.
     /// - Parameter displayData: Relevant information for layout estimation.
-    private func typesetEmptyLine(displayData: TextLine.DisplayData) {
-        let typesetter = CTTypesetterCreateWithAttributedString(self.string)
+    private func typesetEmptyLine(displayData: TextLine.DisplayData, string: NSAttributedString) {
+        let typesetter = CTTypesetterCreateWithAttributedString(string)
         // Insert an empty fragment
         let ctLine = CTTypesetterCreateLine(typesetter, CFRangeMake(0, 0))
         let fragment = LineFragment(
