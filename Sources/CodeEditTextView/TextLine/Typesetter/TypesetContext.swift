@@ -40,7 +40,7 @@ struct TypesetContext {
         fragmentContext.height = fragmentContext.height == 0 ? maxHeight : fragmentContext.height
         currentPosition += attachment.range.length
     }
-    
+
     /// Appends a text range to the current ``fragmentContext``
     /// - Parameters:
     ///   - typesettingRange: The range relative to the typesetter for the current fragment context.

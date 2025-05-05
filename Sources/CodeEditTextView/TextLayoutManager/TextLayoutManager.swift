@@ -64,7 +64,7 @@ public class TextLayoutManager: NSObject {
         }
     }
 
-    public var attachments: TextAttachmentManager = TextAttachmentManager()
+    public let attachments: TextAttachmentManager = TextAttachmentManager()
 
     // MARK: - Internal
 
