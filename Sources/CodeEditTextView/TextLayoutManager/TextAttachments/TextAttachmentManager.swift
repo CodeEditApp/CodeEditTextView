@@ -28,7 +28,7 @@ public final class TextAttachmentManager {
                 layoutManager?.lineStorage.update(atOffset: $0.range.location, delta: 0, deltaHeight: -$0.height)
             }
         }
-        layoutManager?.invalidateLayoutForRange(range)
+        layoutManager?.setNeedsLayout()
     }
 
     public func remove(atOffset offset: Int) {

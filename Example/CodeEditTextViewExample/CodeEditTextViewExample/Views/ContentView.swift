@@ -17,12 +17,6 @@ struct ContentView: View {
             HStack {
                 Toggle("Wrap Lines", isOn: $wrapLines)
                 Toggle("Inset Edges", isOn: $enableEdgeInsets)
-                Button {
-
-                } label: {
-                    Text("Insert Attachment")
-                }
-
             }
             Divider()
             SwiftUITextView(

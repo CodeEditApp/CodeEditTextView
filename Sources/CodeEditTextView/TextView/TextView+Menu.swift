@@ -25,20 +25,9 @@ extension TextView {
         menu.items = [
             NSMenuItem(title: "Cut", action: #selector(cut(_:)), keyEquivalent: "x"),
             NSMenuItem(title: "Copy", action: #selector(copy(_:)), keyEquivalent: "c"),
-            NSMenuItem(title: "Paste", action: #selector(paste(_:)), keyEquivalent: "v"),
-            NSMenuItem(title: "Attach", action: #selector(buh), keyEquivalent: "b")
+            NSMenuItem(title: "Paste", action: #selector(paste(_:)), keyEquivalent: "v")
         ]
 
         return menu
-    }
-
-    @objc func buh() {
-        if layoutManager.attachments.get(
-            startingIn: selectedRange()
-        ).first?.range.location == selectedRange().location {
-            layoutManager.attachments.remove(atOffset: selectedRange().location)
-        } else {
-            layoutManager.attachments.add(Buh(), for: selectedRange())
-        }
     }
 }

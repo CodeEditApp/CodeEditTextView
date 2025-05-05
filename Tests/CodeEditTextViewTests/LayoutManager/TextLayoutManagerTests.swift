@@ -43,6 +43,7 @@ struct TextLayoutManagerTests {
     init() throws {
         textView = TextView(string: "A\nB\nC\nD")
         textView.frame = NSRect(x: 0, y: 0, width: 1000, height: 1000)
+        textView.updateFrameIfNeeded()
         textStorage = textView.textStorage
         layoutManager = try #require(textView.layoutManager)
     }
@@ -180,5 +181,30 @@ struct TextLayoutManagerTests {
             }
             lastLineIndex = lineIndex
         }
+    }
+
+    @Test
+    func afterLayoutDoesntNeedLayout() {
+        layoutManager.layoutLines(in: NSRect(x: 0, y: 0, width: 1000, height: 1000))
+        #expect(layoutManager.needsLayout == false)
+    }
+
+    @Test
+    func invalidatingRangeLaysOutLines() {
+        layoutManager.layoutLines(in: NSRect(x: 0, y: 0, width: 1000, height: 1000))
+
+        let lineIds = Set(layoutManager.linesInRange(NSRange(start: 2, end: 4)).map { $0.data.id })
+        layoutManager.invalidateLayoutForRange(NSRange(start: 2, end: 4))
+
+        #expect(layoutManager.needsLayout == false) // No forced layout
+        #expect(
+            layoutManager
+                .linesInRange(NSRange(start: 2, end: 4))
+                .allSatisfy({ $0.data.needsLayout(maxWidth: .infinity) })
+        )
+
+        let invalidatedLineIds = layoutManager.layoutLines()
+
+        #expect(invalidatedLineIds == lineIds, "Invalidated lines != lines that were laid out in next pass.")
     }
 }

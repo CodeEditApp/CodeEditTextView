@@ -25,36 +25,46 @@ public extension TextSelectionManager {
         decomposeCharacters: Bool = false,
         suggestedXPos: CGFloat? = nil
     ) -> NSRange {
+        var range: NSRange
         switch direction {
         case .backward:
             guard offset > 0 else { return NSRange(location: offset, length: 0) } // Can't go backwards beyond 0
-            return extendSelectionHorizontal(
+            range = extendSelectionHorizontal(
                 from: offset,
                 destination: destination,
                 delta: -1,
                 decomposeCharacters: decomposeCharacters
             )
         case .forward:
-            return extendSelectionHorizontal(
+            range = extendSelectionHorizontal(
                 from: offset,
                 destination: destination,
                 delta: 1,
                 decomposeCharacters: decomposeCharacters
             )
         case .up:
-            return extendSelectionVertical(
+            range = extendSelectionVertical(
                 from: offset,
                 destination: destination,
                 up: true,
                 suggestedXPos: suggestedXPos
             )
         case .down:
-            return extendSelectionVertical(
+            range = extendSelectionVertical(
                 from: offset,
                 destination: destination,
                 up: false,
                 suggestedXPos: suggestedXPos
             )
         }
+
+        // Extend ranges to include attachments.
+        if let attachments = layoutManager?.attachments.get(overlapping: range) {
+            attachments.forEach { textAttachment in
+                range.formUnion(textAttachment.range)
+            }
+        }
+
+        return range
     }
 }

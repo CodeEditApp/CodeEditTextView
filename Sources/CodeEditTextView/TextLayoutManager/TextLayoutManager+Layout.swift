@@ -61,11 +61,12 @@ extension TextLayoutManager {
     /// to re-enter.
     /// - Warning: This is probably not what you're looking for. If you need to invalidate layout, or update lines, this
     ///            is not the way to do so. This should only be called when macOS performs layout.
-    public func layoutLines(in rect: NSRect? = nil) { // swiftlint:disable:this function_body_length
+    @discardableResult
+    public func layoutLines(in rect: NSRect? = nil) -> Set<TextLine.ID> { // swiftlint:disable:this function_body_length
         guard let visibleRect = rect ?? delegate?.visibleRect,
               !isInTransaction,
               let textStorage else {
-            return
+            return []
         }
 
         // The macOS may call `layout` on the textView while we're laying out fragment views. This ensures the view
@@ -82,6 +83,10 @@ extension TextLayoutManager {
         var newVisibleLines: Set<TextLine.ID> = []
         var yContentAdjustment: CGFloat = 0
         var maxFoundLineWidth = maxLineWidth
+
+#if DEBUG
+        var laidOutLines: Set<TextLine.ID> = []
+#endif
 
         // Layout all lines, fetching lines lazily as they are laid out.
         for linePosition in linesStartingAt(minY, until: maxY).lazy {
@@ -115,6 +120,9 @@ extension TextLayoutManager {
                 if maxFoundLineWidth < lineSize.width {
                     maxFoundLineWidth = lineSize.width
                 }
+#if DEBUG
+                laidOutLines.insert(linePosition.data.id)
+#endif
             } else {
                 // Make sure the used fragment views aren't dequeued.
                 usedFragmentIDs.formUnion(linePosition.data.lineFragments.map(\.data.id))
@@ -147,6 +155,12 @@ extension TextLayoutManager {
         if originalHeight != lineStorage.height || layoutView?.frame.size.height != lineStorage.height {
             delegate?.layoutManagerHeightDidUpdate(newHeight: lineStorage.height)
         }
+
+#if DEBUG
+        return laidOutLines
+#else
+        return []
+#endif
     }
 
     // MARK: - Layout Single Line
