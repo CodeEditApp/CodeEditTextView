@@ -7,15 +7,6 @@
 
 import AppKit
 
-class Buh: TextAttachment {
-    var width: CGFloat = 100
-
-    func draw(in context: CGContext, rect: NSRect) {
-        context.setFillColor(NSColor.red.cgColor)
-        context.fill(rect)
-    }
-}
-
 extension TextView {
     override public func menu(for event: NSEvent) -> NSMenu? {
         guard event.type == .rightMouseDown else { return nil }
