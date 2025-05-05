@@ -8,7 +8,7 @@
 import AppKit
 
 public struct TextAttachmentBox: Equatable {
-    let range: NSRange
+    var range: NSRange
     let attachment: any TextAttachment
 
     var width: CGFloat {

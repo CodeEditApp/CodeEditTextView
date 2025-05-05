@@ -14,14 +14,14 @@ public extension TextLayoutManager {
     /// if there is no delegate from `0` to the estimated document height.
     ///
     /// - Returns: An iterator to iterate through all visible lines.
-    func visibleLines() -> Iterator {
+    func visibleLines() -> YPositionIterator {
         let visibleRect = delegate?.visibleRect ?? NSRect(
             x: 0,
             y: 0,
             width: 0,
             height: estimatedHeight()
         )
-        return Iterator(minY: max(visibleRect.minY, 0), maxY: max(visibleRect.maxY, 0), layoutManager: self)
+        return YPositionIterator(minY: max(visibleRect.minY, 0), maxY: max(visibleRect.maxY, 0), layoutManager: self)
     }
 
     /// Iterate over all lines in the y position range.
@@ -29,11 +29,15 @@ public extension TextLayoutManager {
     ///   - minY: The minimum y position to begin at.
     ///   - maxY: The maximum y position to iterate to.
     /// - Returns: An iterator that will iterate through all text lines in the y position range.
-    func linesStartingAt(_ minY: CGFloat, until maxY: CGFloat) -> Iterator {
-        Iterator(minY: minY, maxY: maxY, layoutManager: self)
+    func linesStartingAt(_ minY: CGFloat, until maxY: CGFloat) -> YPositionIterator {
+        YPositionIterator(minY: minY, maxY: maxY, layoutManager: self)
     }
 
-    struct Iterator: LazySequenceProtocol, IteratorProtocol {
+    func linesInRange(_ range: NSRange) -> RangeIterator {
+        RangeIterator(range: range, layoutManager: self)
+    }
+
+    struct YPositionIterator: LazySequenceProtocol, IteratorProtocol {
         typealias TextLinePosition = TextLineStorage<TextLine>.TextLinePosition
 
         private weak var layoutManager: TextLayoutManager?
@@ -60,6 +64,39 @@ public extension TextLayoutManager {
                 self.currentPosition = layoutManager?.determineVisiblePosition(for: nextPosition)
                 return self.currentPosition?.position
             } else if let position = layoutManager?.lineStorage.getLine(atPosition: minY) {
+                currentPosition = layoutManager?.determineVisiblePosition(for: position)
+                return currentPosition?.position
+            }
+
+            return nil
+        }
+    }
+
+    struct RangeIterator: LazySequenceProtocol, IteratorProtocol {
+        typealias TextLinePosition = TextLineStorage<TextLine>.TextLinePosition
+
+        private weak var layoutManager: TextLayoutManager?
+        private let range: NSRange
+        private var currentPosition: (position: TextLinePosition, indexRange: ClosedRange<Int>)?
+
+        init(range: NSRange, layoutManager: TextLayoutManager) {
+            self.range = range
+            self.layoutManager = layoutManager
+        }
+
+        /// Iterates over the "visible" text positions.
+        ///
+        /// See documentation on ``TextLayoutManager/determineVisiblePosition(for:)`` for details.
+        public mutating func next() -> TextLineStorage<TextLine>.TextLinePosition? {
+            if let currentPosition {
+                guard let nextPosition = layoutManager?.lineStorage.getLine(
+                    atIndex: currentPosition.indexRange.upperBound + 1
+                ), nextPosition.range.location < range.max else {
+                    return nil
+                }
+                self.currentPosition = layoutManager?.determineVisiblePosition(for: nextPosition)
+                return self.currentPosition?.position
+            } else if let position = layoutManager?.lineStorage.getLine(atOffset: range.location) {
                 currentPosition = layoutManager?.determineVisiblePosition(for: position)
                 return currentPosition?.position
             }

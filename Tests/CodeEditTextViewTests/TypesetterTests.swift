@@ -267,4 +267,23 @@ class TypesetterTests: XCTestCase {
         XCTAssertEqual(fragment.contents.count, 1)
         XCTAssertTrue(fragment.contents[0].isText)
     }
+
+    func test_wrapLinesDoesNotBreakOnLastNewline() throws {
+        let attachment = DemoTextAttachment(width: 50)
+        let string =  NSAttributedString(string: "AB CD\n12 34\nWX YZ\n", attributes: attributes)
+        typesetter.typeset(
+            string,
+            documentRange: NSRange(location: 0, length: 15),
+            displayData: TextLine.DisplayData(
+                maxWidth: .infinity,
+                lineHeightMultiplier: 1.0,
+                estimatedLineHeight: 20.0,
+                breakStrategy: .word
+            ),
+            markedRanges: nil,
+            attachments: [.init(range: NSRange(start: 4, end: 15), attachment: attachment)]
+        )
+
+        XCTAssertEqual(typesetter.lineFragments.count, 1)
+    }
 }

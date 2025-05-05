@@ -95,6 +95,16 @@ public final class TextAttachmentManager {
 
         return results
     }
+
+    package func textUpdated(atOffset: Int, delta: Int) {
+        for (idx, box) in orderedAttachments.enumerated().reversed() {
+            if box.range.contains(atOffset) {
+                orderedAttachments.remove(at: idx)
+            } else if box.range.location > atOffset {
+                orderedAttachments[idx].range.location += delta
+            }
+        }
+    }
 }
 
 private extension TextAttachmentManager {

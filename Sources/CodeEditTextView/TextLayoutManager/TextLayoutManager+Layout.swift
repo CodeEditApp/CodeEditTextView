@@ -77,7 +77,7 @@ extension TextLayoutManager {
         let minY = max(visibleRect.minY - verticalLayoutPadding, 0)
         let maxY = max(visibleRect.maxY + verticalLayoutPadding, 0)
         let originalHeight = lineStorage.height
-        var usedFragmentIDs = Set<UUID>()
+        var usedFragmentIDs = Set<LineFragment.ID>()
         var forceLayout: Bool = needsLayout
         var newVisibleLines: Set<TextLine.ID> = []
         var yContentAdjustment: CGFloat = 0
@@ -162,7 +162,7 @@ extension TextLayoutManager {
         _ position: TextLineStorage<TextLine>.TextLinePosition,
         textStorage: NSTextStorage,
         layoutData: LineLayoutData,
-        laidOutFragmentIDs: inout Set<UUID>
+        laidOutFragmentIDs: inout Set<LineFragment.ID>
     ) -> CGSize {
         let lineDisplayData = TextLine.DisplayData(
             maxWidth: layoutData.maxWidth,

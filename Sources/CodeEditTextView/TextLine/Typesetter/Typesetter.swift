@@ -48,7 +48,6 @@ final public class Typesetter {
             attachments: attachments
         )
         lineFragments.build(from: lines, estimatedLineHeight: maxHeight)
-
     }
 
     private func makeString(string: NSAttributedString, markedRanges: MarkedRanges?) {
@@ -153,14 +152,16 @@ final public class Typesetter {
         typesetter: CTTypesetter,
         displayData: TextLine.DisplayData
     ) {
+        let substring = string.attributedSubstring(from: range)
+
         // Layout as many fragments as possible in this content run
         while context.currentPosition < range.max {
             // The line break indicates the distance from the range we’re typesetting on that should be broken at.
             // It's relative to the range being typeset, not the line
             let lineBreak = typesetter.suggestLineBreak(
-                using: string,
+                using: substring,
                 strategy: displayData.breakStrategy,
-                startingOffset: context.currentPosition - range.location,
+                subrange: NSRange(start: context.currentPosition - range.location, end: range.length),
                 constrainingWidth: displayData.maxWidth - context.fragmentContext.width
             )
 

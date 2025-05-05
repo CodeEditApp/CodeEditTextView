@@ -13,7 +13,7 @@ extension TextSelectionManager {
     public func drawSelections(in rect: NSRect) {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         context.saveGState()
-        var highlightedLines: Set<UUID> = []
+        var highlightedLines: Set<TextLine.ID> = []
         // For each selection in the rect
         for textSelection in textSelections {
             if textSelection.range.isEmpty {
@@ -41,7 +41,7 @@ extension TextSelectionManager {
         in rect: NSRect,
         for textSelection: TextSelection,
         context: CGContext,
-        highlightedLines: inout Set<UUID>
+        highlightedLines: inout Set<TextLine.ID>
     ) {
         guard let linePosition = layoutManager?.textLineForOffset(textSelection.range.location),
               !highlightedLines.contains(linePosition.data.id) else {

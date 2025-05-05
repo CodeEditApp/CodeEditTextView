@@ -18,20 +18,20 @@ extension CTTypesetter {
     func suggestLineBreak(
         using string: NSAttributedString,
         strategy: LineBreakStrategy,
-        startingOffset: Int,
+        subrange: NSRange,
         constrainingWidth: CGFloat
     ) -> Int {
         switch strategy {
         case .character:
             return suggestLineBreakForCharacter(
                 string: string,
-                startingOffset: startingOffset,
+                startingOffset: subrange.location,
                 constrainingWidth: constrainingWidth
             )
         case .word:
             return suggestLineBreakForWord(
                 string: string,
-                startingOffset: startingOffset,
+                subrange: subrange,
                 constrainingWidth: constrainingWidth
             )
         }
@@ -72,11 +72,11 @@ extension CTTypesetter {
     /// - Returns: An offset relative to the entire string indicating where to break.
     private func suggestLineBreakForWord(
         string: NSAttributedString,
-        startingOffset: Int,
+        subrange: NSRange,
         constrainingWidth: CGFloat
     ) -> Int {
-        var breakIndex = startingOffset + CTTypesetterSuggestClusterBreak(self, startingOffset, constrainingWidth)
-        let isBreakAtEndOfString = breakIndex >= string.length
+        var breakIndex = subrange.location + CTTypesetterSuggestClusterBreak(self, subrange.location, constrainingWidth)
+        let isBreakAtEndOfString = breakIndex >= subrange.max
 
         let isNextCharacterCarriageReturn = checkIfLineBreakOnCRLF(breakIndex, for: string)
         if isNextCharacterCarriageReturn {
@@ -92,7 +92,7 @@ extension CTTypesetter {
             // Try to walk backwards until we hit a whitespace or punctuation
             var index = breakIndex - 1
 
-            while breakIndex - index < 100 && index > startingOffset {
+            while breakIndex - index < 100 && index > subrange.location {
                 if ensureCharacterCanBreakLine(at: index, for: string) {
                     return index + 1
                 }
@@ -107,9 +107,8 @@ extension CTTypesetter {
     /// - Parameter index: The index to check at.
     /// - Returns: True, if the character is a whitespace or punctuation character.
     private func ensureCharacterCanBreakLine(at index: Int, for string: NSAttributedString) -> Bool {
-        let set = CharacterSet(
-            charactersIn: string.attributedSubstring(from: NSRange(location: index, length: 1)).string
-        )
+        let subrange = (string.string as NSString).rangeOfComposedCharacterSequence(at: index)
+        let set = CharacterSet(charactersIn: (string.string as NSString).substring(with: subrange))
         return set.isSubset(of: .whitespacesAndNewlines) || set.isSubset(of: .punctuationCharacters)
     }
 

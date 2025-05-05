@@ -71,7 +71,7 @@ public class TextLayoutManager: NSObject {
     weak var textStorage: NSTextStorage?
     var lineStorage: TextLineStorage<TextLine> = TextLineStorage()
     var markedTextManager: MarkedTextManager = MarkedTextManager()
-    let viewReuseQueue: ViewReuseQueue<LineFragmentView, UUID> = ViewReuseQueue()
+    let viewReuseQueue: ViewReuseQueue<LineFragmentView, LineFragment.ID> = ViewReuseQueue()
     package var visibleLineIds: Set<TextLine.ID> = []
     /// Used to force a complete re-layout using `setNeedsLayout`
     package var needsLayout: Bool = false
