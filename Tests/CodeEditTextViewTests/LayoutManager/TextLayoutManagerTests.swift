@@ -138,13 +138,36 @@ struct TextLayoutManagerTests {
     ///
     /// Related implementation: ``TextLayoutManager/Iterator``
     @Test
-    func iteratorDoesNotSkipEmptyLines() {
+    func yPositionIteratorDoesNotSkipEmptyLines() {
         // Layout manager keeps 1-length lines at the 2nd and 4th lines.
         textStorage.mutableString.setString("A\n\nB\n\nC")
         layoutManager.layoutLines(in: NSRect(x: 0, y: 0, width: 1000, height: 1000))
 
         var lineIndexes: [Int] = []
         for line in layoutManager.linesStartingAt(0.0, until: 1000.0) {
+            lineIndexes.append(line.index)
+        }
+
+        var lastLineIndex: Int?
+        for lineIndex in lineIndexes {
+            if let lastIndex = lastLineIndex {
+                #expect(lineIndex - 1 == lastIndex, "Skipped an index when iterating.")
+            } else {
+                #expect(lineIndex == 0, "First index was not 0")
+            }
+            lastLineIndex = lineIndex
+        }
+    }
+
+    /// See comment for `yPositionIteratorDoesNotSkipEmptyLines`.
+    @Test
+    func rangeIteratorDoesNotSkipEmptyLines() {
+        // Layout manager keeps 1-length lines at the 2nd and 4th lines.
+        textStorage.mutableString.setString("A\n\nB\n\nC")
+        layoutManager.layoutLines(in: NSRect(x: 0, y: 0, width: 1000, height: 1000))
+
+        var lineIndexes: [Int] = []
+        for line in layoutManager.linesInRange(textView.documentRange) {
             lineIndexes.append(line.index)
         }
 
