@@ -24,7 +24,9 @@ public final class TextAttachmentManager {
         let insertIndex = findInsertionIndex(for: range.location)
         orderedAttachments.insert(box, at: insertIndex)
         layoutManager?.lineStorage.linesInRange(range).dropFirst().forEach {
-            layoutManager?.lineStorage.update(atOffset: $0.range.location, delta: 0, deltaHeight: -$0.height)
+            if $0.height != 0 {
+                layoutManager?.lineStorage.update(atOffset: $0.range.location, delta: 0, deltaHeight: -$0.height)
+            }
         }
         layoutManager?.invalidateLayoutForRange(range)
     }

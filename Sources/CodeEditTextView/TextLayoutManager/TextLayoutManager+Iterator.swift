@@ -102,18 +102,23 @@ public extension TextLayoutManager {
         for originalPosition: TextLineStorage<TextLine>.TextLinePosition?
     ) -> (position: TextLineStorage<TextLine>.TextLinePosition, indexRange: ClosedRange<Int>)? {
         guard let originalPosition else { return nil }
+        return determineVisiblePosition(for: (originalPosition, originalPosition.index...originalPosition.index))
+    }
 
-        let attachments = attachments.get(overlapping: originalPosition.range)
+    func determineVisiblePosition(
+        for originalPosition: (position: TextLineStorage<TextLine>.TextLinePosition, indexRange: ClosedRange<Int>)
+    ) -> (position: TextLineStorage<TextLine>.TextLinePosition, indexRange: ClosedRange<Int>)? {
+        let attachments = attachments.get(overlapping: originalPosition.position.range)
         guard let firstAttachment = attachments.first, let lastAttachment = attachments.last else {
             // No change, either no attachments or attachment doesn't span multiple lines.
-            return (originalPosition, originalPosition.index...originalPosition.index)
+            return originalPosition
         }
 
-        var minIndex = originalPosition.index
-        var maxIndex = originalPosition.index
-        var newPosition = originalPosition
+        var minIndex = originalPosition.indexRange.lowerBound
+        var maxIndex = originalPosition.indexRange.upperBound
+        var newPosition = originalPosition.position
 
-        if firstAttachment.range.location < originalPosition.range.location,
+        if firstAttachment.range.location < originalPosition.position.range.location,
            let extendedLinePosition = lineStorage.getLine(atOffset: firstAttachment.range.location) {
             newPosition = TextLineStorage<TextLine>.TextLinePosition(
                 data: extendedLinePosition.data,
@@ -125,23 +130,24 @@ public extension TextLayoutManager {
             minIndex = min(minIndex, newPosition.index)
         }
 
-        if lastAttachment.range.max > originalPosition.range.max,
+        if lastAttachment.range.max > originalPosition.position.range.max,
            let extendedLinePosition = lineStorage.getLine(atOffset: lastAttachment.range.max) {
             newPosition = TextLineStorage<TextLine>.TextLinePosition(
                 data: newPosition.data,
                 range: NSRange(start: newPosition.range.location, end: extendedLinePosition.range.max),
                 yPos: newPosition.yPos,
                 height: newPosition.height,
-                index: newPosition.index
+                index: newPosition.index // We want to keep the minimum index.
             )
-            maxIndex = max(maxIndex, newPosition.index)
+            maxIndex = max(maxIndex, extendedLinePosition.index)
         }
 
-        if newPosition == originalPosition {
+        // Base case, we haven't updated anything
+        if minIndex...maxIndex == originalPosition.indexRange {
             return (newPosition, minIndex...maxIndex)
         } else {
             // Recurse, to make sure we combine all necessary lines.
-            return determineVisiblePosition(for: newPosition)
+            return determineVisiblePosition(for: (newPosition, minIndex...maxIndex))
         }
     }
 }
