@@ -13,7 +13,7 @@ class MockRenderDelegate: TextLayoutManagerRenderDelegate {
 
     var estimatedLineHeightOverride: (() -> CGFloat)?
 
-    func prepareForDisplay(
+    func prepareForDisplay( // swiftlint:disable:this function_parameter_count
         textLine: TextLine,
         displayData: TextLine.DisplayData,
         range: NSRange,
