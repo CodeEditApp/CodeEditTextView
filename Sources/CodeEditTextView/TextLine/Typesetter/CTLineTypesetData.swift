@@ -7,6 +7,7 @@
 
 import AppKit
 
+/// Represents layout information received from a `CTTypesetter` for a `CTLine`.
 struct CTLineTypesetData {
     let ctLine: CTLine
     let descent: CGFloat
