@@ -48,13 +48,12 @@ public final class TextLine: Identifiable, Equatable {
     ///   - range: The range this text range represents in the entire document.
     ///   - stringRef: A reference to the string storage for the document.
     ///   - markedRanges: Any marked ranges in the line.
-    ///   - breakStrategy: Determines how line breaks are calculated.
+    ///   - attachments: Any attachments overlapping the line range.
     public func prepareForDisplay(
         displayData: DisplayData,
         range: NSRange,
         stringRef: NSTextStorage,
         markedRanges: MarkedRanges?,
-        breakStrategy: LineBreakStrategy,
         attachments: [TextAttachmentBox]
     ) {
         let string = stringRef.attributedSubstring(from: range)
@@ -63,7 +62,6 @@ public final class TextLine: Identifiable, Equatable {
             string,
             documentRange: range,
             displayData: displayData,
-            breakStrategy: breakStrategy,
             markedRanges: markedRanges,
             attachments: attachments
         )
@@ -79,11 +77,18 @@ public final class TextLine: Identifiable, Equatable {
         public let maxWidth: CGFloat
         public let lineHeightMultiplier: CGFloat
         public let estimatedLineHeight: CGFloat
+        public let breakStrategy: LineBreakStrategy
 
-        public init(maxWidth: CGFloat, lineHeightMultiplier: CGFloat, estimatedLineHeight: CGFloat) {
+        public init(
+            maxWidth: CGFloat,
+            lineHeightMultiplier: CGFloat,
+            estimatedLineHeight: CGFloat,
+            breakStrategy: LineBreakStrategy = .character
+        ) {
             self.maxWidth = maxWidth
             self.lineHeightMultiplier = lineHeightMultiplier
             self.estimatedLineHeight = estimatedLineHeight
+            self.breakStrategy = breakStrategy
         }
     }
 }

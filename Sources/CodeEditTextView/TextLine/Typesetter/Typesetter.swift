@@ -31,7 +31,6 @@ final public class Typesetter {
         _ string: NSAttributedString,
         documentRange: NSRange,
         displayData: TextLine.DisplayData,
-        breakStrategy: LineBreakStrategy,
         markedRanges: MarkedRanges?,
         attachments: [TextAttachmentBox] = []
     ) {
@@ -46,7 +45,6 @@ final public class Typesetter {
         let (lines, maxHeight) = typesetLineFragments(
             documentRange: documentRange,
             displayData: displayData,
-            breakStrategy: breakStrategy,
             attachments: attachments
         )
         lineFragments.build(from: lines, estimatedLineHeight: maxHeight)
@@ -121,7 +119,6 @@ final public class Typesetter {
     func typesetLineFragments(
         documentRange: NSRange,
         displayData: TextLine.DisplayData,
-        breakStrategy: LineBreakStrategy,
         attachments: [TextAttachmentBox]
     ) -> (lines: [TextLineStorage<LineFragment>.BuildItem], maxHeight: CGFloat) {
         let contentRuns = createContentRuns(documentRange: documentRange, attachments: attachments)
@@ -136,8 +133,7 @@ final public class Typesetter {
                     context: &context,
                     range: run.range,
                     typesetter: typesetter,
-                    displayData: displayData,
-                    breakStrategy: breakStrategy
+                    displayData: displayData
                 )
             }
         }
@@ -155,8 +151,7 @@ final public class Typesetter {
         context: inout TypesetContext,
         range: NSRange,
         typesetter: CTTypesetter,
-        displayData: TextLine.DisplayData,
-        breakStrategy: LineBreakStrategy
+        displayData: TextLine.DisplayData
     ) {
         // Layout as many fragments as possible in this content run
         while context.currentPosition < range.max {
@@ -164,7 +159,7 @@ final public class Typesetter {
             // It's relative to the range being typeset, not the line
             let lineBreak = typesetter.suggestLineBreak(
                 using: string,
-                strategy: breakStrategy,
+                strategy: displayData.breakStrategy,
                 startingOffset: context.currentPosition - range.location,
                 constrainingWidth: displayData.maxWidth - context.fragmentContext.width
             )

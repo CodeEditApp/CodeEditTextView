@@ -167,7 +167,8 @@ extension TextLayoutManager {
         let lineDisplayData = TextLine.DisplayData(
             maxWidth: layoutData.maxWidth,
             lineHeightMultiplier: lineHeightMultiplier,
-            estimatedLineHeight: estimateLineHeight()
+            estimatedLineHeight: estimateLineHeight(),
+            breakStrategy: lineBreakStrategy
         )
 
         let line = position.data
@@ -187,7 +188,6 @@ extension TextLayoutManager {
                 range: position.range,
                 stringRef: textStorage,
                 markedRanges: markedTextManager.markedRanges(in: position.range),
-                breakStrategy: lineBreakStrategy,
                 attachments: attachments.get(startingIn: position.range)
             )
         }

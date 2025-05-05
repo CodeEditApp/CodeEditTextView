@@ -44,7 +44,6 @@ public extension TextLayoutManagerRenderDelegate {
             range: range,
             stringRef: stringRef,
             markedRanges: markedRanges,
-            breakStrategy: breakStrategy,
             attachments: attachments
         )
     }
