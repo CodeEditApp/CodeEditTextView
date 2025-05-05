@@ -14,7 +14,7 @@ public final class LineFragment: Identifiable, Equatable {
     public struct FragmentContent: Equatable {
         public enum Content: Equatable {
             case text(line: CTLine)
-            case attachment(attachment: TextAttachmentBox)
+            case attachment(attachment: AnyTextAttachment)
         }
 
         let data: Content

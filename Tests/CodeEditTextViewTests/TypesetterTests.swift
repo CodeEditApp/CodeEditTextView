@@ -156,7 +156,7 @@ class TypesetterTests: XCTestCase {
                 breakStrategy: .character
             ),
             markedRanges: nil,
-            attachments: [TextAttachmentBox(range: NSRange(location: 1, length: 1), attachment: attachment)]
+            attachments: [AnyTextAttachment(range: NSRange(location: 1, length: 1), attachment: attachment)]
         )
 
         XCTAssertEqual(typesetter.lineFragments.count, 1)
@@ -186,7 +186,7 @@ class TypesetterTests: XCTestCase {
                 breakStrategy: .character
             ),
             markedRanges: nil,
-            attachments: [TextAttachmentBox(range: NSRange(location: 0, length: 3), attachment: attachment)]
+            attachments: [AnyTextAttachment(range: NSRange(location: 0, length: 3), attachment: attachment)]
         )
 
         XCTAssertEqual(typesetter.lineFragments.count, 1)

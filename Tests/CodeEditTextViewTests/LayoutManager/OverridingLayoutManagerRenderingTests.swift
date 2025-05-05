@@ -19,7 +19,7 @@ class MockRenderDelegate: TextLayoutManagerRenderDelegate {
         range: NSRange,
         stringRef: NSTextStorage,
         markedRanges: MarkedRanges?,
-        attachments: [TextAttachmentBox]
+        attachments: [AnyTextAttachment]
     ) {
         prepareForDisplay?(
             textLine,

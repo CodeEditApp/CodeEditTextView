@@ -54,7 +54,7 @@ public final class TextLine: Identifiable, Equatable {
         range: NSRange,
         stringRef: NSTextStorage,
         markedRanges: MarkedRanges?,
-        attachments: [TextAttachmentBox]
+        attachments: [AnyTextAttachment]
     ) {
         let string = stringRef.attributedSubstring(from: range)
         self.maxWidth = displayData.maxWidth

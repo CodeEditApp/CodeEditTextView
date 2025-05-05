@@ -14,7 +14,7 @@ final public class Typesetter {
         let type: RunType
 
         enum RunType {
-            case attachment(TextAttachmentBox)
+            case attachment(AnyTextAttachment)
             case string(CTTypesetter)
         }
     }
@@ -32,7 +32,7 @@ final public class Typesetter {
         documentRange: NSRange,
         displayData: TextLine.DisplayData,
         markedRanges: MarkedRanges?,
-        attachments: [TextAttachmentBox] = []
+        attachments: [AnyTextAttachment] = []
     ) {
         makeString(string: string, markedRanges: markedRanges)
         lineFragments.removeAll()
@@ -69,7 +69,7 @@ final public class Typesetter {
     ///   - documentRange: The range in the string reference.
     ///   - attachments: Any text attachments overlapping the string reference.
     /// - Returns: A series of content runs making up this line.
-    func createContentRuns(documentRange: NSRange, attachments: [TextAttachmentBox]) -> [ContentRun] {
+    func createContentRuns(documentRange: NSRange, attachments: [AnyTextAttachment]) -> [ContentRun] {
         var attachments = attachments
         var currentPosition = 0
         let maxPosition = documentRange.length
@@ -118,7 +118,7 @@ final public class Typesetter {
     func typesetLineFragments(
         documentRange: NSRange,
         displayData: TextLine.DisplayData,
-        attachments: [TextAttachmentBox]
+        attachments: [AnyTextAttachment]
     ) -> (lines: [TextLineStorage<LineFragment>.BuildItem], maxHeight: CGFloat) {
         let contentRuns = createContentRuns(documentRange: documentRange, attachments: attachments)
         var context = TypesetContext(documentRange: documentRange, displayData: displayData)

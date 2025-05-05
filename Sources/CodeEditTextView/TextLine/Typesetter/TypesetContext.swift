@@ -19,7 +19,7 @@ struct TypesetContext {
     /// Tracks the current position when laying out runs
     var currentPosition: Int = 0
 
-    mutating func appendAttachment(_ attachment: TextAttachmentBox) {
+    mutating func appendAttachment(_ attachment: AnyTextAttachment) {
         // Check if we can append this attachment to the current line
         if fragmentContext.width + attachment.width > displayData.maxWidth {
             popCurrentData()

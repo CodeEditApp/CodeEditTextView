@@ -13,16 +13,16 @@ import Foundation
 /// If two attachments are overlapping, the one placed further along in the document will be
 /// ignored when laying out attachments.
 public final class TextAttachmentManager {
-    private var orderedAttachments: [TextAttachmentBox] = []
+    private var orderedAttachments: [AnyTextAttachment] = []
     weak var layoutManager: TextLayoutManager?
 
-    /// Adds a new attachment box, keeping `orderedAttachments` sorted by range.location.
+    /// Adds a new attachment, keeping `orderedAttachments` sorted by range.location.
     /// If two attachments overlap, the layout phase will later ignore the one with the higher start.
     /// - Complexity: `O(n log(n))` due to array insertion. Could be improved with a binary tree.
     public func add(_ attachment: any TextAttachment, for range: NSRange) {
-        let box = TextAttachmentBox(range: range, attachment: attachment)
+        let attachment = AnyTextAttachment(range: range, attachment: attachment)
         let insertIndex = findInsertionIndex(for: range.location)
-        orderedAttachments.insert(box, at: insertIndex)
+        orderedAttachments.insert(attachment, at: insertIndex)
         layoutManager?.lineStorage.linesInRange(range).dropFirst().forEach {
             if $0.height != 0 {
                 layoutManager?.lineStorage.update(atOffset: $0.range.location, delta: 0, deltaHeight: -$0.height)
@@ -46,20 +46,20 @@ public final class TextAttachmentManager {
     /// Finds attachments starting in the given line range, and returns them as an array.
     /// Returned attachment's ranges will be relative to the _document_, not the line.
     /// - Complexity: `O(n log(n))`, ideally `O(log(n))`
-    public func get(startingIn range: NSRange) -> [TextAttachmentBox] {
-        var results: [TextAttachmentBox] = []
+    public func get(startingIn range: NSRange) -> [AnyTextAttachment] {
+        var results: [AnyTextAttachment] = []
         var idx = findInsertionIndex(for: range.location)
         while idx < orderedAttachments.count {
-            let box = orderedAttachments[idx]
-            let loc = box.range.location
+            let attachment = orderedAttachments[idx]
+            let loc = attachment.range.location
             if loc >= range.upperBound {
                 break
             }
             if range.contains(loc) {
-                if let lastResult = results.last, !lastResult.range.contains(box.range.location) {
-                    results.append(box)
+                if let lastResult = results.last, !lastResult.range.contains(attachment.range.location) {
+                    results.append(attachment)
                 } else if results.isEmpty {
-                    results.append(box)
+                    results.append(attachment)
                 }
             }
             idx += 1
@@ -70,25 +70,25 @@ public final class TextAttachmentManager {
     /// Returns all attachments whose ranges overlap the given query range.
     ///
     /// - Parameter query: The `NSRange` to test for overlap.
-    /// - Returns: An array of `TextAttachmentBox` instances whose ranges intersect `query`.
-    public func get(overlapping query: NSRange) -> [TextAttachmentBox] {
+    /// - Returns: An array of `AnyTextAttachment` instances whose ranges intersect `query`.
+    public func get(overlapping query: NSRange) -> [AnyTextAttachment] {
         // Find the first attachment whose end is beyond the start of the query.
         guard let startIdx = firstIndex(where: { $0.range.upperBound > query.location }) else {
             return []
         }
 
-        var results: [TextAttachmentBox] = []
+        var results: [AnyTextAttachment] = []
         var idx = startIdx
 
         // Collect every subsequent attachment that truly overlaps the query.
         while idx < orderedAttachments.count {
-            let box = orderedAttachments[idx]
-            if box.range.location >= query.upperBound {
+            let attachment = orderedAttachments[idx]
+            if attachment.range.location >= query.upperBound {
                 break
             }
-            if NSIntersectionRange(box.range, query).length > 0,
-               results.last?.range != box.range {
-                results.append(box)
+            if NSIntersectionRange(attachment.range, query).length > 0,
+               results.last?.range != attachment.range {
+                results.append(attachment)
             }
             idx += 1
         }
@@ -97,10 +97,10 @@ public final class TextAttachmentManager {
     }
 
     package func textUpdated(atOffset: Int, delta: Int) {
-        for (idx, box) in orderedAttachments.enumerated().reversed() {
-            if box.range.contains(atOffset) {
+        for (idx, attachment) in orderedAttachments.enumerated().reversed() {
+            if attachment.range.contains(atOffset) {
                 orderedAttachments.remove(at: idx)
-            } else if box.range.location > atOffset {
+            } else if attachment.range.location > atOffset {
                 orderedAttachments[idx].range.location += delta
             }
         }
@@ -115,7 +115,7 @@ private extension TextAttachmentManager {
     ///         If it returns `orderedAttachments.count`, no element satisfied
     ///         the predicate, but that’s still a valid insertion point.
     func lowerBoundIndex(
-        where predicate: (TextAttachmentBox) -> Bool
+        where predicate: (AnyTextAttachment) -> Bool
     ) -> Int {
         var low = 0
         var high = orderedAttachments.count
@@ -144,7 +144,7 @@ private extension TextAttachmentManager {
     /// - Parameter predicate: the query predicate.
     /// - Returns: the first matching index, or `nil` if none of the
     ///            attachments satisfy the predicate.
-    func firstIndex(where predicate: (TextAttachmentBox) -> Bool) -> Int? {
+    func firstIndex(where predicate: (AnyTextAttachment) -> Bool) -> Int? {
         let idx = lowerBoundIndex { predicate($0) }
         return idx < orderedAttachments.count ? idx : nil
     }
