@@ -46,7 +46,7 @@ extension TextLayoutManager: NSTextStorageDelegate {
         removeLayoutLinesIn(range: insertedStringRange)
         insertNewLines(for: editedRange)
 
-        attachments.attachments(overlapping: insertedStringRange).forEach { attachment in
+        attachments.get(overlapping: insertedStringRange).forEach { attachment in
             attachments.remove(atOffset: attachment.range.location)
         }
 

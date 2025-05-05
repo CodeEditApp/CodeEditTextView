@@ -103,7 +103,7 @@ public extension TextLayoutManager {
     ) -> (position: TextLineStorage<TextLine>.TextLinePosition, indexRange: ClosedRange<Int>)? {
         guard let originalPosition else { return nil }
 
-        let attachments = attachments.attachments(overlapping: originalPosition.range)
+        let attachments = attachments.get(overlapping: originalPosition.range)
         guard let firstAttachment = attachments.first, let lastAttachment = attachments.last else {
             // No change, either no attachments or attachment doesn't span multiple lines.
             return (originalPosition, originalPosition.index...originalPosition.index)

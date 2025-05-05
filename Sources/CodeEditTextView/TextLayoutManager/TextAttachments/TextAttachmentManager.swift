@@ -44,7 +44,7 @@ public final class TextAttachmentManager {
     /// Finds attachments starting in the given line range, and returns them as an array.
     /// Returned attachment's ranges will be relative to the _document_, not the line.
     /// - Complexity: `O(n log(n))`, ideally `O(log(n))`
-    public func attachments(startingIn range: NSRange) -> [TextAttachmentBox] {
+    public func get(startingIn range: NSRange) -> [TextAttachmentBox] {
         var results: [TextAttachmentBox] = []
         var idx = findInsertionIndex(for: range.location)
         while idx < orderedAttachments.count {
@@ -69,7 +69,7 @@ public final class TextAttachmentManager {
     ///
     /// - Parameter query: The `NSRange` to test for overlap.
     /// - Returns: An array of `TextAttachmentBox` instances whose ranges intersect `query`.
-    func attachments(overlapping query: NSRange) -> [TextAttachmentBox] {
+    public func get(overlapping query: NSRange) -> [TextAttachmentBox] {
         // Find the first attachment whose end is beyond the start of the query.
         guard let startIdx = firstIndex(where: { $0.range.upperBound > query.location }) else {
             return []
@@ -96,27 +96,15 @@ public final class TextAttachmentManager {
 }
 
 private extension TextAttachmentManager {
-    /// Returns the index in `orderedAttachments` at which an attachment with
-    /// `range.location == location` should be inserted to keep the array sorted.
-    /// (Lower‐bound search.)
-    func findInsertionIndex(for location: Int) -> Int {
-        var low = 0
-        var high = orderedAttachments.count
-        while low < high {
-            let mid = (low + high) / 2
-            if orderedAttachments[mid].range.location < location {
-                low = mid + 1
-            } else {
-                high = mid
-            }
-        }
-        return low
-    }
-
-    /// Finds the first index that matches a callback.
-    /// - Parameter predicate: The query predicate.
-    /// - Returns: The first index that matches the given predicate.
-    func firstIndex(where predicate: (TextAttachmentBox) -> Bool) -> Int? {
+    /// Binary-searches `orderedAttachments` and returns the smallest index
+    /// at which `predicate(attachment)` is true (i.e. the lower-bound index).
+    ///
+    /// - Note: always returns a value in `0...orderedAttachments.count`.
+    ///         If it returns `orderedAttachments.count`, no element satisfied
+    ///         the predicate, but that’s still a valid insertion point.
+    func lowerBoundIndex(
+        where predicate: (TextAttachmentBox) -> Bool
+    ) -> Int {
         var low = 0
         var high = orderedAttachments.count
         while low < high {
@@ -127,6 +115,25 @@ private extension TextAttachmentManager {
                 low = mid + 1
             }
         }
-        return low < orderedAttachments.count ? low : nil
+        return low
+    }
+
+    /// Returns the index in `orderedAttachments` at which an attachment whose
+    /// `range.location == location` *could* be inserted, keeping the array sorted.
+    ///
+    /// - Parameter location: the attachment’s `range.location`
+    /// - Returns: a valid insertion index in `0...orderedAttachments.count`
+    func findInsertionIndex(for location: Int) -> Int {
+        lowerBoundIndex { $0.range.location >= location }
+    }
+
+    /// Finds the first index whose attachment satisfies `predicate`.
+    ///
+    /// - Parameter predicate: the query predicate.
+    /// - Returns: the first matching index, or `nil` if none of the
+    ///            attachments satisfy the predicate.
+    func firstIndex(where predicate: (TextAttachmentBox) -> Bool) -> Int? {
+        let idx = lowerBoundIndex { predicate($0) }
+        return idx < orderedAttachments.count ? idx : nil
     }
 }
