@@ -18,7 +18,7 @@ struct ContentView: View {
                 Toggle("Wrap Lines", isOn: $wrapLines)
                 Toggle("Inset Edges", isOn: $enableEdgeInsets)
                 Button {
-                    
+
                 } label: {
                     Text("Insert Attachment")
                 }
