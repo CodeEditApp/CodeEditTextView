@@ -19,17 +19,6 @@ final class DemoTextAttachment: TextAttachment {
 class TypesetterTests: XCTestCase {
     // NOTE: makes chars that are ~6.18 pts wide
     let attributes: [NSAttributedString.Key: Any] = [.font: NSFont.monospacedSystemFont(ofSize: 10, weight: .regular)]
-    let limitedLineWidthDisplayData = TextLine.DisplayData(
-        maxWidth: 150,
-        lineHeightMultiplier: 1.0,
-        estimatedLineHeight: 20.0
-    )
-    let unlimitedLineWidthDisplayData = TextLine.DisplayData(
-        maxWidth: .infinity,
-        lineHeightMultiplier: 1.0,
-        estimatedLineHeight: 20.0
-    )
-
     var typesetter: Typesetter!
 
     override func setUp() {
@@ -41,8 +30,12 @@ class TypesetterTests: XCTestCase {
         typesetter.typeset(
             NSAttributedString(string: "testline\n"),
             documentRange: NSRange(location: 0, length: 9),
-            displayData: unlimitedLineWidthDisplayData,
-            breakStrategy: .word,
+            displayData: TextLine.DisplayData(
+                maxWidth: .infinity,
+                lineHeightMultiplier: 1.0,
+                estimatedLineHeight: 20.0,
+                breakStrategy: .word
+            ),
             markedRanges: nil
         )
 
@@ -51,8 +44,12 @@ class TypesetterTests: XCTestCase {
         typesetter.typeset(
             NSAttributedString(string: "testline\n"),
             documentRange: NSRange(location: 0, length: 9),
-            displayData: unlimitedLineWidthDisplayData,
-            breakStrategy: .character,
+            displayData: TextLine.DisplayData(
+                maxWidth: .infinity,
+                lineHeightMultiplier: 1.0,
+                estimatedLineHeight: 20.0,
+                breakStrategy: .character
+            ),
             markedRanges: nil
         )
 
@@ -63,8 +60,12 @@ class TypesetterTests: XCTestCase {
         typesetter.typeset(
             NSAttributedString(string: "testline\r"),
             documentRange: NSRange(location: 0, length: 9),
-            displayData: unlimitedLineWidthDisplayData,
-            breakStrategy: .word,
+            displayData: TextLine.DisplayData(
+                maxWidth: .infinity,
+                lineHeightMultiplier: 1.0,
+                estimatedLineHeight: 20.0,
+                breakStrategy: .word
+            ),
             markedRanges: nil
         )
 
@@ -73,8 +74,12 @@ class TypesetterTests: XCTestCase {
         typesetter.typeset(
             NSAttributedString(string: "testline\r"),
             documentRange: NSRange(location: 0, length: 9),
-            displayData: unlimitedLineWidthDisplayData,
-            breakStrategy: .character,
+            displayData: TextLine.DisplayData(
+                maxWidth: .infinity,
+                lineHeightMultiplier: 1.0,
+                estimatedLineHeight: 20.0,
+                breakStrategy: .character
+            ),
             markedRanges: nil
         )
 
@@ -85,8 +90,12 @@ class TypesetterTests: XCTestCase {
         typesetter.typeset(
             NSAttributedString(string: "testline\r\n"),
             documentRange: NSRange(location: 0, length: 10),
-            displayData: unlimitedLineWidthDisplayData,
-            breakStrategy: .word,
+            displayData: TextLine.DisplayData(
+                maxWidth: .infinity,
+                lineHeightMultiplier: 1.0,
+                estimatedLineHeight: 20.0,
+                breakStrategy: .word
+            ),
             markedRanges: nil
         )
 
@@ -95,8 +104,12 @@ class TypesetterTests: XCTestCase {
         typesetter.typeset(
             NSAttributedString(string: "testline\r\n"),
             documentRange: NSRange(location: 0, length: 10),
-            displayData: unlimitedLineWidthDisplayData,
-            breakStrategy: .character,
+            displayData: TextLine.DisplayData(
+                maxWidth: .infinity,
+                lineHeightMultiplier: 1.0,
+                estimatedLineHeight: 20.0,
+                breakStrategy: .character
+            ),
             markedRanges: nil
         )
 
@@ -108,8 +121,12 @@ class TypesetterTests: XCTestCase {
         typesetter.typeset(
             NSAttributedString(string: String(repeating: "A", count: 1000), attributes: attributes),
             documentRange: NSRange(location: 0, length: 1000),
-            displayData: limitedLineWidthDisplayData, // 150 px
-            breakStrategy: .character,
+            displayData: TextLine.DisplayData(
+                maxWidth: 150,
+                lineHeightMultiplier: 1.0,
+                estimatedLineHeight: 20.0,
+                breakStrategy: .character
+            ),
             markedRanges: nil,
             attachments: []
         )
@@ -132,8 +149,12 @@ class TypesetterTests: XCTestCase {
         typesetter.typeset(
             NSAttributedString(string: "ABC"),
             documentRange: NSRange(location: 0, length: 3),
-            displayData: unlimitedLineWidthDisplayData,
-            breakStrategy: .character,
+            displayData: TextLine.DisplayData(
+                maxWidth: .infinity,
+                lineHeightMultiplier: 1.0,
+                estimatedLineHeight: 20.0,
+                breakStrategy: .character
+            ),
             markedRanges: nil,
             attachments: [TextAttachmentBox(range: NSRange(location: 1, length: 1), attachment: attachment)]
         )
@@ -158,8 +179,12 @@ class TypesetterTests: XCTestCase {
         typesetter.typeset(
             NSAttributedString(string: "ABC"),
             documentRange: NSRange(location: 0, length: 3),
-            displayData: unlimitedLineWidthDisplayData,
-            breakStrategy: .character,
+            displayData: TextLine.DisplayData(
+                maxWidth: .infinity,
+                lineHeightMultiplier: 1.0,
+                estimatedLineHeight: 20.0,
+                breakStrategy: .character
+            ),
             markedRanges: nil,
             attachments: [TextAttachmentBox(range: NSRange(location: 0, length: 3), attachment: attachment)]
         )
@@ -184,8 +209,12 @@ class TypesetterTests: XCTestCase {
         typesetter.typeset(
             NSAttributedString(string: "ABC123", attributes: attributes),
             documentRange: NSRange(location: 0, length: 6),
-            displayData: limitedLineWidthDisplayData, // 150 px
-            breakStrategy: .character,
+            displayData: TextLine.DisplayData(
+                maxWidth: 150,
+                lineHeightMultiplier: 1.0,
+                estimatedLineHeight: 20.0,
+                breakStrategy: .character
+            ),
             markedRanges: nil,
             attachments: [.init(range: NSRange(location: 1, length: 1), attachment: attachment)]
         )
@@ -211,8 +240,12 @@ class TypesetterTests: XCTestCase {
         typesetter.typeset(
             NSAttributedString(string: "ABC123", attributes: attributes),
             documentRange: NSRange(location: 0, length: 6),
-            displayData: limitedLineWidthDisplayData, // 150 px
-            breakStrategy: .character,
+            displayData: TextLine.DisplayData(
+                maxWidth: 150,
+                lineHeightMultiplier: 1.0,
+                estimatedLineHeight: 20.0,
+                breakStrategy: .character
+            ),
             markedRanges: nil,
             attachments: [.init(range: NSRange(location: 1, length: 1), attachment: attachment)]
         )

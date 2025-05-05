@@ -18,7 +18,6 @@ public protocol TextLayoutManagerRenderDelegate: AnyObject {
         range: NSRange,
         stringRef: NSTextStorage,
         markedRanges: MarkedRanges?,
-        breakStrategy: LineBreakStrategy,
         attachments: [TextAttachmentBox]
     )
 
@@ -36,7 +35,6 @@ public extension TextLayoutManagerRenderDelegate {
         range: NSRange,
         stringRef: NSTextStorage,
         markedRanges: MarkedRanges?,
-        breakStrategy: LineBreakStrategy,
         attachments: [TextAttachmentBox]
     ) {
         textLine.prepareForDisplay(
