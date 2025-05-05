@@ -29,7 +29,7 @@ extension TextLayoutManager {
     /// - Parameter posY: The y position to find a line for.
     /// - Returns: A text line position, if a line could be found at the given y position.
     public func textLineForPosition(_ posY: CGFloat) -> TextLineStorage<TextLine>.TextLinePosition? {
-        determineVisiblePosition(for: lineStorage.getLine(atPosition: posY))
+        determineVisiblePosition(for: lineStorage.getLine(atPosition: posY))?.position
     }
 
     /// Finds a text line for a given text offset.
@@ -46,7 +46,7 @@ extension TextLayoutManager {
         if offset == lineStorage.length {
             return lineStorage.last
         } else {
-            return determineVisiblePosition(for: lineStorage.getLine(atOffset: offset))
+            return determineVisiblePosition(for: lineStorage.getLine(atOffset: offset))?.position
         }
     }
 
@@ -56,7 +56,7 @@ extension TextLayoutManager {
     /// - Returns: The text line position if any, `nil` if the index is out of bounds.
     public func textLineForIndex(_ index: Int) -> TextLineStorage<TextLine>.TextLinePosition? {
         guard index >= 0 && index < lineStorage.count else { return nil }
-        return determineVisiblePosition(for: lineStorage.getLine(atIndex: index))
+        return determineVisiblePosition(for: lineStorage.getLine(atIndex: index))?.position
     }
 
     /// Calculates the text position at the given point in the view.
@@ -69,7 +69,7 @@ extension TextLayoutManager {
         guard point.y <= estimatedHeight() else { // End position is a special case.
             return textStorage?.length
         }
-        guard let linePosition = determineVisiblePosition(for: lineStorage.getLine(atPosition: point.y)),
+        guard let linePosition = determineVisiblePosition(for: lineStorage.getLine(atPosition: point.y))?.position,
               let fragmentPosition = linePosition.data.typesetter.lineFragments.getLine(
                 atPosition: point.y - linePosition.yPos
               ) else {
@@ -91,8 +91,8 @@ extension TextLayoutManager {
     /// If the fragment ends the line, return the position before the potential line break. This visually positions the
     /// cursor at the end of the line, but before the break character. If deleted, it edits the visually selected line.
     ///
-    /// If not at the line end, do the same with the fragment and respect any composed character sequences at the line
-    /// break.
+    /// If not at the line end, do the same with the fragment and respect any composed character sequences at
+    /// the line break.
     ///
     /// Return the line end position otherwise.
     ///
@@ -161,7 +161,7 @@ extension TextLayoutManager {
         guard offset != lineStorage.length else {
             return rectForEndOffset()
         }
-        guard let linePosition = determineVisiblePosition(for: lineStorage.getLine(atOffset: offset)) else {
+        guard let linePosition = determineVisiblePosition(for: lineStorage.getLine(atOffset: offset))?.position else {
             return nil
         }
         guard let fragmentPosition = linePosition.data.typesetter.lineFragments.getLine(

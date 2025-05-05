@@ -39,7 +39,7 @@ public extension TextLayoutManager {
         private weak var layoutManager: TextLayoutManager?
         private let minY: CGFloat
         private let maxY: CGFloat
-        private var currentPosition: TextLinePosition?
+        private var currentPosition: (position: TextLinePosition, indexRange: ClosedRange<Int>)?
 
         init(minY: CGFloat, maxY: CGFloat, layoutManager: TextLayoutManager) {
             self.minY = minY
@@ -47,52 +47,70 @@ public extension TextLayoutManager {
             self.layoutManager = layoutManager
         }
 
+        /// Iterates over the "visible" text positions.
+        ///
+        /// See documentation on ``TextLayoutManager/determineVisiblePosition(for:)`` for details.
         public mutating func next() -> TextLineStorage<TextLine>.TextLinePosition? {
-            // Determine the 'visible' line at the next position. This iterator may skip lines that are covered by
-            // attachments, so we use the line position's range to get the next position. Once we have the position,
-            // we'll create a new one that reflects what we actually want to display.
-            // For example, with the following setup: ([ == Attachment start, ] == Attachment end)
-            //
-            // Line 1
-            // Line[ 2
-            // Line 3
-            // Line] 4
-            //
-            // The iterator will first return the line 1 position, then, line 2 is queried but has an attachment.
-            // So, we extend the line until the end of the attachment (line 4), and return the position extended that
-            // far.
-            // This retains information line line index and position in the text storage.
-
             if let currentPosition {
                 guard let nextPosition = layoutManager?.lineStorage.getLine(
-                    atOffset: currentPosition.range.max + 1
+                    atIndex: currentPosition.indexRange.upperBound + 1
                 ), nextPosition.yPos < maxY else {
                     return nil
                 }
                 self.currentPosition = layoutManager?.determineVisiblePosition(for: nextPosition)
-                return self.currentPosition
+                return self.currentPosition?.position
             } else if let position = layoutManager?.lineStorage.getLine(atPosition: minY) {
                 currentPosition = layoutManager?.determineVisiblePosition(for: position)
-                return currentPosition
+                return currentPosition?.position
             }
 
             return nil
         }
     }
 
-    // TODO: Docs
-
+    /// Determines the “visible” line position by merging any consecutive lines
+    /// that are spanned by text attachments. If an attachment overlaps beyond the
+    /// bounds of the original line, this method will extend the returned range to
+    /// cover the full span of those attachments (and recurse if further attachments
+    /// cross into newly included lines).
+    ///
+    /// For example, given the following:  *(`[` == attachment start, `]` == attachment end)*
+    /// ```
+    /// Line 1
+    /// Line[ 2
+    /// Line 3
+    /// Line] 4
+    /// ```
+    /// If you start at the position for “Line 2”, the first and last attachments
+    /// overlap lines 2–4, so this method will extend the range to cover lines 2–4
+    /// and return a position whose `range` spans the entire attachment.
+    ///
+    /// # Why recursion?
+    ///
+    /// When an attachment extends the visible range, it may pull in new lines that themselves overlap other
+    /// attachments. A simple one‐pass merge wouldn’t catch those secondary overlaps. By calling
+    /// determineVisiblePosition again on the newly extended range, we ensure that all cascading attachments—no matter
+    /// how many lines they span—are folded into a single, coherent TextLinePosition before returning.
+    ///
+    /// - Parameter originalPosition: The initial `TextLinePosition` to inspect.
+    ///   Pass in the position you got from `lineStorage.getLine(atOffset:)` or similar.
+    /// - Returns: A tuple containing `position`: A `TextLinePosition` whose `range` and `index` have been
+    ///            adjusted to include any attachment‐spanned lines.. `indexRange`: A `ClosedRange<Int>` listing all of
+    ///            the line indices that are now covered by the returned position.
+    ///   Returns `nil` if `originalPosition` is `nil`.
     func determineVisiblePosition(
         for originalPosition: TextLineStorage<TextLine>.TextLinePosition?
-    ) -> TextLineStorage<TextLine>.TextLinePosition? {
-        guard let originalPosition else { return nil}
+    ) -> (position: TextLineStorage<TextLine>.TextLinePosition, indexRange: ClosedRange<Int>)? {
+        guard let originalPosition else { return nil }
 
         let attachments = attachments.attachments(overlapping: originalPosition.range)
         guard let firstAttachment = attachments.first, let lastAttachment = attachments.last else {
             // No change, either no attachments or attachment doesn't span multiple lines.
-            return originalPosition
+            return (originalPosition, originalPosition.index...originalPosition.index)
         }
 
+        var minIndex = originalPosition.index
+        var maxIndex = originalPosition.index
         var newPosition = originalPosition
 
         if firstAttachment.range.location < originalPosition.range.location,
@@ -104,6 +122,7 @@ public extension TextLayoutManager {
                 height: extendedLinePosition.height,
                 index: extendedLinePosition.index
             )
+            minIndex = min(minIndex, newPosition.index)
         }
 
         if lastAttachment.range.max > originalPosition.range.max,
@@ -115,10 +134,11 @@ public extension TextLayoutManager {
                 height: newPosition.height,
                 index: newPosition.index
             )
+            maxIndex = max(maxIndex, newPosition.index)
         }
 
         if newPosition == originalPosition {
-            return newPosition
+            return (newPosition, minIndex...maxIndex)
         } else {
             // Recurse, to make sure we combine all necessary lines.
             return determineVisiblePosition(for: newPosition)

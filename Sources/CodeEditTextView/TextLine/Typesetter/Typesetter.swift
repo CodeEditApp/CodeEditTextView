@@ -228,7 +228,7 @@ final public class Typesetter {
         )
         lineFragments.build(
             from: [.init(data: fragment, length: 0, height: fragment.scaledHeight)],
-            estimatedLineHeight: displayData.estimatedLineHeight
+            estimatedLineHeight: 0
         )
     }
 

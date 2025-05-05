@@ -130,4 +130,32 @@ struct TextLayoutManagerTests {
         #expect(lineFragmentIDs == afterLineFragmentIDs, "Line fragments were invalidated by `rectsFor(range:)` call.")
         layoutManager.lineStorage.validateInternalState()
     }
+
+    /// # 05/05/25
+    /// It's easy to iterate through lines by taking the last line's range, and adding one to the end of the range.
+    /// However, that will always skip lines that are empty, but represent a line. This test ensures that when we
+    /// iterate over a range, we'll always find those empty lines.
+    ///
+    /// Related implementation: ``TextLayoutManager/Iterator``
+    @Test
+    func iteratorDoesNotSkipEmptyLines() {
+        // Layout manager keeps 1-length lines at the 2nd and 4th lines.
+        textStorage.mutableString.setString("A\n\nB\n\nC")
+        layoutManager.layoutLines(in: NSRect(x: 0, y: 0, width: 1000, height: 1000))
+
+        var lineIndexes: [Int] = []
+        for line in layoutManager.linesStartingAt(0.0, until: 1000.0) {
+            lineIndexes.append(line.index)
+        }
+
+        var lastLineIndex: Int?
+        for lineIndex in lineIndexes {
+            if let lastIndex = lastLineIndex {
+                #expect(lineIndex - 1 == lastIndex, "Skipped an index when iterating.")
+            } else {
+                #expect(lineIndex == 0, "First index was not 0")
+            }
+            lastLineIndex = lineIndex
+        }
+    }
 }
