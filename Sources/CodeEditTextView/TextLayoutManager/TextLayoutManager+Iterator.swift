@@ -161,7 +161,8 @@ public extension TextLayoutManager {
 
     /// Private implementation of ``TextLayoutManager/determineVisiblePosition(for:)``.
     ///
-    /// Separated for readability. This method does not have an optional parameter, and keeps track of a recursion depth.
+    /// Separated for readability. This method does not have an optional parameter, and keeps track of a recursion
+    /// depth.
     private func determineVisiblePositionRecursively(
         for originalPosition: (position: TextLineStorage<TextLine>.TextLinePosition, indexRange: ClosedRange<Int>),
         recursionDepth: Int
