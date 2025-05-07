@@ -17,10 +17,10 @@ public final class LineFragment: Identifiable, Equatable {
             case attachment(attachment: AnyTextAttachment)
         }
 
-        let data: Content
-        let width: CGFloat
+        public let data: Content
+        public let width: CGFloat
 
-        var length: Int {
+        public var length: Int {
             switch data {
             case .text(let line):
                 CTLineGetStringRange(line).length

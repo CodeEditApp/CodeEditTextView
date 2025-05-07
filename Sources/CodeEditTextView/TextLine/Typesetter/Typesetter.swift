@@ -44,7 +44,7 @@ final public class Typesetter {
         lineFragments.removeAll()
 
         // Fast path
-        if string.length == 0 {
+        if string.length == 0 || displayData.maxWidth <= 0 {
             typesetEmptyLine(displayData: displayData, string: string)
             return
         }

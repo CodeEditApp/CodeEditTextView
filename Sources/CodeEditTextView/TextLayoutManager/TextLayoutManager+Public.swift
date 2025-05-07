@@ -134,7 +134,7 @@ extension TextLayoutManager {
         point: CGPoint,
         inLine linePosition: TextLineStorage<TextLine>.TextLinePosition
     ) -> Int? {
-        guard let (content, contentPosition) = fragment.findContent(atX: point.x) else {
+        guard let (content, contentPosition) = fragment.findContent(atX: point.x - edgeInsets.left) else {
             return nil
         }
         switch content.data {
