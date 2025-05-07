@@ -59,7 +59,7 @@ public extension TextSelectionManager {
         }
 
         // Extend ranges to include attachments.
-        if let attachments = layoutManager?.attachments.get(overlapping: range) {
+        if let attachments = layoutManager?.attachments.getAttachmentsOverlapping(range) {
             attachments.forEach { textAttachment in
                 range.formUnion(textAttachment.range)
             }

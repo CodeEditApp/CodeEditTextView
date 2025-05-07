@@ -31,22 +31,26 @@ public final class TextAttachmentManager {
         layoutManager?.setNeedsLayout()
     }
 
-    public func remove(atOffset offset: Int) {
+    /// Removes an attachment and invalidates layout for the removed range.
+    /// - Parameter offset: The offset the attachment begins at.
+    /// - Returns: The removed attachment, if it exists.
+    @discardableResult
+    public func remove(atOffset offset: Int) -> AnyTextAttachment? {
         let index = findInsertionIndex(for: offset)
 
         guard index < orderedAttachments.count && orderedAttachments[index].range.location == offset else {
-            assertionFailure("No attachment found at offset \(offset)")
-            return
+            return nil
         }
 
         let attachment = orderedAttachments.remove(at: index)
         layoutManager?.invalidateLayoutForRange(attachment.range)
+        return attachment
     }
 
     /// Finds attachments starting in the given line range, and returns them as an array.
     /// Returned attachment's ranges will be relative to the _document_, not the line.
     /// - Complexity: `O(n log(n))`, ideally `O(log(n))`
-    public func get(startingIn range: NSRange) -> [AnyTextAttachment] {
+    public func getAttachmentsStartingIn(_ range: NSRange) -> [AnyTextAttachment] {
         var results: [AnyTextAttachment] = []
         var idx = findInsertionIndex(for: range.location)
         while idx < orderedAttachments.count {
@@ -69,11 +73,11 @@ public final class TextAttachmentManager {
 
     /// Returns all attachments whose ranges overlap the given query range.
     ///
-    /// - Parameter query: The `NSRange` to test for overlap.
+    /// - Parameter range: The `NSRange` to test for overlap.
     /// - Returns: An array of `AnyTextAttachment` instances whose ranges intersect `query`.
-    public func get(overlapping query: NSRange) -> [AnyTextAttachment] {
+    public func getAttachmentsOverlapping(_ range: NSRange) -> [AnyTextAttachment] {
         // Find the first attachment whose end is beyond the start of the query.
-        guard let startIdx = firstIndex(where: { $0.range.upperBound > query.location }) else {
+        guard let startIdx = firstIndex(where: { $0.range.upperBound > range.location }) else {
             return []
         }
 
@@ -83,10 +87,10 @@ public final class TextAttachmentManager {
         // Collect every subsequent attachment that truly overlaps the query.
         while idx < orderedAttachments.count {
             let attachment = orderedAttachments[idx]
-            if attachment.range.location >= query.upperBound {
+            if attachment.range.location >= range.upperBound {
                 break
             }
-            if NSIntersectionRange(attachment.range, query).length > 0,
+            if attachment.range.intersection(range)?.length ?? 0 > 0,
                results.last?.range != attachment.range {
                 results.append(attachment)
             }
@@ -96,6 +100,11 @@ public final class TextAttachmentManager {
         return results
     }
 
+    /// Updates the text attachments to stay in the same relative spot after the edit, and removes any attachments that
+    /// were in the updated range.
+    /// - Parameters:
+    ///   - atOffset: The offset text was updated at.
+    ///   - delta: The change delta, positive is an insertion.
     package func textUpdated(atOffset: Int, delta: Int) {
         for (idx, attachment) in orderedAttachments.enumerated().reversed() {
             if attachment.range.contains(atOffset) {

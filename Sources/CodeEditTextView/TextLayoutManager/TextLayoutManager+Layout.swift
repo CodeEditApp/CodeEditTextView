@@ -193,7 +193,7 @@ extension TextLayoutManager {
                 range: position.range,
                 stringRef: textStorage,
                 markedRanges: markedTextManager.markedRanges(in: position.range),
-                attachments: attachments.get(startingIn: position.range)
+                attachments: attachments.getAttachmentsStartingIn(position.range)
             )
         } else {
             line.prepareForDisplay(
@@ -201,7 +201,7 @@ extension TextLayoutManager {
                 range: position.range,
                 stringRef: textStorage,
                 markedRanges: markedTextManager.markedRanges(in: position.range),
-                attachments: attachments.get(startingIn: position.range)
+                attachments: attachments.getAttachmentsStartingIn(position.range)
             )
         }
 

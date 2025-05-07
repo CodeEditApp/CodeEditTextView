@@ -173,7 +173,7 @@ public extension TextLayoutManager {
             return originalPosition
         }
 
-        let attachments = attachments.get(overlapping: originalPosition.position.range)
+        let attachments = attachments.getAttachmentsOverlapping(originalPosition.position.range)
         guard let firstAttachment = attachments.first, let lastAttachment = attachments.last else {
             // No change, either no attachments or attachment doesn't span multiple lines.
             return originalPosition
