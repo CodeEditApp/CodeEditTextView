@@ -26,9 +26,9 @@ struct TextLayoutManagerAttachmentsTests {
     @Test
     func addAndGetAttachments() throws {
         layoutManager.attachments.add(DemoTextAttachment(), for: NSRange(start: 2, end: 8))
-        #expect(layoutManager.attachments.get(overlapping: textView.documentRange).count == 1)
-        #expect(layoutManager.attachments.get(overlapping: NSRange(start: 0, end: 3)).count == 1)
-        #expect(layoutManager.attachments.get(startingIn: NSRange(start: 0, end: 3)).count == 1)
+        #expect(layoutManager.attachments.getAttachmentsOverlapping(textView.documentRange).count == 1)
+        #expect(layoutManager.attachments.getAttachmentsOverlapping(NSRange(start: 0, end: 3)).count == 1)
+        #expect(layoutManager.attachments.getAttachmentsStartingIn(NSRange(start: 0, end: 3)).count == 1)
     }
 
     // MARK: - Determine Visible Line Tests
