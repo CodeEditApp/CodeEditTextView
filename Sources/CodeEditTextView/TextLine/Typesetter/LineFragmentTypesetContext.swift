@@ -7,7 +7,7 @@
 
 import CoreGraphics
 
-/// Represents partial parsing state for typesetting a line fragment.Used once during typesetting and then discarded.
+/// Represents partial parsing state for typesetting a line fragment. Used once during typesetting and then discarded.
 struct LineFragmentTypesetContext {
     var contents: [LineFragment.FragmentContent] = []
     var start: Int

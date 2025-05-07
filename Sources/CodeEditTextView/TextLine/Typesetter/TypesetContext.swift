@@ -7,7 +7,7 @@
 
 import Foundation
 
-/// Represents partial parsing state for typesetting a line.Used once during typesetting and then discarded.
+/// Represents partial parsing state for typesetting a line. Used once during typesetting and then discarded.
 /// Contains a few methods for appending data or popping the current line data.
 struct TypesetContext {
     let documentRange: NSRange
