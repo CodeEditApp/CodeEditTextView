@@ -102,7 +102,6 @@ struct TextLayoutManagerTests {
         layoutManager.lineStorage.validateInternalState()
     }
 
-    /// # 04/09/25
     /// This ensures that getting line rect info does not invalidate layout. The issue was previously caused by a
     /// call to ``TextLayoutManager/preparePositionForDisplay``.
     @Test
@@ -132,7 +131,6 @@ struct TextLayoutManagerTests {
         layoutManager.lineStorage.validateInternalState()
     }
 
-    /// # 05/05/25
     /// It's easy to iterate through lines by taking the last line's range, and adding one to the end of the range.
     /// However, that will always skip lines that are empty, but represent a line. This test ensures that when we
     /// iterate over a range, we'll always find those empty lines.
