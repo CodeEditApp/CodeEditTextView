@@ -32,11 +32,20 @@ public extension TextLayoutManager {
     func linesStartingAt(_ minY: CGFloat, until maxY: CGFloat) -> YPositionIterator {
         YPositionIterator(minY: minY, maxY: maxY, layoutManager: self)
     }
-
+    /// Iterate over all lines that overlap a document range.
+    /// - Parameters:
+    ///   - range: The range in the document to iterate over.
+    /// - Returns: An iterator for lines in the range. The iterator returns lines that *overlap* with the range.
+    ///            Returned lines may extend slightly before or after the queried range.
     func linesInRange(_ range: NSRange) -> RangeIterator {
         RangeIterator(range: range, layoutManager: self)
     }
 
+    /// This iterator iterates over "visible" text positions that overlap a range of vertical `y` positions
+    /// using ``TextLayoutManager/determineVisiblePosition(for:)``.
+    ///
+    /// Next elements are retrieved lazily. Additionally, this iterator uses a stable `index` rather than a y position
+    /// or a range to fetch the next line. This means the line storage can be updated during iteration.
     struct YPositionIterator: LazySequenceProtocol, IteratorProtocol {
         typealias TextLinePosition = TextLineStorage<TextLine>.TextLinePosition
 
@@ -72,6 +81,11 @@ public extension TextLayoutManager {
         }
     }
 
+    /// This iterator iterates over "visible" text positions that overlap a document using
+    /// ``TextLayoutManager/determineVisiblePosition(for:)``.
+    ///
+    /// Next elements are retrieved lazily. Additionally, this iterator uses a stable `index` rather than a y position
+    /// or a range to fetch the next line. This means the line storage can be updated during iteration.
     struct RangeIterator: LazySequenceProtocol, IteratorProtocol {
         typealias TextLinePosition = TextLineStorage<TextLine>.TextLinePosition
 
@@ -139,12 +153,25 @@ public extension TextLayoutManager {
         for originalPosition: TextLineStorage<TextLine>.TextLinePosition?
     ) -> (position: TextLineStorage<TextLine>.TextLinePosition, indexRange: ClosedRange<Int>)? {
         guard let originalPosition else { return nil }
-        return determineVisiblePosition(for: (originalPosition, originalPosition.index...originalPosition.index))
+        return determineVisiblePositionRecursively(
+            for: (originalPosition, originalPosition.index...originalPosition.index),
+            recursionDepth: 0
+        )
     }
 
-    func determineVisiblePosition(
-        for originalPosition: (position: TextLineStorage<TextLine>.TextLinePosition, indexRange: ClosedRange<Int>)
+    /// Private implementation of ``TextLayoutManager/determineVisiblePosition(for:)``.
+    ///
+    /// Separated for readability. This method does not have an optional parameter, and keeps track of a recursion depth.
+    private func determineVisiblePositionRecursively(
+        for originalPosition: (position: TextLineStorage<TextLine>.TextLinePosition, indexRange: ClosedRange<Int>),
+        recursionDepth: Int
     ) -> (position: TextLineStorage<TextLine>.TextLinePosition, indexRange: ClosedRange<Int>)? {
+        // Arbitrary max recursion depth. Ensures we don't spiral into in an infinite recursion.
+        guard recursionDepth < 10 else {
+            logger.warning("Visible position recursed for over 10 levels, returning early.")
+            return originalPosition
+        }
+
         let attachments = attachments.get(overlapping: originalPosition.position.range)
         guard let firstAttachment = attachments.first, let lastAttachment = attachments.last else {
             // No change, either no attachments or attachment doesn't span multiple lines.
@@ -184,7 +211,10 @@ public extension TextLayoutManager {
             return (newPosition, minIndex...maxIndex)
         } else {
             // Recurse, to make sure we combine all necessary lines.
-            return determineVisiblePosition(for: (newPosition, minIndex...maxIndex))
+            return determineVisiblePositionRecursively(
+                for: (newPosition, minIndex...maxIndex),
+                recursionDepth: recursionDepth + 1
+            )
         }
     }
 }
