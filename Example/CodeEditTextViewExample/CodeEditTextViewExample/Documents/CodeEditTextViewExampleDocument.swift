@@ -33,19 +33,13 @@ struct CodeEditTextViewExampleDocument: FileDocument, @unchecked Sendable {
     }
 
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
-        let data = try text.data(for: NSRange(location: 0, length: text.length))
-        return .init(regularFileWithContents: data)
-    }
-}
-
-extension NSAttributedString {
-    func data(for range: NSRange) throws -> Data {
-        try data(
-            from: range,
+        let data = try text.data(
+            from: NSRange(location: 0, length: text.length),
             documentAttributes: [
                 .documentType: NSAttributedString.DocumentType.plain,
                 .characterEncoding: NSUTF8StringEncoding
             ]
         )
+        return .init(regularFileWithContents: data)
     }
 }
