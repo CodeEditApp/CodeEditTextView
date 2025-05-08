@@ -79,7 +79,7 @@ extension TextLayoutManager {
 
         if fragment.width == 0 {
             return linePosition.range.location + fragmentPosition.range.location
-        } else if fragment.width < point.x - edgeInsets.left {
+        } else if fragment.width <= point.x - edgeInsets.left {
             return findOffsetAfterEndOf(fragmentPosition: fragmentPosition, in: linePosition)
         } else {
             return findOffsetAtPoint(inFragment: fragment, point: point, inLine: linePosition)
