@@ -19,7 +19,11 @@ struct ContentView: View {
                 Toggle("Inset Edges", isOn: $enableEdgeInsets)
             }
             Divider()
-            SwiftUITextView(text: $document.text, wrapLines: $wrapLines, enableEdgeInsets: $enableEdgeInsets)
+            SwiftUITextView(
+                text: document.text,
+                wrapLines: $wrapLines,
+                enableEdgeInsets: $enableEdgeInsets
+            )
         }
     }
 }

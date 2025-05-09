@@ -43,6 +43,7 @@ struct TextLayoutManagerTests {
     init() throws {
         textView = TextView(string: "A\nB\nC\nD")
         textView.frame = NSRect(x: 0, y: 0, width: 1000, height: 1000)
+        textView.updateFrameIfNeeded()
         textStorage = textView.textStorage
         layoutManager = try #require(textView.layoutManager)
     }
@@ -101,7 +102,6 @@ struct TextLayoutManagerTests {
         layoutManager.lineStorage.validateInternalState()
     }
 
-    /// # 04/09/25
     /// This ensures that getting line rect info does not invalidate layout. The issue was previously caused by a
     /// call to ``TextLayoutManager/preparePositionForDisplay``.
     @Test
@@ -129,5 +129,80 @@ struct TextLayoutManagerTests {
         )
         #expect(lineFragmentIDs == afterLineFragmentIDs, "Line fragments were invalidated by `rectsFor(range:)` call.")
         layoutManager.lineStorage.validateInternalState()
+    }
+
+    /// It's easy to iterate through lines by taking the last line's range, and adding one to the end of the range.
+    /// However, that will always skip lines that are empty, but represent a line. This test ensures that when we
+    /// iterate over a range, we'll always find those empty lines.
+    ///
+    /// Related implementation: ``TextLayoutManager/Iterator``
+    @Test
+    func yPositionIteratorDoesNotSkipEmptyLines() {
+        // Layout manager keeps 1-length lines at the 2nd and 4th lines.
+        textStorage.mutableString.setString("A\n\nB\n\nC")
+        layoutManager.layoutLines(in: NSRect(x: 0, y: 0, width: 1000, height: 1000))
+
+        var lineIndexes: [Int] = []
+        for line in layoutManager.linesStartingAt(0.0, until: 1000.0) {
+            lineIndexes.append(line.index)
+        }
+
+        var lastLineIndex: Int?
+        for lineIndex in lineIndexes {
+            if let lastIndex = lastLineIndex {
+                #expect(lineIndex - 1 == lastIndex, "Skipped an index when iterating.")
+            } else {
+                #expect(lineIndex == 0, "First index was not 0")
+            }
+            lastLineIndex = lineIndex
+        }
+    }
+
+    /// See comment for `yPositionIteratorDoesNotSkipEmptyLines`.
+    @Test
+    func rangeIteratorDoesNotSkipEmptyLines() {
+        // Layout manager keeps 1-length lines at the 2nd and 4th lines.
+        textStorage.mutableString.setString("A\n\nB\n\nC")
+        layoutManager.layoutLines(in: NSRect(x: 0, y: 0, width: 1000, height: 1000))
+
+        var lineIndexes: [Int] = []
+        for line in layoutManager.linesInRange(textView.documentRange) {
+            lineIndexes.append(line.index)
+        }
+
+        var lastLineIndex: Int?
+        for lineIndex in lineIndexes {
+            if let lastIndex = lastLineIndex {
+                #expect(lineIndex - 1 == lastIndex, "Skipped an index when iterating.")
+            } else {
+                #expect(lineIndex == 0, "First index was not 0")
+            }
+            lastLineIndex = lineIndex
+        }
+    }
+
+    @Test
+    func afterLayoutDoesntNeedLayout() {
+        layoutManager.layoutLines(in: NSRect(x: 0, y: 0, width: 1000, height: 1000))
+        #expect(layoutManager.needsLayout == false)
+    }
+
+    @Test
+    func invalidatingRangeLaysOutLines() {
+        layoutManager.layoutLines(in: NSRect(x: 0, y: 0, width: 1000, height: 1000))
+
+        let lineIds = Set(layoutManager.linesInRange(NSRange(start: 2, end: 4)).map { $0.data.id })
+        layoutManager.invalidateLayoutForRange(NSRange(start: 2, end: 4))
+
+        #expect(layoutManager.needsLayout == false) // No forced layout
+        #expect(
+            layoutManager
+                .linesInRange(NSRange(start: 2, end: 4))
+                .allSatisfy({ $0.data.needsLayout(maxWidth: .infinity) })
+        )
+
+        let invalidatedLineIds = layoutManager.layoutLines()
+
+        #expect(invalidatedLineIds == lineIds, "Invalidated lines != lines that were laid out in next pass.")
     }
 }

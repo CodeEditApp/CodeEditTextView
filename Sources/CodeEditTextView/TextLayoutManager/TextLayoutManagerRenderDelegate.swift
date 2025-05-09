@@ -18,7 +18,7 @@ public protocol TextLayoutManagerRenderDelegate: AnyObject {
         range: NSRange,
         stringRef: NSTextStorage,
         markedRanges: MarkedRanges?,
-        breakStrategy: LineBreakStrategy
+        attachments: [AnyTextAttachment]
     )
 
     func estimatedLineHeight() -> CGFloat?
@@ -35,14 +35,14 @@ public extension TextLayoutManagerRenderDelegate {
         range: NSRange,
         stringRef: NSTextStorage,
         markedRanges: MarkedRanges?,
-        breakStrategy: LineBreakStrategy
+        attachments: [AnyTextAttachment]
     ) {
         textLine.prepareForDisplay(
             displayData: displayData,
             range: range,
             stringRef: stringRef,
             markedRanges: markedRanges,
-            breakStrategy: breakStrategy
+            attachments: attachments
         )
     }
 

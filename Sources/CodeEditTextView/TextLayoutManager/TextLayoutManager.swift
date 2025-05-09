@@ -64,12 +64,14 @@ public class TextLayoutManager: NSObject {
         }
     }
 
+    public let attachments: TextAttachmentManager = TextAttachmentManager()
+
     // MARK: - Internal
 
     weak var textStorage: NSTextStorage?
     var lineStorage: TextLineStorage<TextLine> = TextLineStorage()
     var markedTextManager: MarkedTextManager = MarkedTextManager()
-    let viewReuseQueue: ViewReuseQueue<LineFragmentView, UUID> = ViewReuseQueue()
+    let viewReuseQueue: ViewReuseQueue<LineFragmentView, LineFragment.ID> = ViewReuseQueue()
     package var visibleLineIds: Set<TextLine.ID> = []
     /// Used to force a complete re-layout using `setNeedsLayout`
     package var needsLayout: Bool = false
@@ -130,6 +132,7 @@ public class TextLayoutManager: NSObject {
         self.renderDelegate = renderDelegate
         super.init()
         prepareTextLines()
+        attachments.layoutManager = self
     }
 
     /// Prepares the layout manager for use.

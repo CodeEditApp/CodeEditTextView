@@ -46,7 +46,9 @@ extension TextLayoutManager: NSTextStorageDelegate {
         removeLayoutLinesIn(range: insertedStringRange)
         insertNewLines(for: editedRange)
 
-        setNeedsLayout()
+        attachments.textUpdated(atOffset: editedRange.location, delta: delta)
+
+        invalidateLayoutForRange(insertedStringRange)
     }
 
     /// Removes all lines in the range, as if they were deleted. This is a setup for inserting the lines back in on an

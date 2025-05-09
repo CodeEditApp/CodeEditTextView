@@ -37,7 +37,7 @@ extension TextSelectionManager {
             height: rect.height
         ).intersection(rect)
 
-        for linePosition in layoutManager.lineStorage.linesInRange(range) {
+        for linePosition in layoutManager.linesInRange(range) {
             fillRects.append(
                 contentsOf: getFillRects(in: validTextDrawingRect, selectionRange: range, forPosition: linePosition)
             )

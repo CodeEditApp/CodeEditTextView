@@ -8,8 +8,7 @@ class MockRenderDelegate: TextLayoutManagerRenderDelegate {
         _ displayData: TextLine.DisplayData,
         _ range: NSRange,
         _ stringRef: NSTextStorage,
-        _ markedRanges: MarkedRanges?,
-        _ breakStrategy: LineBreakStrategy
+        _ markedRanges: MarkedRanges?
     ) -> Void)?
 
     var estimatedLineHeightOverride: (() -> CGFloat)?
@@ -20,21 +19,20 @@ class MockRenderDelegate: TextLayoutManagerRenderDelegate {
         range: NSRange,
         stringRef: NSTextStorage,
         markedRanges: MarkedRanges?,
-        breakStrategy: LineBreakStrategy
+        attachments: [AnyTextAttachment]
     ) {
         prepareForDisplay?(
             textLine,
             displayData,
             range,
             stringRef,
-            markedRanges,
-            breakStrategy
+            markedRanges
         ) ?? textLine.prepareForDisplay(
             displayData: displayData,
             range: range,
             stringRef: stringRef,
             markedRanges: markedRanges,
-            breakStrategy: breakStrategy
+            attachments: []
         )
     }
 
@@ -62,13 +60,13 @@ struct OverridingLayoutManagerRenderingTests {
 
     @Test
     func overriddenLineHeight() {
-        mockDelegate.prepareForDisplay = { textLine, displayData, range, stringRef, markedRanges, breakStrategy in
+        mockDelegate.prepareForDisplay = { textLine, displayData, range, stringRef, markedRanges in
             textLine.prepareForDisplay(
                 displayData: displayData,
                 range: range,
                 stringRef: stringRef,
                 markedRanges: markedRanges,
-                breakStrategy: breakStrategy
+                attachments: []
             )
             // Update all text fragments to be height = 2.0
             textLine.lineFragments.forEach { fragmentPosition in
