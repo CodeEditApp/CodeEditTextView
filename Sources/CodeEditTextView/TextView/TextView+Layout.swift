@@ -72,7 +72,7 @@ extension TextView {
         availableSize.height -= (scrollView?.contentInsets.top ?? 0) + (scrollView?.contentInsets.bottom ?? 0)
 
         let extraHeight = availableSize.height * overscrollAmount
-        let newHeight = max(layoutManager.estimatedHeight() + extraHeight, availableSize.height)
+        let newHeight = max(layoutManager.estimatedHeight() + extraHeight, availableSize.height, 0)
         let newWidth = layoutManager.estimatedWidth()
 
         var didUpdate = false
