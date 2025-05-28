@@ -187,6 +187,9 @@ struct TextLayoutManagerTests {
         #expect(layoutManager.needsLayout == false)
     }
 
+    /// Invalidating a range shouldn't cause a layout on any other lines next layout pass.
+    /// Note that this is correct behavior, and edits that add or remove lines will trigger another heuristic.
+    /// See `editsWithNewlinesForceLayoutGoingDownScreen`
     @Test
     func invalidatingRangeLaysOutLines() {
         layoutManager.layoutLines(in: NSRect(x: 0, y: 0, width: 1000, height: 1000))
@@ -203,6 +206,26 @@ struct TextLayoutManagerTests {
 
         let invalidatedLineIds = layoutManager.layoutLines()
 
-        #expect(invalidatedLineIds == lineIds, "Invalidated lines != lines that were laid out in next pass.")
+        #expect(
+            invalidatedLineIds.isSuperset(of: lineIds),
+            "Invalidated lines != lines that were laid out in next pass."
+        )
+    }
+
+    /// Inserting a new line should cause layout going down the rest of the screen, because the following lines
+    /// should have moved their position to accomodate the new line.
+    @Test
+    func editsWithNewlinesForceLayoutGoingDownScreen() {
+        layoutManager.layoutLines(in: NSRect(x: 0, y: 0, width: 1000, height: 1000))
+        textStorage.replaceCharacters(in: NSRange(start: 4, end: 4), with: "Z\n")
+
+        let expectedLineIds = Array(
+            layoutManager.lineStorage.linesInRange(NSRange(location: 4, length: 9))
+        ).map { $0.data.id }
+
+        #expect(layoutManager.needsLayout == false) // No forced layout for entire view
+
+        let invalidatedLineIds = layoutManager.layoutLines()
+        #expect(Set(expectedLineIds) == invalidatedLineIds)
     }
 }

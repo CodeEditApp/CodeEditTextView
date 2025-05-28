@@ -87,30 +87,28 @@ extension TextLayoutManager {
 #if DEBUG
         var laidOutLines: Set<TextLine.ID> = []
 #endif
-
         // Layout all lines, fetching lines lazily as they are laid out.
         for linePosition in linesStartingAt(minY, until: maxY).lazy {
             guard linePosition.yPos < maxY else { continue }
             // Three ways to determine if a line needs to be re-calculated.
-            let changedWidth = linePosition.data.needsLayout(maxWidth: maxLineLayoutWidth)
+            let linePositionNeedsLayout = linePosition.data.needsLayout(maxWidth: maxLineLayoutWidth)
             let wasNotVisible = !visibleLineIds.contains(linePosition.data.id)
             let lineNotEntirelyLaidOut = linePosition.height != linePosition.data.lineFragments.height
 
-            if forceLayout || changedWidth || wasNotVisible || lineNotEntirelyLaidOut {
+            if forceLayout || linePositionNeedsLayout || wasNotVisible || lineNotEntirelyLaidOut {
                 let lineSize = layoutLine(
                     linePosition,
                     textStorage: textStorage,
                     layoutData: LineLayoutData(minY: minY, maxY: maxY, maxWidth: maxLineLayoutWidth),
                     laidOutFragmentIDs: &usedFragmentIDs
                 )
-                if lineSize.height != linePosition.height {
+                let wasLineHeightChanged = lineSize.height != linePosition.height
+                if wasLineHeightChanged {
                     lineStorage.update(
                         atOffset: linePosition.range.location,
                         delta: 0,
                         deltaHeight: lineSize.height - linePosition.height
                     )
-                    // If we've updated a line's height, force re-layout for the rest of the pass.
-                    forceLayout = true
 
                     if linePosition.yPos < minY {
                         // Adjust the scroll position by the difference between the new height and old.
@@ -123,6 +121,14 @@ extension TextLayoutManager {
 #if DEBUG
                 laidOutLines.insert(linePosition.data.id)
 #endif
+                // If we've updated a line's height, or a line position was newly laid out, force re-layout for the
+                // rest of the pass (going down the screen).
+                //
+                // These two signals identify:
+                // - New lines being inserted & Lines being deleted (lineNotEntirelyLaidOut)
+                // - Line updated for width change (wasLineHeightChanged)
+
+                forceLayout = forceLayout || wasLineHeightChanged || lineNotEntirelyLaidOut
             } else {
                 // Make sure the used fragment views aren't dequeued.
                 usedFragmentIDs.formUnion(linePosition.data.lineFragments.map(\.data.id))
