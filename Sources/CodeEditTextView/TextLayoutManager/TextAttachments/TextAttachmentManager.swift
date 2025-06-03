@@ -23,11 +23,28 @@ public final class TextAttachmentManager {
         let attachment = AnyTextAttachment(range: range, attachment: attachment)
         let insertIndex = findInsertionIndex(for: range.location)
         orderedAttachments.insert(attachment, at: insertIndex)
+
+        // This is ugly, but if our attachment meets the end of the next line, we need to merge that line with this
+        // one.
+        var getNextOne = false
         layoutManager?.lineStorage.linesInRange(range).dropFirst().forEach {
             if $0.height != 0 {
                 layoutManager?.lineStorage.update(atOffset: $0.range.location, delta: 0, deltaHeight: -$0.height)
             }
+
+            // Only do this if it's not the end of the document
+            if range.max == $0.range.max && range.max != layoutManager?.lineStorage.length {
+                getNextOne = true
+            }
         }
+
+        if getNextOne,
+            let trailingLine = layoutManager?.lineStorage.getLine(atOffset: range.max),
+           trailingLine.height != 0 {
+            // Update the one trailing line.
+            layoutManager?.lineStorage.update(atOffset: range.max, delta: 0, deltaHeight: -trailingLine.height)
+        }
+
         layoutManager?.setNeedsLayout()
     }
 

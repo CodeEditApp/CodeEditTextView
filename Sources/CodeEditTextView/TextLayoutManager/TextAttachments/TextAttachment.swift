@@ -18,8 +18,8 @@ public protocol TextAttachment: AnyObject {
 /// This type cannot be initialized outside of `CodeEditTextView`, but will be received when interrogating
 /// the ``TextAttachmentManager``.
 public struct AnyTextAttachment: Equatable {
-    var range: NSRange
-    let attachment: any TextAttachment
+    package(set) public var range: NSRange
+    public let attachment: any TextAttachment
 
     var width: CGFloat {
         attachment.width
