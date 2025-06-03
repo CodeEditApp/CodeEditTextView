@@ -108,4 +108,14 @@ struct TextLayoutManagerAttachmentsTests {
         // Line "5" is from the trailing newline. That shows up as an empty line in the view.
         #expect(lines.map { $0.index } == [0, 4])
     }
+
+    @Test
+    func addingAttachmentThatMeetsEndOfLineMergesNextLine() throws {
+        let height = try #require(layoutManager.textLineForOffset(0)).height
+        layoutManager.attachments.add(DemoTextAttachment(), for: NSRange(start: 0, end: 3))
+
+        // With bug: this the line for offset 3 is > 0 because it wasn't updated for the new attachment.
+        #expect(layoutManager.textLineForOffset(0)?.height == height)
+        #expect(layoutManager.textLineForOffset(3)?.height == 0)
+    }
 }
