@@ -8,26 +8,33 @@
 
 /* Begin PBXBuildFile section */
 		6C2265DF2D306AB7008710D7 /* CodeEditTextView in Frameworks */ = {isa = PBXBuildFile; productRef = 6C2265DE2D306AB7008710D7 /* CodeEditTextView */; };
-		6C2265E42D306B90008710D7 /* SwiftUITextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C2265E32D306B90008710D7 /* SwiftUITextView.swift */; };
-		6C2265E62D306D37008710D7 /* TextViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C2265E52D306D37008710D7 /* TextViewController.swift */; };
-		6CCDA29B2D306A25007CD84A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6CCDA2942D306A25007CD84A /* Assets.xcassets */; };
-		6CCDA29D2D306A25007CD84A /* CodeEditTextViewExampleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CCDA2952D306A25007CD84A /* CodeEditTextViewExampleApp.swift */; };
-		6CCDA29E2D306A25007CD84A /* CodeEditTextViewExampleDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CCDA2962D306A25007CD84A /* CodeEditTextViewExampleDocument.swift */; };
-		6CCDA29F2D306A25007CD84A /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CCDA2972D306A25007CD84A /* ContentView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		6C2265E12D306B58008710D7 /* CodeEditTextViewExample.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CodeEditTextViewExample.entitlements; sourceTree = "<group>"; };
-		6C2265E32D306B90008710D7 /* SwiftUITextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftUITextView.swift; sourceTree = "<group>"; };
-		6C2265E52D306D37008710D7 /* TextViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextViewController.swift; sourceTree = "<group>"; };
 		6CCDA27D2D306A1B007CD84A /* CodeEditTextViewExample.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CodeEditTextViewExample.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		6CCDA2942D306A25007CD84A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		6CCDA2952D306A25007CD84A /* CodeEditTextViewExampleApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeEditTextViewExampleApp.swift; sourceTree = "<group>"; };
-		6CCDA2962D306A25007CD84A /* CodeEditTextViewExampleDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeEditTextViewExampleDocument.swift; sourceTree = "<group>"; };
-		6CCDA2972D306A25007CD84A /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		6CCDA2982D306A25007CD84A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		6CCDA2A12D306A5B007CD84A /* CodeEditTextView */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = CodeEditTextView; path = ../..; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		B6654F662DF001EB003B32B8 /* Exceptions for "CodeEditTextViewExample" folder in "CodeEditTextViewExample" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 6CCDA27C2D306A1B007CD84A /* CodeEditTextViewExample */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		B6654F5D2DF001EB003B32B8 /* CodeEditTextViewExample */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				B6654F662DF001EB003B32B8 /* Exceptions for "CodeEditTextViewExample" folder in "CodeEditTextViewExample" target */,
+			);
+			path = CodeEditTextViewExample;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		6CCDA27A2D306A1B007CD84A /* Frameworks */ = {
@@ -41,29 +48,11 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		6C2265E02D306AEB008710D7 /* Documents */ = {
-			isa = PBXGroup;
-			children = (
-				6CCDA2962D306A25007CD84A /* CodeEditTextViewExampleDocument.swift */,
-			);
-			path = Documents;
-			sourceTree = "<group>";
-		};
-		6C2265E22D306B69008710D7 /* Views */ = {
-			isa = PBXGroup;
-			children = (
-				6CCDA2972D306A25007CD84A /* ContentView.swift */,
-				6C2265E32D306B90008710D7 /* SwiftUITextView.swift */,
-				6C2265E52D306D37008710D7 /* TextViewController.swift */,
-			);
-			path = Views;
-			sourceTree = "<group>";
-		};
 		6CCDA2742D306A1B007CD84A = {
 			isa = PBXGroup;
 			children = (
 				6CCDA2A12D306A5B007CD84A /* CodeEditTextView */,
-				6CCDA2992D306A25007CD84A /* CodeEditTextViewExample */,
+				B6654F5D2DF001EB003B32B8 /* CodeEditTextViewExample */,
 				6CCDA2A02D306A5B007CD84A /* Frameworks */,
 				6CCDA27E2D306A1B007CD84A /* Products */,
 			);
@@ -75,19 +64,6 @@
 				6CCDA27D2D306A1B007CD84A /* CodeEditTextViewExample.app */,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-		6CCDA2992D306A25007CD84A /* CodeEditTextViewExample */ = {
-			isa = PBXGroup;
-			children = (
-				6CCDA2952D306A25007CD84A /* CodeEditTextViewExampleApp.swift */,
-				6C2265E02D306AEB008710D7 /* Documents */,
-				6C2265E22D306B69008710D7 /* Views */,
-				6CCDA2942D306A25007CD84A /* Assets.xcassets */,
-				6CCDA2982D306A25007CD84A /* Info.plist */,
-				6C2265E12D306B58008710D7 /* CodeEditTextViewExample.entitlements */,
-			);
-			path = CodeEditTextViewExample;
 			sourceTree = "<group>";
 		};
 		6CCDA2A02D306A5B007CD84A /* Frameworks */ = {
@@ -111,6 +87,9 @@
 			buildRules = (
 			);
 			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				B6654F5D2DF001EB003B32B8 /* CodeEditTextViewExample */,
 			);
 			name = CodeEditTextViewExample;
 			packageProductDependencies = (
@@ -159,7 +138,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				6CCDA29B2D306A25007CD84A /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -170,11 +148,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				6C2265E62D306D37008710D7 /* TextViewController.swift in Sources */,
-				6CCDA29D2D306A25007CD84A /* CodeEditTextViewExampleApp.swift in Sources */,
-				6CCDA29E2D306A25007CD84A /* CodeEditTextViewExampleDocument.swift in Sources */,
-				6CCDA29F2D306A25007CD84A /* ContentView.swift in Sources */,
-				6C2265E42D306B90008710D7 /* SwiftUITextView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
