@@ -102,7 +102,7 @@ Special thanks to [Matt Massicotte](https://twitter.com/mattie) for the great wo
   <tr>
     <td align="center">
       <a href="https://github.com/CodeEditApp/CodeEdit">
-        <img src="https://user-images.githubusercontent.com/806104/163099605-4eaedd33-8441-4125-9ca1-a7ccb2f62a74.png" height="128">
+        <img src="https://github.com/CodeEditApp/CodeEdit/blob/main/.github/CodeEdit-Icon-128@2x.png?raw=true" height="128">
         <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;CodeEdit&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</p>
       </a>
     </td>
