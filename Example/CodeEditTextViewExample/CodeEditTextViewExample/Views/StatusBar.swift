@@ -10,7 +10,7 @@ import SwiftUI
 struct StatusBar: View {
     @Environment(\.colorScheme)
     var colorScheme
-    
+
     var text: NSTextStorage
 
     @Binding var wrapLines: Bool
@@ -37,7 +37,6 @@ struct StatusBar: View {
                 .menuIndicator(.hidden)
                 .frame(maxWidth: 18, alignment: .center)
             Spacer()
-            
             Group {
                 Text("\(text.length) characters")
             }
