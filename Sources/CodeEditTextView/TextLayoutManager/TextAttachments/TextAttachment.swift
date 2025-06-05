@@ -10,6 +10,7 @@ import AppKit
 /// Represents an attachment type. Attachments take up some set width, and draw their contents in a receiver view.
 public protocol TextAttachment: AnyObject {
     var width: CGFloat { get }
+    var isSelected: Bool { get set }
     func draw(in context: CGContext, rect: NSRect)
 }
 

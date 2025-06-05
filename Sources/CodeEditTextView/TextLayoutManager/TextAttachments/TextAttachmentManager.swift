@@ -15,6 +15,7 @@ import Foundation
 public final class TextAttachmentManager {
     private var orderedAttachments: [AnyTextAttachment] = []
     weak var layoutManager: TextLayoutManager?
+    private var selectionObserver: (any NSObjectProtocol)?
 
     /// Adds a new attachment, keeping `orderedAttachments` sorted by range.location.
     /// If two attachments overlap, the layout phase will later ignore the one with the higher start.
@@ -94,7 +95,7 @@ public final class TextAttachmentManager {
     /// - Returns: An array of `AnyTextAttachment` instances whose ranges intersect `query`.
     public func getAttachmentsOverlapping(_ range: NSRange) -> [AnyTextAttachment] {
         // Find the first attachment whose end is beyond the start of the query.
-        guard let startIdx = firstIndex(where: { $0.range.upperBound > range.location }) else {
+        guard let startIdx = firstIndex(where: { $0.range.upperBound >= range.location }) else {
             return []
         }
 
@@ -107,8 +108,8 @@ public final class TextAttachmentManager {
             if attachment.range.location >= range.upperBound {
                 break
             }
-            if attachment.range.intersection(range)?.length ?? 0 > 0,
-               results.last?.range != attachment.range {
+            if (attachment.range.intersection(range)?.length ?? 0 > 0 || attachment.range.max == range.location)
+                && results.last?.range != attachment.range {
                 results.append(attachment)
             }
             idx += 1
@@ -129,6 +130,43 @@ public final class TextAttachmentManager {
             } else if attachment.range.location > atOffset {
                 orderedAttachments[idx].range.location += delta
             }
+        }
+    }
+    
+    /// Set up the attachment manager to listen to selection updates, giving text attachments a chance to respond to
+    /// selection state.
+    ///
+    /// This is specifically not in the initializer to prevent a bit of a chicken-and-the-egg situation where the
+    /// layout manager and selection manager need each other to init.
+    ///
+    /// - Parameter selectionManager: The selection manager to listen to.
+    func setUpSelectionListener(for selectionManager: TextSelectionManager) {
+        if let selectionObserver {
+            NotificationCenter.default.removeObserver(selectionObserver)
+        }
+
+        selectionObserver = NotificationCenter.default.addObserver(
+            forName: TextSelectionManager.selectionChangedNotification,
+            object: selectionManager,
+            queue: .main
+        ) { [weak self] notification in
+            guard let selectionManager = notification.object as? TextSelectionManager else {
+                return
+            }
+            let selectedSet = IndexSet(ranges: selectionManager.textSelections.map({ $0.range }))
+            for attachment in self?.orderedAttachments ?? [] {
+                let isSelected = selectedSet.contains(integersIn: attachment.range)
+                if attachment.attachment.isSelected != isSelected {
+                    self?.layoutManager?.invalidateLayoutForRange(attachment.range)
+                }
+                attachment.attachment.isSelected = isSelected
+            }
+        }
+    }
+
+    deinit {
+        if let selectionObserver {
+            NotificationCenter.default.removeObserver(selectionObserver)
         }
     }
 }

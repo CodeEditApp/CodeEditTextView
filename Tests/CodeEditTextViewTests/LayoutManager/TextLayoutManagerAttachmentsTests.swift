@@ -114,8 +114,8 @@ struct TextLayoutManagerAttachmentsTests {
         let height = try #require(layoutManager.textLineForOffset(0)).height
         layoutManager.attachments.add(DemoTextAttachment(), for: NSRange(start: 0, end: 3))
 
-        // With bug: this the line for offset 3 is > 0 because it wasn't updated for the new attachment.
-        #expect(layoutManager.textLineForOffset(0)?.height == height)
-        #expect(layoutManager.textLineForOffset(3)?.height == 0)
+        // With bug: the line for offset 3 would be the 2nd line (index 1). They should be merged
+        #expect(layoutManager.textLineForOffset(0)?.index == 0)
+        #expect(layoutManager.textLineForOffset(3)?.index == 0)
     }
 }

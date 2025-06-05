@@ -346,6 +346,8 @@ public class TextView: NSView, NSTextContent {
         selectionManager = setUpSelectionManager()
         selectionManager.useSystemCursor = useSystemCursor
 
+        layoutManager.attachments.setUpSelectionListener(for: selectionManager)
+
         _undoManager = CEUndoManager(textView: self)
 
         layoutManager.layoutLines()
