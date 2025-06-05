@@ -132,7 +132,7 @@ public final class TextAttachmentManager {
             }
         }
     }
-    
+
     /// Set up the attachment manager to listen to selection updates, giving text attachments a chance to respond to
     /// selection state.
     ///
