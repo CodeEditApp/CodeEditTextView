@@ -14,7 +14,7 @@ extension TextView {
     }
 
     override public var undoManager: UndoManager? {
-        _undoManager?.manager
+        _undoManager
     }
 
     @objc func undo(_ sender: AnyObject?) {
