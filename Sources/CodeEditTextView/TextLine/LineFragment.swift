@@ -47,6 +47,7 @@ public final class LineFragment: Identifiable, Equatable {
     }
 
     public let id = UUID()
+    public let lineRange: NSRange
     public let documentRange: NSRange
     public var contents: [FragmentContent]
     public var width: CGFloat
@@ -60,6 +61,7 @@ public final class LineFragment: Identifiable, Equatable {
     }
 
     init(
+        lineRange: NSRange,
         documentRange: NSRange,
         contents: [FragmentContent],
         width: CGFloat,
@@ -67,6 +69,7 @@ public final class LineFragment: Identifiable, Equatable {
         descent: CGFloat,
         lineHeightMultiplier: CGFloat
     ) {
+        self.lineRange = lineRange
         self.documentRange = documentRange
         self.contents = contents
         self.width = width
@@ -100,52 +103,6 @@ public final class LineFragment: Identifiable, Equatable {
         case .attachment:
             return position.xPos
         }
-    }
-
-    public func draw(in context: CGContext, yPos: CGFloat) {
-        context.saveGState()
-
-        // Removes jagged edges
-        context.setAllowsAntialiasing(true)
-        context.setShouldAntialias(true)
-
-        // Effectively increases the screen resolution by drawing text in each LED color pixel (R, G, or B), rather than
-        // the triplet of pixels (RGB) for a regular pixel. This can increase text clarity, but loses effectiveness
-        // in low-contrast settings.
-        context.setAllowsFontSubpixelPositioning(true)
-        context.setShouldSubpixelPositionFonts(true)
-
-        // Quantizes the position of each glyph, resulting in slightly less accurate positioning, and gaining higher
-        // quality bitmaps and performance.
-        context.setAllowsFontSubpixelQuantization(true)
-        context.setShouldSubpixelQuantizeFonts(true)
-
-        ContextSetHiddenSmoothingStyle(context, 16)
-
-        context.textMatrix = .init(scaleX: 1, y: -1)
-
-        var currentPosition: CGFloat = 0.0
-        var currentLocation = 0
-        for content in contents {
-            context.saveGState()
-            switch content.data {
-            case .text(let ctLine):
-                context.textPosition = CGPoint(
-                    x: currentPosition,
-                    y: yPos + height - descent + (heightDifference/2)
-                ).pixelAligned
-                CTLineDraw(ctLine, context)
-            case .attachment(let attachment):
-                attachment.attachment.draw(
-                    in: context,
-                    rect: NSRect(x: currentPosition, y: yPos, width: attachment.width, height: scaledHeight)
-                )
-            }
-            context.restoreGState()
-            currentPosition += content.width
-            currentLocation += content.length
-        }
-        context.restoreGState()
     }
 
     package func findContent(at location: Int) -> (content: FragmentContent, position: ContentPosition)? {

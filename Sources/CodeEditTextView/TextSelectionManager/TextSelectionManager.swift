@@ -179,7 +179,7 @@ public class TextSelectionManager: NSObject {
                             cursorTimer.register(internalCursorView)
                         }
 
-                        textView?.addSubview(cursorView)
+                        textView?.addSubview(cursorView, positioned: .above, relativeTo: nil)
                     }
 
                     cursorView.frame.origin = cursorRect.origin

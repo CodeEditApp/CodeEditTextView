@@ -10,6 +10,7 @@ import AppKit
 /// Displays a line fragment.
 open class LineFragmentView: NSView {
     public weak var lineFragment: LineFragment?
+    public weak var renderer: LineFragmentRenderer?
 
     open override var isFlipped: Bool {
         true
@@ -29,8 +30,9 @@ open class LineFragmentView: NSView {
 
     /// Set a new line fragment for this view, updating view size.
     /// - Parameter newFragment: The new fragment to use.
-    open func setLineFragment(_ newFragment: LineFragment) {
+    open func setLineFragment(_ newFragment: LineFragment, renderer: LineFragmentRenderer) {
         self.lineFragment = newFragment
+        self.renderer = renderer
         self.frame.size = CGSize(width: newFragment.width, height: newFragment.scaledHeight)
     }
 
@@ -40,6 +42,6 @@ open class LineFragmentView: NSView {
             return
         }
 
-        lineFragment.draw(in: context, yPos: 0.0)
+        renderer?.draw(lineFragment: lineFragment, in: context, yPos: 0.0)
     }
 }

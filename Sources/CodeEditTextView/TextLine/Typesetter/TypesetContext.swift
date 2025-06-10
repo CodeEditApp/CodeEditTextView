@@ -61,6 +61,7 @@ struct TypesetContext {
     /// Pop the current fragment state into a new line fragment, and reset the fragment state.
     mutating func popCurrentData() {
         let fragment = LineFragment(
+            lineRange: documentRange,
             documentRange: NSRange(
                 location: fragmentContext.start + documentRange.location,
                 length: currentPosition - fragmentContext.start
