@@ -44,6 +44,10 @@ public final class LineFragmentRenderer {
     ///   - context: The drawing context to draw into.
     ///   - yPos: In the drawing context, what `y` position to start drawing at.
     public func draw(lineFragment: LineFragment, in context: CGContext, yPos: CGFloat) {
+        if invisibleCharacterDelegate?.invisibleStyleShouldClearCache() == true {
+            attributedStringCache.removeAll(keepingCapacity: true)
+        }
+
         context.saveGState()
         // Removes jagged edges
         context.setAllowsAntialiasing(true)
@@ -147,7 +151,7 @@ public final class LineFragmentRenderer {
 
         lazy var offset = CTLineGetStringRange(drawingContext.ctLine).location
 
-        for (idx, character) in string.enumerated()
+        for (idx, character) in string.utf16.enumerated()
         where delegate.triggerCharacters.contains(character) {
             processInvisibleCharacter(
                 character: character,
@@ -163,7 +167,7 @@ public final class LineFragmentRenderer {
     // Disabling the next lint warning because I *cannot* figure out how to split this up further.
 
     private func processInvisibleCharacter( // swiftlint:disable:this function_parameter_count
-        character: Character,
+        character: UInt16,
         at index: Int,
         in range: NSRange,
         offset: Int,

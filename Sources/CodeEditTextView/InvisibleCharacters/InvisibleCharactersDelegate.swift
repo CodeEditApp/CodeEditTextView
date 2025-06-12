@@ -14,6 +14,7 @@ public enum InvisibleCharacterStyle: Hashable {
 }
 
 public protocol InvisibleCharactersDelegate: AnyObject {
-    var triggerCharacters: Set<Character> { get }
-    func invisibleStyle(for character: Character, at range: NSRange, lineRange: NSRange) -> InvisibleCharacterStyle?
+    var triggerCharacters: Set<UInt16> { get }
+    func invisibleStyleShouldClearCache() -> Bool
+    func invisibleStyle(for character: UInt16, at range: NSRange, lineRange: NSRange) -> InvisibleCharacterStyle?
 }
