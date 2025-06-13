@@ -3,6 +3,7 @@ import XCTest
 
 final class DemoTextAttachment: TextAttachment {
     var width: CGFloat
+    var isSelected: Bool = false
 
     init(width: CGFloat = 100) {
         self.width = width

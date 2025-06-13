@@ -69,7 +69,7 @@ public class TextLayoutManager: NSObject {
     // MARK: - Internal
 
     weak var textStorage: NSTextStorage?
-    var lineStorage: TextLineStorage<TextLine> = TextLineStorage()
+    public var lineStorage: TextLineStorage<TextLine> = TextLineStorage()
     var markedTextManager: MarkedTextManager = MarkedTextManager()
     let viewReuseQueue: ViewReuseQueue<LineFragmentView, LineFragment.ID> = ViewReuseQueue()
     package var visibleLineIds: Set<TextLine.ID> = []

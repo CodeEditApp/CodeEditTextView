@@ -203,7 +203,7 @@ extension TextLayoutManager {
     ///   - line: The line to calculate rects for.
     /// - Returns: Multiple bounding rects. Will return one rect for each line fragment that overlaps the given range.
     public func rectsFor(range: NSRange) -> [CGRect] {
-        return lineStorage.linesInRange(range).flatMap { self.rectsFor(range: range, in: $0) }
+        return linesInRange(range).flatMap { self.rectsFor(range: range, in: $0) }
     }
 
     /// Calculates all text bounding rects that intersect with a given range, with a given line position.

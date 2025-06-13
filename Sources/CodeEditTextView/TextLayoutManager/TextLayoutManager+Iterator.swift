@@ -196,7 +196,7 @@ public extension TextLayoutManager {
         }
 
         if lastAttachment.range.max > originalPosition.position.range.max,
-           let extendedLinePosition = lineStorage.getLine(atOffset: lastAttachment.range.max) {
+           var extendedLinePosition = lineStorage.getLine(atOffset: lastAttachment.range.max) {
             newPosition = TextLineStorage<TextLine>.TextLinePosition(
                 data: newPosition.data,
                 range: NSRange(start: newPosition.range.location, end: extendedLinePosition.range.max),
@@ -205,6 +205,14 @@ public extension TextLayoutManager {
                 index: newPosition.index // We want to keep the minimum index.
             )
             maxIndex = max(maxIndex, extendedLinePosition.index)
+        }
+
+        if firstAttachment.range.location == newPosition.range.location {
+            minIndex = max(minIndex, 0)
+        }
+
+        if lastAttachment.range.max == newPosition.range.max {
+            maxIndex = min(maxIndex, lineStorage.count - 1)
         }
 
         // Base case, we haven't updated anything
