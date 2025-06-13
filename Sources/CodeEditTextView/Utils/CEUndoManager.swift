@@ -15,45 +15,7 @@ import TextStory
 /// - Grouping pasted text
 ///
 /// If needed, the automatic undo grouping can be overridden using the `beginGrouping()` and `endGrouping()` methods.
-public class CEUndoManager {
-    /// An `UndoManager` subclass that forwards relevant actions to a `CEUndoManager`.
-    /// Allows for objects like `TextView` to use the `UndoManager` API
-    /// while CETV manages the undo/redo actions.
-    public class DelegatedUndoManager: UndoManager {
-        weak var parent: CEUndoManager?
-
-        public override var isUndoing: Bool { parent?.isUndoing ?? false }
-        public override var isRedoing: Bool { parent?.isRedoing ?? false }
-        public override var canUndo: Bool { parent?.canUndo ?? false }
-        public override var canRedo: Bool { parent?.canRedo ?? false }
-
-        public func registerMutation(_ mutation: TextMutation) {
-            parent?.registerMutation(mutation)
-            removeAllActions()
-        }
-
-        public override func undo() {
-            parent?.undo()
-        }
-
-        public override func redo() {
-            parent?.redo()
-        }
-
-        public override func beginUndoGrouping() {
-            parent?.beginUndoGrouping()
-        }
-
-        public override func endUndoGrouping() {
-            parent?.endUndoGrouping()
-        }
-
-        public override func registerUndo(withTarget target: Any, selector: Selector, object anObject: Any?) {
-            // no-op, but just in case to save resources:
-            removeAllActions()
-        }
-    }
-
+public class CEUndoManager: UndoManager {
     /// Represents a group of mutations that should be treated as one mutation when undoing/redoing.
     private struct UndoGroup {
         var mutations: [Mutation]
@@ -65,16 +27,17 @@ public class CEUndoManager {
         var inverse: TextMutation
     }
 
-    public let manager: DelegatedUndoManager
-    private(set) public var isUndoing: Bool = false
-    private(set) public var isRedoing: Bool = false
+    private var _isUndoing: Bool = false
+    private var _isRedoing: Bool = false
 
-    public var canUndo: Bool {
-        !undoStack.isEmpty
-    }
-    public var canRedo: Bool {
-        !redoStack.isEmpty
-    }
+    override public var isUndoing: Bool { _isUndoing }
+    override public var isRedoing: Bool { _isRedoing }
+
+    override public var undoCount: Int { undoStack.count }
+    override public var redoCount: Int { redoStack.count }
+
+    override public var canUndo: Bool { !undoStack.isEmpty }
+    override public var canRedo: Bool { !redoStack.isEmpty }
 
     /// A stack of operations that can be undone.
     private var undoStack: [UndoGroup] = []
@@ -93,10 +56,7 @@ public class CEUndoManager {
 
     // MARK: - Init
 
-    public init() {
-        self.manager = DelegatedUndoManager()
-        manager.parent = self
-    }
+    override public init() { }
 
     convenience init(textView: TextView) {
         self.init()
@@ -106,37 +66,49 @@ public class CEUndoManager {
     // MARK: - Undo/Redo
 
     /// Performs an undo operation if there is one available.
-    public func undo() {
-        guard !isDisabled, let item = undoStack.popLast(), let textView else {
+    override public func undo() {
+        guard !isDisabled, let textView else {
             return
         }
-        isUndoing = true
-        NotificationCenter.default.post(name: .NSUndoManagerWillUndoChange, object: self.manager)
+
+        guard let item = undoStack.popLast() else {
+            NSSound.beep()
+            return
+        }
+
+        _isUndoing = true
+        NotificationCenter.default.post(name: .NSUndoManagerWillUndoChange, object: self)
         textView.textStorage.beginEditing()
         for mutation in item.mutations.reversed() {
             textView.replaceCharacters(in: mutation.inverse.range, with: mutation.inverse.string)
         }
         textView.textStorage.endEditing()
-        NotificationCenter.default.post(name: .NSUndoManagerDidUndoChange, object: self.manager)
+        NotificationCenter.default.post(name: .NSUndoManagerDidUndoChange, object: self)
         redoStack.append(item)
-        isUndoing = false
+        _isUndoing = false
     }
 
     /// Performs a redo operation if there is one available.
-    public func redo() {
-        guard !isDisabled, let item = redoStack.popLast(), let textView else {
+    override public func redo() {
+        guard !isDisabled, let textView else {
             return
         }
-        isRedoing = true
-        NotificationCenter.default.post(name: .NSUndoManagerWillRedoChange, object: self.manager)
+
+        guard let item = redoStack.popLast() else {
+            NSSound.beep()
+            return
+        }
+
+        _isRedoing = true
+        NotificationCenter.default.post(name: .NSUndoManagerWillRedoChange, object: self)
         textView.textStorage.beginEditing()
         for mutation in item.mutations {
             textView.replaceCharacters(in: mutation.mutation.range, with: mutation.mutation.string)
         }
         textView.textStorage.endEditing()
-        NotificationCenter.default.post(name: .NSUndoManagerDidRedoChange, object: self.manager)
+        NotificationCenter.default.post(name: .NSUndoManagerDidRedoChange, object: self)
         undoStack.append(item)
-        isRedoing = false
+        _isRedoing = false
     }
 
     /// Clears the undo/redo stacks.
@@ -147,11 +119,17 @@ public class CEUndoManager {
 
     // MARK: - Mutations
 
+    public override func registerUndo(withTarget target: Any, selector: Selector, object anObject: Any?) {
+        // no-op, but just in case to save resources:
+        removeAllActions()
+    }
+
     /// Registers a mutation into the undo stack.
     ///
     /// Calling this method while the manager is in an undo/redo operation will result in a no-op.
     /// - Parameter mutation: The mutation to register for undo/redo
     public func registerMutation(_ mutation: TextMutation) {
+        removeAllActions()
         guard let textView,
               let textStorage = textView.textStorage,
               !isUndoing,
@@ -178,7 +156,7 @@ public class CEUndoManager {
     // MARK: - Grouping
 
     /// Groups all incoming mutations.
-    public func beginUndoGrouping() {
+    override public func beginUndoGrouping() {
         guard !isGrouping else { return }
         isGrouping = true
         // This is a new undo group, break for it.
@@ -186,7 +164,7 @@ public class CEUndoManager {
     }
 
     /// Stops grouping all incoming mutations.
-    public func endUndoGrouping() {
+    override public func endUndoGrouping() {
         guard isGrouping else { return }
         isGrouping = false
         // We just ended a group, do not allow the next mutation to be added to the group we just made.
