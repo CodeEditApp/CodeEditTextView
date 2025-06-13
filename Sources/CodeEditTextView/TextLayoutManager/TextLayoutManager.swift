@@ -66,12 +66,21 @@ public class TextLayoutManager: NSObject {
 
     public let attachments: TextAttachmentManager = TextAttachmentManager()
 
+    public weak var invisibleCharacterDelegate: InvisibleCharactersDelegate? {
+        didSet {
+            lineFragmentRenderer.invisibleCharacterDelegate = invisibleCharacterDelegate
+            layoutView?.needsDisplay = true
+        }
+    }
+
     // MARK: - Internal
 
     weak var textStorage: NSTextStorage?
     var lineStorage: TextLineStorage<TextLine> = TextLineStorage()
     var markedTextManager: MarkedTextManager = MarkedTextManager()
     let viewReuseQueue: ViewReuseQueue<LineFragmentView, LineFragment.ID> = ViewReuseQueue()
+    let lineFragmentRenderer: LineFragmentRenderer
+
     package var visibleLineIds: Set<TextLine.ID> = []
     /// Used to force a complete re-layout using `setNeedsLayout`
     package var needsLayout: Bool = false
@@ -122,7 +131,8 @@ public class TextLayoutManager: NSObject {
         wrapLines: Bool,
         textView: NSView,
         delegate: TextLayoutManagerDelegate?,
-        renderDelegate: TextLayoutManagerRenderDelegate? = nil
+        renderDelegate: TextLayoutManagerRenderDelegate? = nil,
+        invisibleCharacterDelegate: InvisibleCharactersDelegate? = nil
     ) {
         self.textStorage = textStorage
         self.lineHeightMultiplier = lineHeightMultiplier
@@ -130,6 +140,11 @@ public class TextLayoutManager: NSObject {
         self.layoutView = textView
         self.delegate = delegate
         self.renderDelegate = renderDelegate
+        self.lineFragmentRenderer = LineFragmentRenderer(
+            textStorage: textStorage,
+            invisibleCharacterDelegate: invisibleCharacterDelegate
+        )
+        self.invisibleCharacterDelegate = invisibleCharacterDelegate
         super.init()
         prepareTextLines()
         attachments.layoutManager = self
@@ -166,6 +181,7 @@ public class TextLayoutManager: NSObject {
         viewReuseQueue.usedViews.removeAll()
         maxLineWidth = 0
         markedTextManager.removeAll()
+        lineFragmentRenderer.textStorage = textStorage
         prepareTextLines()
         setNeedsLayout()
     }

@@ -70,13 +70,17 @@ class DraggingTextRenderer: NSView {
         yOffset: CGFloat,
         context: CGContext
     ) {
+        let renderer = LineFragmentRenderer(
+            textStorage: layoutManager.textStorage,
+            invisibleCharacterDelegate: layoutManager.invisibleCharacterDelegate
+        )
         for fragment in line.data.lineFragments {
             guard let fragmentRange = fragment.range.shifted(by: line.range.location),
                   fragmentRange.intersection(selectedRange) != nil else {
                 continue
             }
             let fragmentYPos = line.yPos + fragment.yPos - yOffset
-            fragment.data.draw(in: context, yPos: fragmentYPos)
+            renderer.draw(lineFragment: fragment.data, in: context, yPos: fragmentYPos)
 
             // Clear text that's not selected
             if fragmentRange.contains(selectedRange.lowerBound) {

@@ -230,6 +230,7 @@ final public class Typesetter {
         // Insert an empty fragment
         let ctLine = CTTypesetterCreateLine(typesetter, CFRangeMake(0, 0))
         let fragment = LineFragment(
+            lineRange: documentRange ?? .zero,
             documentRange: NSRange(location: (documentRange ?? .notFound).location, length: 0),
             contents: [.init(data: .text(line: ctLine), width: 0.0)],
             width: 0,

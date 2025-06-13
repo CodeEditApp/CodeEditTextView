@@ -251,9 +251,9 @@ extension TextLayoutManager {
             renderDelegate?.lineFragmentView(for: lineFragment.data) ?? LineFragmentView()
         }
         view.translatesAutoresizingMaskIntoConstraints = false
-        view.setLineFragment(lineFragment.data)
+        view.setLineFragment(lineFragment.data, renderer: lineFragmentRenderer)
         view.frame.origin = CGPoint(x: edgeInsets.left, y: yPos)
-        layoutView?.addSubview(view)
+        layoutView?.addSubview(view, positioned: .below, relativeTo: nil)
         view.needsDisplay = true
     }
 }
