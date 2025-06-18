@@ -255,9 +255,9 @@ extension TextView: NSDraggingSource {
             insertText("") // Replace the selected ranges with nothing
         }
 
-        undoManager?.endUndoGrouping()
-
         replaceCharacters(in: [NSRange(location: insertionOffset, length: 0)], with: insertionString)
+
+        undoManager?.endUndoGrouping()
 
         selectionManager.setSelectedRange(
             NSRange(location: insertionOffset, length: NSString(string: insertionString).length)
