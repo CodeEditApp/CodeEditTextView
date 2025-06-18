@@ -85,6 +85,7 @@ public class CEUndoManager: UndoManager {
         textView.textStorage.endEditing()
 
         updateSelectionsForMutations(mutations: item.mutations.map { $0.mutation })
+        textView.scrollSelectionToVisible()
 
         NotificationCenter.default.post(name: .NSUndoManagerDidUndoChange, object: self)
         redoStack.append(item)
@@ -112,6 +113,7 @@ public class CEUndoManager: UndoManager {
         textView.textStorage.endEditing()
 
         updateSelectionsForMutations(mutations: item.mutations.map { $0.inverse })
+        textView.scrollSelectionToVisible()
 
         NotificationCenter.default.post(name: .NSUndoManagerDidRedoChange, object: self)
         undoStack.append(item)
