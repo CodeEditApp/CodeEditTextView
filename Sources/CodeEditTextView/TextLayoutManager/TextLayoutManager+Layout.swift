@@ -250,7 +250,7 @@ extension TextLayoutManager {
         let view = viewReuseQueue.getOrCreateView(forKey: lineFragment.data.id) {
             renderDelegate?.lineFragmentView(for: lineFragment.data) ?? LineFragmentView()
         }
-        view.translatesAutoresizingMaskIntoConstraints = false
+        view.translatesAutoresizingMaskIntoConstraints = true // Small optimization for lots of subviews
         view.setLineFragment(lineFragment.data, renderer: lineFragmentRenderer)
         view.frame.origin = CGPoint(x: edgeInsets.left, y: yPos)
         layoutView?.addSubview(view, positioned: .below, relativeTo: nil)
