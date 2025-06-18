@@ -83,6 +83,10 @@ public class CEUndoManager: UndoManager {
             textView.replaceCharacters(in: mutation.inverse.range, with: mutation.inverse.string)
         }
         textView.textStorage.endEditing()
+
+        updateSelectionsForMutations(mutations: item.mutations.map { $0.mutation })
+        textView.scrollSelectionToVisible()
+
         NotificationCenter.default.post(name: .NSUndoManagerDidUndoChange, object: self)
         redoStack.append(item)
         _isUndoing = false
@@ -101,14 +105,39 @@ public class CEUndoManager: UndoManager {
 
         _isRedoing = true
         NotificationCenter.default.post(name: .NSUndoManagerWillRedoChange, object: self)
+        textView.selectionManager.removeCursors()
         textView.textStorage.beginEditing()
         for mutation in item.mutations {
             textView.replaceCharacters(in: mutation.mutation.range, with: mutation.mutation.string)
         }
         textView.textStorage.endEditing()
+
+        updateSelectionsForMutations(mutations: item.mutations.map { $0.inverse })
+        textView.scrollSelectionToVisible()
+
         NotificationCenter.default.post(name: .NSUndoManagerDidRedoChange, object: self)
         undoStack.append(item)
         _isRedoing = false
+    }
+
+    /// We often undo/redo a group of mutations that contain updated ranges that are next to each other but for a user
+    /// should be one continuous range. This merges those ranges into a set of disjoint ranges before updating the
+    /// selection manager.
+    private func updateSelectionsForMutations(mutations: [TextMutation]) {
+        if mutations.reduce(0, { $0 + $1.range.length }) == 0 {
+            if let minimumMutation = mutations.min(by: { $0.range.location < $1.range.location }) {
+                // If the mutations are only deleting text (no replacement), we just place the cursor at the last range,
+                // since all the ranges are the same but the other method will return no ranges (empty range).
+                textView?.selectionManager.setSelectedRange(
+                    NSRange(location: minimumMutation.range.location, length: 0)
+                )
+            }
+        } else {
+            let mergedRanges = mutations.reduce(into: IndexSet(), { set, mutation in
+                set.insert(range: mutation.range)
+            })
+            textView?.selectionManager.setSelectedRanges(mergedRanges.rangeView.map { NSRange($0) })
+        }
     }
 
     /// Clears the undo/redo stacks.

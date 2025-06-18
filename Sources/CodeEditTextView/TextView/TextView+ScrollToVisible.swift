@@ -14,11 +14,9 @@ extension TextView {
 
     /// Scrolls the upmost selection to the visible rect if `scrollView` is not `nil`.
     public func scrollSelectionToVisible() {
-        guard let scrollView, let selection = getSelection() else {
+        guard let scrollView else {
             return
         }
-
-        let offsetToScrollTo = offsetNotPivot(selection)
 
         // There's a bit of a chicken-and-the-egg issue going on here. We need to know the rect to scroll to, but we
         // can't know the exact rect to make visible without laying out the text. Then, once text is laid out the
@@ -26,7 +24,7 @@ extension TextView {
         // pass and scroll to that rect.
 
         var lastFrame: CGRect = .zero
-        while let boundingRect = layoutManager.rectForOffset(offsetToScrollTo), lastFrame != boundingRect {
+        while let boundingRect = getSelection()?.boundingRect, lastFrame != boundingRect {
             lastFrame = boundingRect
             layoutManager.layoutLines()
             selectionManager.updateSelectionViews()
@@ -34,6 +32,7 @@ extension TextView {
         }
         if lastFrame != .zero {
             scrollView.contentView.scrollToVisible(lastFrame)
+            scrollView.reflectScrolledClipView(scrollView.contentView)
         }
     }
 
