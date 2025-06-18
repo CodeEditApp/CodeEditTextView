@@ -27,6 +27,25 @@ class TextViewController: NSViewController {
             textView.wrapLines = wrapLines
         }
     }
+    var useSystemCursor: Bool = false {
+        didSet {
+            textView.useSystemCursor = useSystemCursor
+            // Force cursor update by temporarily removing and re-adding the selection
+            if let range = textView.selectionManager.textSelections.first?.range {
+                textView.selectionManager.setSelectedRange(NSRange(location: range.location, length: 0))
+            }
+        }
+    }
+    var isSelectable: Bool = true {
+        didSet {
+            textView.isSelectable = isSelectable
+        }
+    }
+    var isEditable: Bool = true {
+        didSet {
+            textView.isEditable = isEditable
+        }
+    }
 
     init(string: String) {
         textView = TextView(string: string)
