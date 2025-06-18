@@ -122,10 +122,14 @@ public class CEUndoManager: UndoManager {
     /// should be one continuous range. This merges those ranges into a set of disjoint ranges before updating the
     /// selection manager.
     private func updateSelectionsForMutations(mutations: [TextMutation]) {
-        if mutations.reduce(0, { $0 + $1.range.length }) == 0, let last = mutations.last {
-            // If the mutations are only deleting text (no replacement), we just place the cursor at the last range,
-            // since all the ranges are the same but the other method will return no ranges (empty range).
-            textView?.selectionManager.setSelectedRange(last.range)
+        if mutations.reduce(0, { $0 + $1.range.length }) == 0 {
+            if let minimumMutation = mutations.min(by: { $0.range.location < $1.range.location }) {
+                // If the mutations are only deleting text (no replacement), we just place the cursor at the last range,
+                // since all the ranges are the same but the other method will return no ranges (empty range).
+                textView?.selectionManager.setSelectedRange(
+                    NSRange(location: minimumMutation.range.location, length: 0)
+                )
+            }
         } else {
             let mergedRanges = mutations.reduce(into: IndexSet(), { set, mutation in
                 set.insert(range: mutation.range)
