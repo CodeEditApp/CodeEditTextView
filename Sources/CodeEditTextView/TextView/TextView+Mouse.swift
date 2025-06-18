@@ -41,10 +41,11 @@ extension TextView {
             super.mouseDown(with: event)
             return
         }
-        if event.modifierFlags.intersection(.deviceIndependentFlagsMask).isSuperset(of: [.control, .shift]) {
+        let eventFlags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if eventFlags == [.control, .shift] {
             unmarkText()
             selectionManager.addSelectedRange(NSRange(location: offset, length: 0))
-        } else if event.modifierFlags.intersection(.deviceIndependentFlagsMask).contains(.shift) {
+        } else if eventFlags.contains(.shift) {
             unmarkText()
             shiftClickExtendSelection(to: offset)
         } else {
@@ -96,40 +97,11 @@ extension TextView {
                 return
             }
 
-            switch cursorSelectionMode {
-            case .character:
-                selectionManager.setSelectedRange(
-                    NSRange(
-                        location: min(startPosition, endPosition),
-                        length: max(startPosition, endPosition) - min(startPosition, endPosition)
-                    )
-                )
-
-            case .word:
-                let startWordRange = findWordBoundary(at: startPosition)
-                let endWordRange = findWordBoundary(at: endPosition)
-
-                selectionManager.setSelectedRange(
-                    NSRange(
-                        location: min(startWordRange.location, endWordRange.location),
-                        length: max(startWordRange.location + startWordRange.length,
-                                    endWordRange.location + endWordRange.length) -
-                                min(startWordRange.location, endWordRange.location)
-                    )
-                )
-
-            case .line:
-                let startLineRange = findLineBoundary(at: startPosition)
-                let endLineRange = findLineBoundary(at: endPosition)
-
-                selectionManager.setSelectedRange(
-                    NSRange(
-                        location: min(startLineRange.location, endLineRange.location),
-                        length: max(startLineRange.location + startLineRange.length,
-                                    endLineRange.location + endLineRange.length) -
-                                min(startLineRange.location, endLineRange.location)
-                    )
-                )
+            let modifierFlags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            if modifierFlags.contains(.option) {
+                dragColumnSelection(mouseDragAnchor: mouseDragAnchor, event: event)
+            } else {
+                dragSelection(startPosition: startPosition, endPosition: endPosition, mouseDragAnchor: mouseDragAnchor)
             }
 
             setNeedsDisplay()
@@ -181,5 +153,84 @@ extension TextView {
     func disableMouseAutoscrollTimer() {
         mouseDragTimer?.invalidate()
         mouseDragTimer = nil
+    }
+
+    private func dragSelection(startPosition: Int, endPosition: Int, mouseDragAnchor: CGPoint) {
+        switch cursorSelectionMode {
+        case .character:
+            selectionManager.setSelectedRange(
+                NSRange(
+                    location: min(startPosition, endPosition),
+                    length: max(startPosition, endPosition) - min(startPosition, endPosition)
+                )
+            )
+
+        case .word:
+            let startWordRange = findWordBoundary(at: startPosition)
+            let endWordRange = findWordBoundary(at: endPosition)
+
+            selectionManager.setSelectedRange(
+                NSRange(
+                    location: min(startWordRange.location, endWordRange.location),
+                    length: max(startWordRange.location + startWordRange.length,
+                                endWordRange.location + endWordRange.length) -
+                    min(startWordRange.location, endWordRange.location)
+                )
+            )
+
+        case .line:
+            let startLineRange = findLineBoundary(at: startPosition)
+            let endLineRange = findLineBoundary(at: endPosition)
+
+            selectionManager.setSelectedRange(
+                NSRange(
+                    location: min(startLineRange.location, endLineRange.location),
+                    length: max(startLineRange.location + startLineRange.length,
+                                endLineRange.location + endLineRange.length) -
+                    min(startLineRange.location, endLineRange.location)
+                )
+            )
+        }
+    }
+
+    private func dragColumnSelection(mouseDragAnchor: CGPoint, event: NSEvent) {
+        // Drag the selection and select in columns
+        let eventLocation = convert(event.locationInWindow, from: nil)
+
+        let start = CGPoint(
+            x: min(mouseDragAnchor.x, eventLocation.x),
+            y: min(mouseDragAnchor.y, eventLocation.y)
+        )
+        let end = CGPoint(
+            x: max(mouseDragAnchor.x, eventLocation.x),
+            y: max(mouseDragAnchor.y, eventLocation.y)
+        )
+
+        // Collect all overlapping text ranges
+        var selectedRanges: [NSRange] = layoutManager.linesStartingAt(start.y, until: end.y).flatMap { textLine in
+            // Collect fragment ranges
+            return textLine.data.lineFragments.compactMap { lineFragment -> NSRange? in
+                let startOffset = self.layoutManager.textOffsetAtPoint(
+                    start,
+                    fragmentPosition: lineFragment,
+                    linePosition: textLine
+                )
+                let endOffset = self.layoutManager.textOffsetAtPoint(
+                    end,
+                    fragmentPosition: lineFragment,
+                    linePosition: textLine
+                )
+                guard let startOffset, let endOffset else { return nil }
+
+                return NSRange(start: startOffset, end: endOffset)
+            }
+        }
+
+        // If we have some non-cursor selections, filter out any cursor selections
+        if selectedRanges.contains(where: { !$0.isEmpty }) {
+            selectedRanges = selectedRanges.filter({ !$0.isEmpty })
+        }
+
+        selectionManager.setSelectedRanges(selectedRanges)
     }
 }
