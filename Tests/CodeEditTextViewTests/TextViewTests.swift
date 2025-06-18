@@ -64,4 +64,18 @@ struct TextViewTests {
         #expect(textView1.layoutManager.lineCount == 3)
         #expect(textView2.layoutManager.lineCount == 3)
     }
+
+    @Test("Custom UndoManager class receives events")
+    func customUndoManagerReceivesEvents() {
+        let textView = TextView(string: "")
+
+        textView.replaceCharacters(in: .zero, with: "Hello World")
+        textView.undo(nil)
+
+        #expect(textView.string == "")
+
+        textView.redo(nil)
+
+        #expect(textView.string == "Hello World")
+    }
 }
