@@ -136,60 +136,15 @@ public class TextSelectionManager: NSObject {
 
     // MARK: - Selection Views
 
-    /// Update all selection cursors. Placing them in the correct position for each text selection and reseting the
-    /// blink timer.
-    func updateSelectionViews(force: Bool = false) {
+    /// Update all selection cursors. Placing them in the correct position for each text selection and
+    /// optionally reseting the blink timer.
+    func updateSelectionViews(force: Bool = false, skipTimerReset: Bool = false) {
         guard textView?.isFirstResponder ?? false else { return }
         var didUpdate: Bool = false
 
         for textSelection in textSelections {
             if textSelection.range.isEmpty {
-                guard let cursorRect = layoutManager?.rectForOffset(textSelection.range.location) else {
-                    continue
-                }
-
-                var doesViewNeedReposition: Bool
-
-                // If using the system cursor, macOS will change the origin and height by about 0.5, so we do an
-                // approximate equals in that case to avoid extra updates.
-                if useSystemCursor, #available(macOS 14.0, *) {
-                    doesViewNeedReposition = !textSelection.boundingRect.origin.approxEqual(cursorRect.origin)
-                    || !textSelection.boundingRect.height.approxEqual(layoutManager?.estimateLineHeight() ?? 0)
-                } else {
-                    doesViewNeedReposition = textSelection.boundingRect.origin != cursorRect.origin
-                    || textSelection.boundingRect.height != layoutManager?.estimateLineHeight() ?? 0
-                }
-
-                if textSelection.view == nil || doesViewNeedReposition {
-                    let cursorView: NSView
-
-                    if let existingCursorView = textSelection.view {
-                        cursorView = existingCursorView
-                    } else {
-                        textSelection.view?.removeFromSuperview()
-                        textSelection.view = nil
-
-                        if useSystemCursor, #available(macOS 14.0, *) {
-                            let systemCursorView = NSTextInsertionIndicator(frame: .zero)
-                            cursorView = systemCursorView
-                            systemCursorView.displayMode = .automatic
-                        } else {
-                            let internalCursorView = CursorView(color: insertionPointColor)
-                            cursorView = internalCursorView
-                            cursorTimer.register(internalCursorView)
-                        }
-
-                        textView?.addSubview(cursorView, positioned: .above, relativeTo: nil)
-                    }
-
-                    cursorView.frame.origin = cursorRect.origin
-                    cursorView.frame.size.height = cursorRect.height
-
-                    textSelection.view = cursorView
-                    textSelection.boundingRect = cursorView.frame
-
-                    didUpdate = true
-                }
+                didUpdate = didUpdate || repositionCursorSelection(textSelection: textSelection)
             } else if !textSelection.range.isEmpty && textSelection.view != nil {
                 textSelection.view?.removeFromSuperview()
                 textSelection.view = nil
@@ -199,9 +154,62 @@ public class TextSelectionManager: NSObject {
 
         if didUpdate || force {
             delegate?.setNeedsDisplay()
-            cursorTimer.resetTimer()
-            resetSystemCursorTimers()
+            if !skipTimerReset {
+                cursorTimer.resetTimer()
+                resetSystemCursorTimers()
+            }
         }
+    }
+
+    private func repositionCursorSelection(textSelection: TextSelection) -> Bool {
+        guard let cursorRect = layoutManager?.rectForOffset(textSelection.range.location) else {
+            return false
+        }
+
+        var doesViewNeedReposition: Bool
+
+        // If using the system cursor, macOS will change the origin and height by about 0.5, so we do an
+        // approximate equals in that case to avoid extra updates.
+        if useSystemCursor, #available(macOS 14.0, *) {
+            doesViewNeedReposition = !textSelection.boundingRect.origin.approxEqual(cursorRect.origin)
+            || !textSelection.boundingRect.height.approxEqual(layoutManager?.estimateLineHeight() ?? 0)
+        } else {
+            doesViewNeedReposition = textSelection.boundingRect.origin != cursorRect.origin
+            || textSelection.boundingRect.height != layoutManager?.estimateLineHeight() ?? 0
+        }
+
+        if textSelection.view == nil || doesViewNeedReposition {
+            let cursorView: NSView
+
+            if let existingCursorView = textSelection.view {
+                cursorView = existingCursorView
+            } else {
+                textSelection.view?.removeFromSuperview()
+                textSelection.view = nil
+
+                if useSystemCursor, #available(macOS 14.0, *) {
+                    let systemCursorView = NSTextInsertionIndicator(frame: .zero)
+                    cursorView = systemCursorView
+                    systemCursorView.displayMode = .automatic
+                } else {
+                    let internalCursorView = CursorView(color: insertionPointColor)
+                    cursorView = internalCursorView
+                    cursorTimer.register(internalCursorView)
+                }
+
+                textView?.addSubview(cursorView, positioned: .above, relativeTo: nil)
+            }
+
+            cursorView.frame.origin = cursorRect.origin
+            cursorView.frame.size.height = cursorRect.height
+
+            textSelection.view = cursorView
+            textSelection.boundingRect = cursorView.frame
+
+            return true
+        }
+
+        return false
     }
 
     private func resetSystemCursorTimers() {
