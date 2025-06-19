@@ -136,6 +136,8 @@ extension TextView {
         setNeedsDisplay()
     }
 
+    // MARK: - Mouse Autoscroll
+
     /// Sets up a timer that fires at a predetermined period to autoscroll the text view.
     /// Ensure the timer is disabled using ``disableMouseAutoscrollTimer``.
     func setUpMouseAutoscrollTimer() {
@@ -154,6 +156,8 @@ extension TextView {
         mouseDragTimer?.invalidate()
         mouseDragTimer = nil
     }
+
+    // MARK: - Drag Selection
 
     private func dragSelection(startPosition: Int, endPosition: Int, mouseDragAnchor: CGPoint) {
         switch cursorSelectionMode {
@@ -196,41 +200,6 @@ extension TextView {
     private func dragColumnSelection(mouseDragAnchor: CGPoint, event: NSEvent) {
         // Drag the selection and select in columns
         let eventLocation = convert(event.locationInWindow, from: nil)
-
-        let start = CGPoint(
-            x: min(mouseDragAnchor.x, eventLocation.x),
-            y: min(mouseDragAnchor.y, eventLocation.y)
-        )
-        let end = CGPoint(
-            x: max(mouseDragAnchor.x, eventLocation.x),
-            y: max(mouseDragAnchor.y, eventLocation.y)
-        )
-
-        // Collect all overlapping text ranges
-        var selectedRanges: [NSRange] = layoutManager.linesStartingAt(start.y, until: end.y).flatMap { textLine in
-            // Collect fragment ranges
-            return textLine.data.lineFragments.compactMap { lineFragment -> NSRange? in
-                let startOffset = self.layoutManager.textOffsetAtPoint(
-                    start,
-                    fragmentPosition: lineFragment,
-                    linePosition: textLine
-                )
-                let endOffset = self.layoutManager.textOffsetAtPoint(
-                    end,
-                    fragmentPosition: lineFragment,
-                    linePosition: textLine
-                )
-                guard let startOffset, let endOffset else { return nil }
-
-                return NSRange(start: startOffset, end: endOffset)
-            }
-        }
-
-        // If we have some non-cursor selections, filter out any cursor selections
-        if selectedRanges.contains(where: { !$0.isEmpty }) {
-            selectedRanges = selectedRanges.filter({ !$0.isEmpty })
-        }
-
-        selectionManager.setSelectedRanges(selectedRanges)
+        selectColumns(betweenPointA: eventLocation, pointB: mouseDragAnchor)
     }
 }

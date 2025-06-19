@@ -52,8 +52,10 @@ extension TextView {
         super.flagsChanged(with: event)
 
         let modifierFlags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        if modifierFlags.contains(.option) != isOptionPressed {
-            isOptionPressed = modifierFlags.contains(.option)
+        let modifierFlagsIsOption = modifierFlags == [.option]
+
+        if modifierFlagsIsOption != isOptionPressed {
+            isOptionPressed = modifierFlagsIsOption
             resetCursorRects()
         }
     }
