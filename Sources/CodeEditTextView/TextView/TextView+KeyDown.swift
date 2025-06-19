@@ -47,4 +47,14 @@ extension TextView {
 
         return false
     }
+
+    override public func flagsChanged(with event: NSEvent) {
+        super.flagsChanged(with: event)
+
+        let modifierFlags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if modifierFlags.contains(.option) != isOptionPressed {
+            isOptionPressed = modifierFlags.contains(.option)
+            resetCursorRects()
+        }
+    }
 }
