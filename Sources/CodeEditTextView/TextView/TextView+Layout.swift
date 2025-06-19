@@ -11,6 +11,7 @@ extension TextView {
     override public func layout() {
         super.layout()
         layoutManager.layoutLines()
+        selectionManager.updateSelectionViews(skipTimerReset: true)
     }
 
     open override class var isCompatibleWithResponsiveScrolling: Bool {
