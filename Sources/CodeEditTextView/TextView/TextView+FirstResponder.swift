@@ -51,7 +51,10 @@ extension TextView {
     open override func resetCursorRects() {
         super.resetCursorRects()
         if isSelectable {
-            addCursorRect(visibleRect, cursor: .iBeam)
+            addCursorRect(
+                visibleRect,
+                cursor: isOptionPressed ? .crosshair : .iBeam
+            )
         }
     }
 }

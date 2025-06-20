@@ -269,6 +269,8 @@ public class TextView: NSView, NSTextContent {
     var draggingCursorView: NSView?
     var isDragging: Bool = false
 
+    var isOptionPressed: Bool = false
+
     private var fontCharWidth: CGFloat {
         (" " as NSString).size(withAttributes: [.font: font]).width
     }
