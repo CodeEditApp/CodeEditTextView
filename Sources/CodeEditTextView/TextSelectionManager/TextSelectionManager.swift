@@ -95,6 +95,7 @@ public class TextSelectionManager: NSObject {
                 (0...(textStorage?.length ?? 0)).contains($0.location)
                 && (0...(textStorage?.length ?? 0)).contains($0.max)
             }
+            .sorted(by: { $0.location < $1.location })
             .map {
                 let selection = TextSelection(range: $0)
                 selection.suggestedXPos = layoutManager?.rectForOffset($0.location)?.minX
@@ -127,6 +128,7 @@ public class TextSelectionManager: NSObject {
         }
         if !didHandle {
             textSelections.append(newTextSelection)
+            textSelections.sort(by: { $0.range.location < $1.range.location })
         }
 
         updateSelectionViews()

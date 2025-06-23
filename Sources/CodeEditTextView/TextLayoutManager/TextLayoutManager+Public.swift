@@ -75,14 +75,22 @@ extension TextLayoutManager {
               ) else {
             return nil
         }
-        let fragment = fragmentPosition.data
 
+        return textOffsetAtPoint(point, fragmentPosition: fragmentPosition, linePosition: linePosition)
+    }
+
+    func textOffsetAtPoint(
+        _ point: CGPoint,
+        fragmentPosition: TextLineStorage<LineFragment>.TextLinePosition,
+        linePosition: TextLineStorage<TextLine>.TextLinePosition
+    ) -> Int? {
+        let fragment = fragmentPosition.data
         if fragment.width == 0 {
             return linePosition.range.location + fragmentPosition.range.location
         } else if fragment.width <= point.x - edgeInsets.left {
             return findOffsetAfterEndOf(fragmentPosition: fragmentPosition, in: linePosition)
         } else {
-            return findOffsetAtPoint(inFragment: fragment, point: point, inLine: linePosition)
+            return findOffsetAtPoint(inFragment: fragment, xPos: point.x, inLine: linePosition)
         }
     }
 
@@ -125,23 +133,23 @@ extension TextLayoutManager {
     /// Finds a document offset for a point that lies in a line fragment.
     /// - Parameters:
     ///   - fragment: The fragment the point lies in.
-    ///   - point: The point being queried, relative to the text view.
+    ///   - xPos: The point being queried, relative to the text view.
     ///   - linePosition: The position that contains the `fragment`.
     /// - Returns: The offset (relative to the document) that's closest to the given point, or `nil` if it could not be
     ///            found.
-    private func findOffsetAtPoint(
+    func findOffsetAtPoint(
         inFragment fragment: LineFragment,
-        point: CGPoint,
+        xPos: CGFloat,
         inLine linePosition: TextLineStorage<TextLine>.TextLinePosition
     ) -> Int? {
-        guard let (content, contentPosition) = fragment.findContent(atX: point.x - edgeInsets.left) else {
+        guard let (content, contentPosition) = fragment.findContent(atX: xPos - edgeInsets.left) else {
             return nil
         }
         switch content.data {
         case .text(let ctLine):
             let fragmentIndex = CTLineGetStringIndexForPosition(
                 ctLine,
-                CGPoint(x: point.x - edgeInsets.left - contentPosition.xPos, y: fragment.height/2)
+                CGPoint(x: xPos - edgeInsets.left - contentPosition.xPos, y: fragment.height/2)
             )
             return fragmentIndex + contentPosition.offset + linePosition.range.location
         case .attachment:

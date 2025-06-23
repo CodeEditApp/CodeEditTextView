@@ -41,10 +41,11 @@ extension TextView {
             super.mouseDown(with: event)
             return
         }
-        if event.modifierFlags.intersection(.deviceIndependentFlagsMask).isSuperset(of: [.control, .shift]) {
+        let eventFlags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if eventFlags == [.control, .shift] {
             unmarkText()
             selectionManager.addSelectedRange(NSRange(location: offset, length: 0))
-        } else if event.modifierFlags.intersection(.deviceIndependentFlagsMask).contains(.shift) {
+        } else if eventFlags.contains(.shift) {
             unmarkText()
             shiftClickExtendSelection(to: offset)
         } else {
@@ -96,40 +97,11 @@ extension TextView {
                 return
             }
 
-            switch cursorSelectionMode {
-            case .character:
-                selectionManager.setSelectedRange(
-                    NSRange(
-                        location: min(startPosition, endPosition),
-                        length: max(startPosition, endPosition) - min(startPosition, endPosition)
-                    )
-                )
-
-            case .word:
-                let startWordRange = findWordBoundary(at: startPosition)
-                let endWordRange = findWordBoundary(at: endPosition)
-
-                selectionManager.setSelectedRange(
-                    NSRange(
-                        location: min(startWordRange.location, endWordRange.location),
-                        length: max(startWordRange.location + startWordRange.length,
-                                    endWordRange.location + endWordRange.length) -
-                                min(startWordRange.location, endWordRange.location)
-                    )
-                )
-
-            case .line:
-                let startLineRange = findLineBoundary(at: startPosition)
-                let endLineRange = findLineBoundary(at: endPosition)
-
-                selectionManager.setSelectedRange(
-                    NSRange(
-                        location: min(startLineRange.location, endLineRange.location),
-                        length: max(startLineRange.location + startLineRange.length,
-                                    endLineRange.location + endLineRange.length) -
-                                min(startLineRange.location, endLineRange.location)
-                    )
-                )
+            let modifierFlags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            if modifierFlags.contains(.option) {
+                dragColumnSelection(mouseDragAnchor: mouseDragAnchor, event: event)
+            } else {
+                dragSelection(startPosition: startPosition, endPosition: endPosition, mouseDragAnchor: mouseDragAnchor)
             }
 
             setNeedsDisplay()
@@ -164,6 +136,8 @@ extension TextView {
         setNeedsDisplay()
     }
 
+    // MARK: - Mouse Autoscroll
+
     /// Sets up a timer that fires at a predetermined period to autoscroll the text view.
     /// Ensure the timer is disabled using ``disableMouseAutoscrollTimer``.
     func setUpMouseAutoscrollTimer() {
@@ -181,5 +155,51 @@ extension TextView {
     func disableMouseAutoscrollTimer() {
         mouseDragTimer?.invalidate()
         mouseDragTimer = nil
+    }
+
+    // MARK: - Drag Selection
+
+    private func dragSelection(startPosition: Int, endPosition: Int, mouseDragAnchor: CGPoint) {
+        switch cursorSelectionMode {
+        case .character:
+            selectionManager.setSelectedRange(
+                NSRange(
+                    location: min(startPosition, endPosition),
+                    length: max(startPosition, endPosition) - min(startPosition, endPosition)
+                )
+            )
+
+        case .word:
+            let startWordRange = findWordBoundary(at: startPosition)
+            let endWordRange = findWordBoundary(at: endPosition)
+
+            selectionManager.setSelectedRange(
+                NSRange(
+                    location: min(startWordRange.location, endWordRange.location),
+                    length: max(startWordRange.location + startWordRange.length,
+                                endWordRange.location + endWordRange.length) -
+                    min(startWordRange.location, endWordRange.location)
+                )
+            )
+
+        case .line:
+            let startLineRange = findLineBoundary(at: startPosition)
+            let endLineRange = findLineBoundary(at: endPosition)
+
+            selectionManager.setSelectedRange(
+                NSRange(
+                    location: min(startLineRange.location, endLineRange.location),
+                    length: max(startLineRange.location + startLineRange.length,
+                                endLineRange.location + endLineRange.length) -
+                    min(startLineRange.location, endLineRange.location)
+                )
+            )
+        }
+    }
+
+    private func dragColumnSelection(mouseDragAnchor: CGPoint, event: NSEvent) {
+        // Drag the selection and select in columns
+        let eventLocation = convert(event.locationInWindow, from: nil)
+        selectColumns(betweenPointA: eventLocation, pointB: mouseDragAnchor)
     }
 }
