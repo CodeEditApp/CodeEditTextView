@@ -41,10 +41,11 @@ extension TextView {
             super.mouseDown(with: event)
             return
         }
-        if event.modifierFlags.intersection(.deviceIndependentFlagsMask).isSuperset(of: [.control, .shift]) {
+        let eventFlags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if eventFlags == [.control, .shift] {
             unmarkText()
             selectionManager.addSelectedRange(NSRange(location: offset, length: 0))
-        } else if event.modifierFlags.intersection(.deviceIndependentFlagsMask).contains(.shift) {
+        } else if eventFlags.contains(.shift) {
             unmarkText()
             shiftClickExtendSelection(to: offset)
         } else {
@@ -143,6 +144,8 @@ extension TextView {
         setNeedsDisplay()
     }
 
+    // MARK: - Mouse Autoscroll
+
     /// Sets up a timer that fires at a predetermined period to autoscroll the text view.
     /// Ensure the timer is disabled using ``disableMouseAutoscrollTimer``.
     func setUpMouseAutoscrollTimer() {
@@ -161,6 +164,8 @@ extension TextView {
         mouseDragTimer?.invalidate()
         mouseDragTimer = nil
     }
+
+    // MARK: - Drag Selection
 
     private func dragSelection(startPosition: Int, endPosition: Int, mouseDragAnchor: CGPoint) {
         switch cursorSelectionMode {
