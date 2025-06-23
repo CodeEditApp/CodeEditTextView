@@ -206,41 +206,6 @@ extension TextView {
     }
 
     private func dragColumnSelection(mouseDragAnchor: CGPoint, locationInView: CGPoint) {
-        // Drag the selection and select in columns
-        let start = CGPoint(
-            x: min(mouseDragAnchor.x, locationInView.x),
-            y: min(mouseDragAnchor.y, locationInView.y)
-        )
-        let end = CGPoint(
-            x: max(mouseDragAnchor.x, locationInView.x),
-            y: max(mouseDragAnchor.y, locationInView.y)
-        )
-
-        // Collect all overlapping text ranges
-        var selectedRanges: [NSRange] = layoutManager.linesStartingAt(start.y, until: end.y).flatMap { textLine in
-            // Collect fragment ranges
-            return textLine.data.lineFragments.compactMap { lineFragment -> NSRange? in
-                let startOffset = self.layoutManager.textOffsetAtPoint(
-                    start,
-                    fragmentPosition: lineFragment,
-                    linePosition: textLine
-                )
-                let endOffset = self.layoutManager.textOffsetAtPoint(
-                    end,
-                    fragmentPosition: lineFragment,
-                    linePosition: textLine
-                )
-                guard let startOffset, let endOffset else { return nil }
-
-                return NSRange(start: startOffset, end: endOffset)
-            }
-        }
-
-        // If we have some non-cursor selections, filter out any cursor selections
-        if selectedRanges.contains(where: { !$0.isEmpty }) {
-            selectedRanges = selectedRanges.filter({ !$0.isEmpty })
-        }
-
-        selectionManager.setSelectedRanges(selectedRanges)
+        selectColumns(betweenPointA: mouseDragAnchor, pointB: locationInView)
     }
 }
