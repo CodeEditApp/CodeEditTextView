@@ -87,19 +87,27 @@ extension TextView {
             return
         }
 
+        // We receive global events because our view received the drag event, but we need to clamp the potentially
+        // out-of-bounds positions to a position our layout manager can deal with.
+        let locationInWindow = convert(event.locationInWindow, from: nil)
+        let locationInView = CGPoint(
+            x: max(0.0, min(locationInWindow.x, frame.width)),
+            y: max(0.0, min(locationInWindow.y, frame.height))
+        )
+
         if mouseDragAnchor == nil {
-            mouseDragAnchor = convert(event.locationInWindow, from: nil)
+            mouseDragAnchor = locationInView
             super.mouseDragged(with: event)
         } else {
             guard let mouseDragAnchor,
                   let startPosition = layoutManager.textOffsetAtPoint(mouseDragAnchor),
-                  let endPosition = layoutManager.textOffsetAtPoint(convert(event.locationInWindow, from: nil)) else {
+                  let endPosition = layoutManager.textOffsetAtPoint(locationInView) else {
                 return
             }
 
             let modifierFlags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
             if modifierFlags.contains(.option) {
-                dragColumnSelection(mouseDragAnchor: mouseDragAnchor, event: event)
+                dragColumnSelection(mouseDragAnchor: mouseDragAnchor, locationInView: locationInView)
             } else {
                 dragSelection(startPosition: startPosition, endPosition: endPosition, mouseDragAnchor: mouseDragAnchor)
             }
@@ -197,9 +205,7 @@ extension TextView {
         }
     }
 
-    private func dragColumnSelection(mouseDragAnchor: CGPoint, event: NSEvent) {
-        // Drag the selection and select in columns
-        let eventLocation = convert(event.locationInWindow, from: nil)
-        selectColumns(betweenPointA: eventLocation, pointB: mouseDragAnchor)
+    private func dragColumnSelection(mouseDragAnchor: CGPoint, locationInView: CGPoint) {
+        selectColumns(betweenPointA: mouseDragAnchor, pointB: locationInView)
     }
 }
