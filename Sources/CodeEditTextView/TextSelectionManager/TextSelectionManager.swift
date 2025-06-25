@@ -80,7 +80,6 @@ public class TextSelectionManager: NSObject {
         textSelections = [selection]
         updateSelectionViews()
         NotificationCenter.default.post(Notification(name: Self.selectionChangedNotification, object: self))
-        delegate?.setNeedsDisplay()
     }
 
     /// Set the selected ranges to new ranges. Overrides any existing selections.

@@ -12,8 +12,14 @@ extension TextView {
         // Set cursor
         guard isSelectable,
               event.type == .leftMouseDown,
-              let offset = layoutManager.textOffsetAtPoint(self.convert(event.locationInWindow, from: nil)) else {
+              let offset = layoutManager.textOffsetAtPoint(self.convert(event.locationInWindow, from: nil)),
+              let content = layoutManager.contentRun(at: offset) else {
             super.mouseDown(with: event)
+            return
+        }
+
+        if case let .attachment(attachment) = content.data, event.clickCount < 3 {
+            handleAttachmentClick(event: event, offset: offset, attachment: attachment)
             return
         }
 
@@ -74,6 +80,30 @@ extension TextView {
         }
         unmarkText()
         selectLine(nil)
+    }
+
+    fileprivate func handleAttachmentClick(event: NSEvent, offset: Int, attachment: AnyTextAttachment) {
+        switch event.clickCount {
+        case 1:
+            selectionManager.setSelectedRange(attachment.range)
+        case 2:
+            performAttachmentAction(attachment: attachment)
+        default:
+            break
+        }
+    }
+
+    func performAttachmentAction(attachment: AnyTextAttachment) {
+        let action = attachment.attachment.attachmentAction()
+        switch action {
+        case .none:
+            return
+        case .discard:
+            layoutManager.attachments.remove(atOffset: attachment.range.location)
+            selectionManager.setSelectedRange(NSRange(location: attachment.range.location, length: 0))
+        case let .replace(text):
+            replaceCharacters(in: attachment.range, with: text)
+        }
     }
 
     override public func mouseUp(with event: NSEvent) {

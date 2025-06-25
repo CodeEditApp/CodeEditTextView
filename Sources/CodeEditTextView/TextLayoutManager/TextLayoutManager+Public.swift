@@ -339,4 +339,12 @@ extension TextLayoutManager {
             height: lineFragment.scaledHeight
         ).pixelAligned
     }
+
+    func contentRun(at offset: Int) -> LineFragment.FragmentContent? {
+        guard let textLine = textLineForOffset(offset),
+              let fragment = textLine.data.lineFragments.getLine(atOffset: offset - textLine.range.location) else {
+            return nil
+        }
+        return fragment.data.findContent(at: offset - textLine.range.location - fragment.range.location)?.content
+    }
 }

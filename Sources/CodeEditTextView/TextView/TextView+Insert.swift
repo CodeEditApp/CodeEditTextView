@@ -9,6 +9,21 @@ import AppKit
 
 extension TextView {
     override public func insertNewline(_ sender: Any?) {
+        var attachments: [AnyTextAttachment] = selectionManager.textSelections.compactMap({ selection in
+            let content = layoutManager.contentRun(at: selection.range.location)
+            if case let .attachment(attachment) = content?.data, attachment.range == selection.range {
+                return attachment
+            }
+            return nil
+        })
+
+        if !attachments.isEmpty {
+            for attachment in attachments.sorted(by: { $0.range.location > $1.range.location }) {
+                performAttachmentAction(attachment: attachment)
+            }
+            return
+        }
+
         insertText(layoutManager.detectedLineEnding.rawValue)
     }
 

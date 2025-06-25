@@ -102,7 +102,7 @@ public final class TextAttachmentManager {
     /// - Returns: An array of `AnyTextAttachment` instances whose ranges intersect `query`.
     public func getAttachmentsOverlapping(_ range: NSRange) -> [AnyTextAttachment] {
         // Find the first attachment whose end is beyond the start of the query.
-        guard let startIdx = firstIndex(where: { $0.range.upperBound >= range.location }) else {
+        guard let startIdx = orderedAttachments.firstIndex(where: { $0.range.upperBound >= range.location }) else {
             return []
         }
 
