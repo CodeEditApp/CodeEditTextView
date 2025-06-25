@@ -92,9 +92,9 @@ public final class LineFragmentRenderer {
                     in: context,
                     rect: NSRect(
                         x: currentPosition,
-                        y: yPos,
+                        y: yPos + (lineFragment.heightDifference/2),
                         width: attachment.width,
-                        height: lineFragment.scaledHeight
+                        height: lineFragment.height
                     )
                 )
             }

@@ -17,6 +17,8 @@ public final class TextAttachmentManager {
     weak var layoutManager: TextLayoutManager?
     private var selectionObserver: (any NSObjectProtocol)?
 
+    public weak var delegate: TextAttachmentManagerDelegate?
+
     /// Adds a new attachment, keeping `orderedAttachments` sorted by range.location.
     /// If two attachments overlap, the layout phase will later ignore the one with the higher start.
     /// - Complexity: `O(n log(n))` due to array insertion. Could be improved with a binary tree.
@@ -47,6 +49,8 @@ public final class TextAttachmentManager {
         }
 
         layoutManager?.setNeedsLayout()
+
+        delegate?.textAttachmentDidAdd(attachment.attachment, for: range)
     }
 
     /// Removes an attachment and invalidates layout for the removed range.
@@ -62,6 +66,9 @@ public final class TextAttachmentManager {
 
         let attachment = orderedAttachments.remove(at: index)
         layoutManager?.invalidateLayoutForRange(attachment.range)
+
+        delegate?.textAttachmentDidRemove(attachment.attachment, for: attachment.range)
+
         return attachment
     }
 
