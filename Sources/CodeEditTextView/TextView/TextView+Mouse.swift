@@ -87,18 +87,22 @@ extension TextView {
         case 1:
             selectionManager.setSelectedRange(attachment.range)
         case 2:
-            let action = attachment.attachment.attachmentAction()
-            switch action {
-            case .none:
-                return
-            case .discard:
-                layoutManager.attachments.remove(atOffset: offset)
-                selectionManager.setSelectedRange(NSRange(location: attachment.range.location, length: 0))
-            case let .replace(text):
-                replaceCharacters(in: attachment.range, with: text)
-            }
+            performAttachmentAction(attachment: attachment)
         default:
             break
+        }
+    }
+
+    func performAttachmentAction(attachment: AnyTextAttachment) {
+        let action = attachment.attachment.attachmentAction()
+        switch action {
+        case .none:
+            return
+        case .discard:
+            layoutManager.attachments.remove(atOffset: attachment.range.location)
+            selectionManager.setSelectedRange(NSRange(location: attachment.range.location, length: 0))
+        case let .replace(text):
+            replaceCharacters(in: attachment.range, with: text)
         }
     }
 
