@@ -80,7 +80,11 @@ public class CEUndoManager: UndoManager {
         NotificationCenter.default.post(name: .NSUndoManagerWillUndoChange, object: self)
         textView.textStorage.beginEditing()
         for mutation in item.mutations.reversed() {
-            textView.replaceCharacters(in: mutation.inverse.range, with: mutation.inverse.string)
+            textView.replaceCharacters(
+                in: mutation.inverse.range,
+                with: mutation.inverse.string,
+                skipUpdateSelection: true
+            )
         }
         textView.textStorage.endEditing()
 
@@ -108,7 +112,11 @@ public class CEUndoManager: UndoManager {
         textView.selectionManager.removeCursors()
         textView.textStorage.beginEditing()
         for mutation in item.mutations {
-            textView.replaceCharacters(in: mutation.mutation.range, with: mutation.mutation.string)
+            textView.replaceCharacters(
+                in: mutation.mutation.range,
+                with: mutation.mutation.string,
+                skipUpdateSelection: true
+            )
         }
         textView.textStorage.endEditing()
 
