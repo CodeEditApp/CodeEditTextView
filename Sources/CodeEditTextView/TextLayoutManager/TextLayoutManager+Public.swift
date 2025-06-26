@@ -166,7 +166,7 @@ extension TextLayoutManager {
     /// - Parameter offset: The offset to create the rect for.
     /// - Returns: The found rect for the given offset.
     public func rectForOffset(_ offset: Int) -> CGRect? {
-        guard offset != lineStorage.length else {
+        guard offset < lineStorage.length else {
             return rectForEndOffset()
         }
         guard let linePosition = determineVisiblePosition(for: lineStorage.getLine(atOffset: offset))?.position else {

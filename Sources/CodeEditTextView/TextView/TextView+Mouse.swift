@@ -12,13 +12,13 @@ extension TextView {
         // Set cursor
         guard isSelectable,
               event.type == .leftMouseDown,
-              let offset = layoutManager.textOffsetAtPoint(self.convert(event.locationInWindow, from: nil)),
-              let content = layoutManager.contentRun(at: offset) else {
+              let offset = layoutManager.textOffsetAtPoint(self.convert(event.locationInWindow, from: nil)) else {
             super.mouseDown(with: event)
             return
         }
 
-        if case let .attachment(attachment) = content.data, event.clickCount < 3 {
+        if let content = layoutManager.contentRun(at: offset),
+           case let .attachment(attachment) = content.data, event.clickCount < 3 {
             handleAttachmentClick(event: event, offset: offset, attachment: attachment)
             return
         }
