@@ -217,4 +217,10 @@ final class TextSelectionManagerTests: XCTestCase {
             )
         }
     }
+
+    func test_selectionEndOfDocumentHasXPos() {
+        let selectionManager = selectionManager("1\n2\n3\n")
+        selectionManager.setSelectedRange(NSRange(location: 6, length: 0)) // Beyond text.length, end of doc
+        XCTAssertNotNil(selectionManager.textSelections.first?.suggestedXPos)
+    }
 }

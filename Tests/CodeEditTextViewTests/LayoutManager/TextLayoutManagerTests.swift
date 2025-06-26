@@ -228,4 +228,26 @@ struct TextLayoutManagerTests {
         let invalidatedLineIds = layoutManager.layoutLines()
         #expect(Set(expectedLineIds) == invalidatedLineIds)
     }
+
+    @Test
+    func rectForOffsetReturnsValueAfterEndOfDoc() throws {
+        layoutManager.layoutLines(in: NSRect(x: 0, y: 0, width: 1000, height: 1000))
+
+        for idx in 0..<10 {
+            // This should return something even after the end of the document.
+            #expect(layoutManager.rectForOffset(idx) != nil, "Failed to find rect for offset: \(idx)")
+        }
+    }
+
+    @Test
+    func textOffsetForPointReturnsValuesEverywhere() throws {
+        layoutManager.layoutLines(in: NSRect(x: 0, y: 0, width: 1000, height: 1000))
+
+        // textOffsetAtPoint is valid *everywhere*. It should always return something.
+        for xPos in 0..<1000 {
+            for yPos in 0..<1000 {
+                #expect(layoutManager.textOffsetAtPoint(CGPoint(x: xPos, y: yPos)) != nil)
+            }
+        }
+    }
 }
