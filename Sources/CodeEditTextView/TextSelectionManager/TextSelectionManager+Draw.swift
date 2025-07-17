@@ -82,13 +82,7 @@ extension TextSelectionManager {
         context.setFillColor(fillColor)
 
         let fillRects = getFillRects(in: rect, for: textSelection)
-
-        let minX = fillRects.min(by: { $0.origin.x < $1.origin.x })?.origin.x ?? 0
-        let minY = fillRects.min(by: { $0.origin.y < $1.origin.y })?.origin.y ?? 0
-        let max = fillRects.max(by: { $0.maxY < $1.maxY }) ?? .zero
-        let origin = CGPoint(x: minX, y: minY)
-        let size = CGSize(width: max.maxX - minX, height: max.maxY - minY)
-        textSelection.boundingRect = CGRect(origin: origin, size: size)
+        textSelection.boundingRect = fillRects.boundingRect()
 
         context.fill(fillRects)
         context.restoreGState()

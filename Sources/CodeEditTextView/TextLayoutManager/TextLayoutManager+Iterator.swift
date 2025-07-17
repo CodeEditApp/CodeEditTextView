@@ -196,7 +196,7 @@ public extension TextLayoutManager {
         }
 
         if lastAttachment.range.max > originalPosition.position.range.max,
-           var extendedLinePosition = lineStorage.getLine(atOffset: lastAttachment.range.max) {
+           let extendedLinePosition = lineStorage.getLine(atOffset: lastAttachment.range.max) {
             newPosition = TextLineStorage<TextLine>.TextLinePosition(
                 data: newPosition.data,
                 range: NSRange(start: newPosition.range.location, end: extendedLinePosition.range.max),
