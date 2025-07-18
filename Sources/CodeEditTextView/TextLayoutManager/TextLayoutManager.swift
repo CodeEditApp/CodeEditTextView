@@ -168,8 +168,13 @@ public class TextLayoutManager: NSObject {
         let end = mach_absolute_time()
         let elapsed = end - start
         let nanos = elapsed * UInt64(info.numer) / UInt64(info.denom)
-        let msec = TimeInterval(nanos) / TimeInterval(NSEC_PER_MSEC)
-        logger.info("TextLayoutManager built in: \(msec, privacy: .public)ms")
+        let sec = TimeInterval(nanos) / TimeInterval(NSEC_PER_SEC)
+        // This used to be logged every time. However we're now confident enough in the performance of this method
+        // that it's not useful to log it anymore unless it's an odd number. Taking ~500ms for a >500k loc file
+        // is normal. More than 1s for any document is not normal.
+        if sec >= 1 {
+            logger.warning("TextLayoutManager built in: \(sec, privacy: .public)s")
+        }
         #endif
     }
 
