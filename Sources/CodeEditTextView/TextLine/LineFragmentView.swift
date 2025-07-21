@@ -35,23 +35,19 @@ open class LineFragmentView: NSView {
     }
 
 #if DEBUG_LINE_INVALIDATION
-    /// Setup background animation from random color to clear
+    /// Setup background animation from random color to clear when this fragment is invalidated.
     private func setupBackgroundAnimation() {
-        // Ensure the view is layer-backed for animation
         self.wantsLayer = true
 
-        // Generate random color
         let randomColor = NSColor(
             red: CGFloat.random(in: 0...1),
             green: CGFloat.random(in: 0...1),
             blue: CGFloat.random(in: 0...1),
-            alpha: 0.3 // Start with some transparency
+            alpha: 0.3
         )
 
-        // Set initial background color
         self.layer?.backgroundColor = randomColor.cgColor
 
-        // Create animation from random color to clear
         let animation = CABasicAnimation(keyPath: "backgroundColor")
         animation.fromValue = randomColor.cgColor
         animation.toValue = NSColor.clear.cgColor
@@ -59,11 +55,8 @@ open class LineFragmentView: NSView {
         animation.timingFunction = CAMediaTimingFunction(name: .easeOut)
         animation.fillMode = .forwards
         animation.isRemovedOnCompletion = false
-
-        // Apply animation
         self.layer?.add(animation, forKey: "backgroundColorAnimation")
 
-        // Set final state
         DispatchQueue.main.asyncAfter(deadline: .now() + animation.duration) {
             self.layer?.backgroundColor = NSColor.clear.cgColor
         }
