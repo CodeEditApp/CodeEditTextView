@@ -11,7 +11,9 @@ import AppKit
 open class LineFragmentView: NSView {
     public weak var lineFragment: LineFragment?
     public weak var renderer: LineFragmentRenderer?
+#if DEBUG_LINE_INVALIDATION
     private var backgroundAnimation: CABasicAnimation?
+#endif
 
     open override var isFlipped: Bool {
         true
@@ -26,14 +28,13 @@ open class LineFragmentView: NSView {
     /// Initialize with random background color animation
     public override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
-        setupBackgroundAnimation()
     }
 
     required public init?(coder: NSCoder) {
         super.init(coder: coder)
-        setupBackgroundAnimation()
     }
 
+#if DEBUG_LINE_INVALIDATION
     /// Setup background animation from random color to clear
     private func setupBackgroundAnimation() {
         // Ensure the view is layer-backed for animation
@@ -67,14 +68,16 @@ open class LineFragmentView: NSView {
             self.layer?.backgroundColor = NSColor.clear.cgColor
         }
     }
+#endif
 
     /// Prepare the view for reuse, clears the line fragment reference and restarts animation.
     open override func prepareForReuse() {
         super.prepareForReuse()
         lineFragment = nil
 
-        // Restart the background animation
+#if DEBUG_LINE_INVALIDATION
         setupBackgroundAnimation()
+#endif
     }
 
     /// Set a new line fragment for this view, updating view size.
