@@ -16,6 +16,7 @@ struct TypesetContext {
     /// Accumulated generated line fragments.
     var lines: [TextLineStorage<LineFragment>.BuildItem] = []
     var maxHeight: CGFloat = 0
+    var maxWidth: CGFloat = 0
     /// The current fragment typesetting context.
     var fragmentContext = LineFragmentTypesetContext(start: 0, width: 0.0, height: 0.0, descent: 0.0)
 
@@ -76,6 +77,7 @@ struct TypesetContext {
             .init(data: fragment, length: currentPosition - fragmentContext.start, height: fragment.scaledHeight)
         )
         maxHeight = max(maxHeight, fragment.scaledHeight)
+        maxWidth = max(maxWidth, fragment.width)
 
         fragmentContext.clear()
         fragmentContext.start = currentPosition

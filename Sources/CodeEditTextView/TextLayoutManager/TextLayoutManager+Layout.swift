@@ -79,7 +79,8 @@ extension TextLayoutManager {
         let maxY = max(visibleRect.maxY + verticalLayoutPadding, 0)
         let originalHeight = lineStorage.height
         var usedFragmentIDs = Set<LineFragment.ID>()
-        var forceLayout: Bool = needsLayout
+        let forceLayout: Bool = needsLayout
+        var didLayoutChange = false
         var newVisibleLines: Set<TextLine.ID> = []
         var yContentAdjustment: CGFloat = 0
         var maxFoundLineWidth = maxLineWidth
@@ -95,29 +96,17 @@ extension TextLayoutManager {
             let wasNotVisible = !visibleLineIds.contains(linePosition.data.id)
             let lineNotEntirelyLaidOut = linePosition.height != linePosition.data.lineFragments.height
 
-            if forceLayout || linePositionNeedsLayout || wasNotVisible || lineNotEntirelyLaidOut {
-                let lineSize = layoutLine(
-                    linePosition,
-                    textStorage: textStorage,
-                    layoutData: LineLayoutData(minY: minY, maxY: maxY, maxWidth: maxLineLayoutWidth),
-                    laidOutFragmentIDs: &usedFragmentIDs
-                )
-                let wasLineHeightChanged = lineSize.height != linePosition.height
-                if wasLineHeightChanged {
-                    lineStorage.update(
-                        atOffset: linePosition.range.location,
-                        delta: 0,
-                        deltaHeight: lineSize.height - linePosition.height
-                    )
+            defer { newVisibleLines.insert(linePosition.data.id) }
 
-                    if linePosition.yPos < minY {
-                        // Adjust the scroll position by the difference between the new height and old.
-                        yContentAdjustment += lineSize.height - linePosition.height
-                    }
-                }
-                if maxFoundLineWidth < lineSize.width {
-                    maxFoundLineWidth = lineSize.width
-                }
+            func fullLineLayout() {
+                let (yAdjustment, wasLineHeightChanged) = layoutLine(
+                    linePosition,
+                    usedFragmentIDs: &usedFragmentIDs,
+                    textStorage: textStorage,
+                    yRange: minY..<maxY,
+                    maxFoundLineWidth: &maxFoundLineWidth
+                )
+                yContentAdjustment += yAdjustment
 #if DEBUG
                 laidOutLines.insert(linePosition.data.id)
 #endif
@@ -128,12 +117,24 @@ extension TextLayoutManager {
                 // - New lines being inserted & Lines being deleted (lineNotEntirelyLaidOut)
                 // - Line updated for width change (wasLineHeightChanged)
 
-                forceLayout = forceLayout || wasLineHeightChanged || lineNotEntirelyLaidOut
+                didLayoutChange = didLayoutChange || wasLineHeightChanged || lineNotEntirelyLaidOut
+            }
+
+            if forceLayout || linePositionNeedsLayout || wasNotVisible || lineNotEntirelyLaidOut {
+                fullLineLayout()
             } else {
+                if didLayoutChange || yContentAdjustment > 0 {
+                    // Layout happened and this line needs to be moved but not necessarily re-added
+                    let needsFullLayout = updateLineViewPositions(linePosition)
+                    if needsFullLayout {
+                        fullLineLayout()
+                        continue
+                    }
+                }
+
                 // Make sure the used fragment views aren't dequeued.
                 usedFragmentIDs.formUnion(linePosition.data.lineFragments.map(\.data.id))
             }
-            newVisibleLines.insert(linePosition.data.id)
         }
 
         // Enqueue any lines not used in this layout pass.
@@ -171,6 +172,42 @@ extension TextLayoutManager {
 
     // MARK: - Layout Single Line
 
+    private func layoutLine(
+        _ linePosition: TextLineStorage<TextLine>.TextLinePosition,
+        usedFragmentIDs: inout Set<LineFragment.ID>,
+        textStorage: NSTextStorage,
+        yRange: Range<CGFloat>,
+        maxFoundLineWidth: inout CGFloat
+    ) -> (CGFloat, wasLineHeightChanged: Bool) {
+        let lineSize = layoutLineViews(
+            linePosition,
+            textStorage: textStorage,
+            layoutData: LineLayoutData(minY: yRange.lowerBound, maxY: yRange.upperBound, maxWidth: maxLineLayoutWidth),
+            laidOutFragmentIDs: &usedFragmentIDs
+        )
+        let wasLineHeightChanged = lineSize.height != linePosition.height
+        var yContentAdjustment: CGFloat = 0.0
+        var maxFoundLineWidth = maxFoundLineWidth
+
+        if wasLineHeightChanged {
+            lineStorage.update(
+                atOffset: linePosition.range.location,
+                delta: 0,
+                deltaHeight: lineSize.height - linePosition.height
+            )
+
+            if linePosition.yPos < yRange.lowerBound {
+                // Adjust the scroll position by the difference between the new height and old.
+                yContentAdjustment += lineSize.height - linePosition.height
+            }
+        }
+        if maxFoundLineWidth < lineSize.width {
+            maxFoundLineWidth = lineSize.width
+        }
+
+        return (yContentAdjustment, wasLineHeightChanged)
+    }
+
     /// Lays out a single text line.
     /// - Parameters:
     ///   - position: The line position from storage to use for layout.
@@ -178,7 +215,7 @@ extension TextLayoutManager {
     ///   - layoutData: The information required to perform layout for the given line.
     ///   - laidOutFragmentIDs: Updated by this method as line fragments are laid out.
     /// - Returns: A `CGSize` representing the max width and total height of the laid out portion of the line.
-    private func layoutLine(
+    private func layoutLineViews(
         _ position: TextLineStorage<TextLine>.TextLinePosition,
         textStorage: NSTextStorage,
         layoutData: LineLayoutData,
@@ -255,5 +292,17 @@ extension TextLayoutManager {
         view.frame.origin = CGPoint(x: edgeInsets.left, y: yPos)
         layoutView?.addSubview(view, positioned: .below, relativeTo: nil)
         view.needsDisplay = true
+    }
+
+    private func updateLineViewPositions(_ position: TextLineStorage<TextLine>.TextLinePosition) -> Bool {
+        let line = position.data
+        for lineFragmentPosition in line.lineFragments {
+            guard let view = viewReuseQueue.getView(forKey: lineFragmentPosition.data.id) else {
+                return true
+            }
+
+            view.frame.origin = CGPoint(x: edgeInsets.left, y: position.yPos + lineFragmentPosition.yPos)
+        }
+        return false
     }
 }

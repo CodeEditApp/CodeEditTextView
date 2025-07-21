@@ -31,13 +31,11 @@ public final class TextLine: Identifiable, Equatable {
     /// - Returns: True, if this line has been marked as needing layout using ``TextLine/setNeedsLayout()`` or if the
     ///            line needs to find new line breaks due to a new constraining width.
     func needsLayout(maxWidth: CGFloat) -> Bool {
-        needsLayout // Force layout
+        return needsLayout // Force layout
         || (
             // Both max widths we're comparing are finite
             maxWidth.isFinite
             && (self.maxWidth ?? 0.0).isFinite
-            // We can't use `<` here because we want to calculate layout again if this was previously constrained to a
-            // small layout size and needs to grow.
             && maxWidth != (self.maxWidth ?? 0.0)
         )
     }
@@ -57,14 +55,15 @@ public final class TextLine: Identifiable, Equatable {
         attachments: [AnyTextAttachment]
     ) {
         let string = stringRef.attributedSubstring(from: range)
-        self.maxWidth = displayData.maxWidth
-        typesetter.typeset(
+        let maxWidth = typesetter.typeset(
             string,
             documentRange: range,
             displayData: displayData,
             markedRanges: markedRanges,
             attachments: attachments
         )
+//        self.maxWidth = min(maxWidth, displayData.maxWidth)
+        self.maxWidth = displayData.maxWidth
         needsLayout = false
     }
 

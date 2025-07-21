@@ -33,28 +33,31 @@ final public class Typesetter {
 
     public init() { }
 
+    /// Performs the typesetting operation, returning the maximum width required for the current layout.
+    /// - Returns: The maximum width the typeset lines require.
     public func typeset(
         _ string: NSAttributedString,
         documentRange: NSRange,
         displayData: TextLine.DisplayData,
         markedRanges: MarkedRanges?,
         attachments: [AnyTextAttachment] = []
-    ) {
+    ) -> CGFloat {
         let string = makeString(string: string, markedRanges: markedRanges)
         lineFragments.removeAll()
 
         // Fast path
         if string.length == 0 || displayData.maxWidth <= 0 {
             typesetEmptyLine(displayData: displayData, string: string)
-            return
+            return 0.0
         }
-        let (lines, maxHeight) = typesetLineFragments(
+        let (lines, maxSize) = typesetLineFragments(
             string: string,
             documentRange: documentRange,
             displayData: displayData,
             attachments: attachments
         )
-        lineFragments.build(from: lines, estimatedLineHeight: maxHeight)
+        lineFragments.build(from: lines, estimatedLineHeight: maxSize.height)
+        return maxSize.width
     }
 
     private func makeString(string: NSAttributedString, markedRanges: MarkedRanges?) -> NSAttributedString {
@@ -132,7 +135,7 @@ final public class Typesetter {
         documentRange: NSRange,
         displayData: TextLine.DisplayData,
         attachments: [AnyTextAttachment]
-    ) -> (lines: [TextLineStorage<LineFragment>.BuildItem], maxHeight: CGFloat) {
+    ) -> (lines: [TextLineStorage<LineFragment>.BuildItem], maxSize: CGSize) {
         let contentRuns = createContentRuns(string: string, documentRange: documentRange, attachments: attachments)
         var context = TypesetContext(documentRange: documentRange, displayData: displayData)
 
@@ -155,7 +158,7 @@ final public class Typesetter {
             context.popCurrentData()
         }
 
-        return (context.lines, context.maxHeight)
+        return (context.lines, CGSize(width: context.maxWidth, height: context.maxHeight))
     }
 
     // MARK: - Layout Text Fragments

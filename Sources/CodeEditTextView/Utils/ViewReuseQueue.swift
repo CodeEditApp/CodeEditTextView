@@ -40,6 +40,10 @@ public class ViewReuseQueue<View: NSView, Key: Hashable> {
         return view
     }
 
+    public func getView(forKey key: Key) -> View? {
+        usedViews[key]
+    }
+
     /// Removes a view for the given key and enqueues it for reuse.
     /// - Parameter key: The key for the view to reuse.
     public func enqueueView(forKey key: Key) {
