@@ -62,7 +62,6 @@ public final class TextLine: Identifiable, Equatable {
             markedRanges: markedRanges,
             attachments: attachments
         )
-//        self.maxWidth = min(maxWidth, displayData.maxWidth)
         self.maxWidth = displayData.maxWidth
         needsLayout = false
     }

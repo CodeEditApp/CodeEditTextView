@@ -122,7 +122,7 @@ public final class LineFragmentRenderer {
             context: context
         )
 
-        let range = createTextRange(for: drawingContext)
+        let range = createTextRange(for: drawingContext).clamped(to: (textStorage.string as NSString).length)
         let string = (textStorage.string as NSString).substring(with: range)
 
         processInvisibleCharacters(
@@ -177,7 +177,7 @@ public final class LineFragmentRenderer {
         guard let style = delegate.invisibleStyle(
             for: character,
             at: NSRange(start: range.location + index, end: range.max),
-            lineRange: drawingContext.lineFragment.lineRange
+            lineRange: drawingContext.lineFragment.documentRange
         ) else {
             return
         }

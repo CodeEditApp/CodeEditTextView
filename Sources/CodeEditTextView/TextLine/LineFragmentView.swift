@@ -79,7 +79,7 @@ open class LineFragmentView: NSView {
 
     /// Set a new line fragment for this view, updating view size.
     /// - Parameter newFragment: The new fragment to use.
-    open func setLineFragment(_ newFragment: LineFragment, renderer: LineFragmentRenderer) {
+    open func setLineFragment(_ newFragment: LineFragment, fragmentRange: NSRange, renderer: LineFragmentRenderer) {
         self.lineFragment = newFragment
         self.renderer = renderer
         self.frame.size = CGSize(width: newFragment.width, height: newFragment.scaledHeight)

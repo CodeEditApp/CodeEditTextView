@@ -112,12 +112,13 @@ extension TextLayoutManager {
         fragmentPosition: TextLineStorage<LineFragment>.TextLinePosition,
         in linePosition: TextLineStorage<TextLine>.TextLinePosition
     ) -> Int? {
-        let endPosition = fragmentPosition.data.documentRange.max
+        let fragmentRange = fragmentPosition.range.translate(location: linePosition.range.location)
+        let endPosition = fragmentRange.max
 
         // If the endPosition is at the end of the line, and the line ends with a line ending character
         // return the index before the eol.
         if fragmentPosition.index == linePosition.data.lineFragments.count - 1,
-           let lineEnding = LineEnding(line: textStorage?.substring(from: fragmentPosition.data.documentRange) ?? "") {
+           let lineEnding = LineEnding(line: textStorage?.substring(from: fragmentRange) ?? "") {
             return endPosition - lineEnding.length
         } else if fragmentPosition.index != linePosition.data.lineFragments.count - 1 {
             // If this isn't the last fragment, we want to place the cursor at the offset right before the break
@@ -175,7 +176,7 @@ extension TextLayoutManager {
         guard let fragmentPosition = linePosition.data.typesetter.lineFragments.getLine(
             atOffset: offset - linePosition.range.location
         ) else {
-            return nil
+            return CGRect(x: edgeInsets.left, y: linePosition.yPos, width: 0, height: linePosition.height)
         }
 
         // Get the *real* length of the character at the offset. If this is a surrogate pair it'll return the correct
@@ -190,11 +191,11 @@ extension TextLayoutManager {
 
         let minXPos = characterXPosition(
             in: fragmentPosition.data,
-            for: realRange.location - fragmentPosition.data.documentRange.location
+            for: realRange.location - linePosition.range.location - fragmentPosition.range.location
         )
         let maxXPos = characterXPosition(
             in: fragmentPosition.data,
-            for: realRange.max - fragmentPosition.data.documentRange.location
+            for: realRange.max - linePosition.range.location - fragmentPosition.range.location
         )
 
         return CGRect(

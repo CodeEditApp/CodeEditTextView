@@ -47,8 +47,7 @@ public final class LineFragment: Identifiable, Equatable {
     }
 
     public let id = UUID()
-    public let lineRange: NSRange
-    public let documentRange: NSRange
+    public var documentRange: NSRange = .notFound
     public var contents: [FragmentContent]
     public var width: CGFloat
     public var height: CGFloat
@@ -61,16 +60,12 @@ public final class LineFragment: Identifiable, Equatable {
     }
 
     init(
-        lineRange: NSRange,
-        documentRange: NSRange,
         contents: [FragmentContent],
         width: CGFloat,
         height: CGFloat,
         descent: CGFloat,
         lineHeightMultiplier: CGFloat
     ) {
-        self.lineRange = lineRange
-        self.documentRange = documentRange
         self.contents = contents
         self.width = width
         self.height = height

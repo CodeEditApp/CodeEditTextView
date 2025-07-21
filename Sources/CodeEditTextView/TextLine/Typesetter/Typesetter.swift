@@ -33,31 +33,28 @@ final public class Typesetter {
 
     public init() { }
 
-    /// Performs the typesetting operation, returning the maximum width required for the current layout.
-    /// - Returns: The maximum width the typeset lines require.
     public func typeset(
         _ string: NSAttributedString,
         documentRange: NSRange,
         displayData: TextLine.DisplayData,
         markedRanges: MarkedRanges?,
         attachments: [AnyTextAttachment] = []
-    ) -> CGFloat {
+    ) {
         let string = makeString(string: string, markedRanges: markedRanges)
         lineFragments.removeAll()
 
         // Fast path
         if string.length == 0 || displayData.maxWidth <= 0 {
             typesetEmptyLine(displayData: displayData, string: string)
-            return 0.0
+            return
         }
-        let (lines, maxSize) = typesetLineFragments(
+        let (lines, maxHeight) = typesetLineFragments(
             string: string,
             documentRange: documentRange,
             displayData: displayData,
             attachments: attachments
         )
-        lineFragments.build(from: lines, estimatedLineHeight: maxSize.height)
-        return maxSize.width
+        lineFragments.build(from: lines, estimatedLineHeight: maxHeight)
     }
 
     private func makeString(string: NSAttributedString, markedRanges: MarkedRanges?) -> NSAttributedString {
@@ -135,7 +132,7 @@ final public class Typesetter {
         documentRange: NSRange,
         displayData: TextLine.DisplayData,
         attachments: [AnyTextAttachment]
-    ) -> (lines: [TextLineStorage<LineFragment>.BuildItem], maxSize: CGSize) {
+    ) -> (lines: [TextLineStorage<LineFragment>.BuildItem], maxHeight: CGFloat) {
         let contentRuns = createContentRuns(string: string, documentRange: documentRange, attachments: attachments)
         var context = TypesetContext(documentRange: documentRange, displayData: displayData)
 
@@ -158,7 +155,7 @@ final public class Typesetter {
             context.popCurrentData()
         }
 
-        return (context.lines, CGSize(width: context.maxWidth, height: context.maxHeight))
+        return (context.lines, context.maxHeight)
     }
 
     // MARK: - Layout Text Fragments
@@ -233,8 +230,6 @@ final public class Typesetter {
         // Insert an empty fragment
         let ctLine = CTTypesetterCreateLine(typesetter, CFRangeMake(0, 0))
         let fragment = LineFragment(
-            lineRange: documentRange ?? .zero,
-            documentRange: NSRange(location: (documentRange ?? .notFound).location, length: 0),
             contents: [.init(data: .text(line: ctLine), width: 0.0)],
             width: 0,
             height: displayData.estimatedLineHeight / displayData.lineHeightMultiplier,

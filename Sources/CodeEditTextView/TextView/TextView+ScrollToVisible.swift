@@ -29,10 +29,11 @@ extension TextView {
             layoutManager.layoutLines()
             selectionManager.updateSelectionViews()
             selectionManager.drawSelections(in: visibleRect)
-        }
-        if lastFrame != .zero {
-            scrollView.contentView.scrollToVisible(lastFrame)
-            scrollView.reflectScrolledClipView(scrollView.contentView)
+
+            if lastFrame != .zero {
+                scrollView.contentView.scrollToVisible(lastFrame)
+                scrollView.reflectScrolledClipView(scrollView.contentView)
+            }
         }
     }
 

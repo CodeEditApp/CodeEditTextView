@@ -263,8 +263,13 @@ extension TextLayoutManager {
 //        ) {
         for lineFragmentPosition in line.lineFragments {
             let lineFragment = lineFragmentPosition.data
+            lineFragment.documentRange = lineFragmentPosition.range.translate(location: position.range.location)
 
-            layoutFragmentView(for: lineFragmentPosition, at: position.yPos + lineFragmentPosition.yPos)
+            layoutFragmentView(
+                inLine: position,
+                for: lineFragmentPosition,
+                at: position.yPos + lineFragmentPosition.yPos
+            )
 
             width = max(width, lineFragment.width)
             height += lineFragment.scaledHeight
@@ -281,14 +286,16 @@ extension TextLayoutManager {
     ///   - lineFragment: The line fragment position to lay out a view for.
     ///   - yPos: The y value at which the line should begin.
     private func layoutFragmentView(
+        inLine line: TextLineStorage<TextLine>.TextLinePosition,
         for lineFragment: TextLineStorage<LineFragment>.TextLinePosition,
         at yPos: CGFloat
     ) {
+        let fragmentRange = lineFragment.range.translate(location: line.range.location)
         let view = viewReuseQueue.getOrCreateView(forKey: lineFragment.data.id) {
             renderDelegate?.lineFragmentView(for: lineFragment.data) ?? LineFragmentView()
         }
         view.translatesAutoresizingMaskIntoConstraints = true // Small optimization for lots of subviews
-        view.setLineFragment(lineFragment.data, renderer: lineFragmentRenderer)
+        view.setLineFragment(lineFragment.data, fragmentRange: fragmentRange, renderer: lineFragmentRenderer)
         view.frame.origin = CGPoint(x: edgeInsets.left, y: yPos)
         layoutView?.addSubview(view, positioned: .below, relativeTo: nil)
         view.needsDisplay = true
@@ -300,7 +307,9 @@ extension TextLayoutManager {
             guard let view = viewReuseQueue.getView(forKey: lineFragmentPosition.data.id) else {
                 return true
             }
-
+            lineFragmentPosition.data.documentRange = lineFragmentPosition.range.translate(
+                location: position.range.location
+            )
             view.frame.origin = CGPoint(x: edgeInsets.left, y: position.yPos + lineFragmentPosition.yPos)
         }
         return false
