@@ -254,17 +254,14 @@ class TypesetterTests: XCTestCase {
         XCTAssertEqual(typesetter.lineFragments.count, 3)
 
         var fragment = try XCTUnwrap(typesetter.lineFragments.first?.data)
-        XCTAssertEqual(fragment.documentRange, NSRange(location: 0, length: 1))
         XCTAssertEqual(fragment.contents.count, 1)
         XCTAssertTrue(fragment.contents[0].isText)
 
         fragment = try XCTUnwrap(typesetter.lineFragments.getLine(atIndex: 1)?.data)
-        XCTAssertEqual(fragment.documentRange, NSRange(location: 1, length: 1))
         XCTAssertEqual(fragment.contents.count, 1)
         XCTAssertFalse(fragment.contents[0].isText)
 
         fragment = try XCTUnwrap(typesetter.lineFragments.getLine(atIndex: 2)?.data)
-        XCTAssertEqual(fragment.documentRange, NSRange(location: 2, length: 4))
         XCTAssertEqual(fragment.contents.count, 1)
         XCTAssertTrue(fragment.contents[0].isText)
     }

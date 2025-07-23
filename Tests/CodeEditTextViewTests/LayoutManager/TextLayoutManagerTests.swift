@@ -212,15 +212,18 @@ struct TextLayoutManagerTests {
         )
     }
 
-    /// Inserting a new line should cause layout going down the rest of the screen, because the following lines
-    /// should have moved their position to accomodate the new line.
+    /// ~~Inserting a new line should cause layout going down the rest of the screen, because the following lines
+    /// should have moved their position to accomodate the new line.~~
+    /// This is slightly changed now. The layout manager checks if a line actually needs to be typeset again and only
+    /// invalidates it if it does. Otherwise it moves lines. This test now just checks that the invalidated lines
+    /// equal the expected invalidated lines.
     @Test
     func editsWithNewlinesForceLayoutGoingDownScreen() {
         layoutManager.layoutLines(in: NSRect(x: 0, y: 0, width: 1000, height: 1000))
         textStorage.replaceCharacters(in: NSRange(start: 4, end: 4), with: "Z\n")
 
         let expectedLineIds = Array(
-            layoutManager.lineStorage.linesInRange(NSRange(location: 4, length: 9))
+            layoutManager.lineStorage.linesInRange(NSRange(location: 4, length: 4))
         ).map { $0.data.id }
 
         #expect(layoutManager.needsLayout == false) // No forced layout for entire view
@@ -249,5 +252,21 @@ struct TextLayoutManagerTests {
                 #expect(layoutManager.textOffsetAtPoint(CGPoint(x: xPos, y: yPos)) != nil)
             }
         }
+    }
+
+    @Test
+    func editingEndOfDocumentInvalidatesLastLine() throws {
+        // Setup a slightly longer final line
+        textStorage.replaceCharacters(in: NSRange(location: 7, length: 0), with: "EFGH")
+        layoutManager.layoutLines(in: NSRect(x: 0, y: 0, width: 1000, height: 1000))
+
+        textStorage.replaceCharacters(in: NSRange(location: 10, length: 1), with: "")
+        let invalidatedLineIds = layoutManager.layoutLines(in: NSRect(x: 0, y: 0, width: 1000, height: 1000))
+
+        let expectedLineIds = Array(
+            layoutManager.lineStorage.linesInRange(NSRange(location: 6, length: 0))
+        ).map { $0.data.id }
+
+        #expect(invalidatedLineIds.isSuperset(of: Set(expectedLineIds)))
     }
 }

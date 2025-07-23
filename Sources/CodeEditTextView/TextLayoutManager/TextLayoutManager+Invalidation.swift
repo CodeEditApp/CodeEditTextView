@@ -25,6 +25,12 @@ extension TextLayoutManager {
             linePosition.data.setNeedsLayout()
         }
 
+        // Special case where we've deleted from the very end, `linesInRange` correctly does not return any lines
+        // So we need to invalidate the last line specifically.
+        if range.location == textStorage?.length, !lineStorage.isEmpty {
+            lineStorage.last?.data.setNeedsLayout()
+        }
+
         layoutView?.needsLayout = true
     }
 
