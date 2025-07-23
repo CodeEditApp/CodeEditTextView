@@ -212,8 +212,11 @@ struct TextLayoutManagerTests {
         )
     }
 
-    /// Inserting a new line should cause layout going down the rest of the screen, because the following lines
-    /// should have moved their position to accomodate the new line.
+    /// ~~Inserting a new line should cause layout going down the rest of the screen, because the following lines
+    /// should have moved their position to accomodate the new line.~~
+    /// This is slightly changed now. The layout manager checks if a line actually needs to be typeset again and only
+    /// invalidates it if it does. Otherwise it moves lines. This test now just checks that the invalidated lines
+    /// equal the expected invalidated lines.
     @Test
     func editsWithNewlinesForceLayoutGoingDownScreen() {
         layoutManager.layoutLines(in: NSRect(x: 0, y: 0, width: 1000, height: 1000))
