@@ -250,4 +250,20 @@ struct TextLayoutManagerTests {
             }
         }
     }
+
+    @Test
+    func editingEndOfDocumentInvalidatesLastLine() throws {
+        // Setup a slightly longer final line
+        textStorage.replaceCharacters(in: NSRange(location: 7, length: 0), with: "EFGH")
+        layoutManager.layoutLines(in: NSRect(x: 0, y: 0, width: 1000, height: 1000))
+
+        textStorage.replaceCharacters(in: NSRange(location: 10, length: 1), with: "")
+        let invalidatedLineIds = layoutManager.layoutLines(in: NSRect(x: 0, y: 0, width: 1000, height: 1000))
+
+        let expectedLineIds = Array(
+            layoutManager.lineStorage.linesInRange(NSRange(location: 6, length: 0))
+        ).map { $0.data.id }
+
+        #expect(invalidatedLineIds.isSuperset(of: Set(expectedLineIds)))
+    }
 }
