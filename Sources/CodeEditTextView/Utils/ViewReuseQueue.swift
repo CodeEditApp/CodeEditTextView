@@ -35,6 +35,7 @@ public class ViewReuseQueue<View: NSView, Key: Hashable> {
         } else {
             view = queuedViews.popFirst() ?? createView()
             view.prepareForReuse()
+            view.isHidden = false
             usedViews[key] = view
         }
         return view
@@ -48,11 +49,14 @@ public class ViewReuseQueue<View: NSView, Key: Hashable> {
     /// - Parameter key: The key for the view to reuse.
     public func enqueueView(forKey key: Key) {
         guard let view = usedViews[key] else { return }
-        if queuedViews.count < usedViews.count / 4 {
+        if queuedViews.count < usedViews.count {
             queuedViews.append(view)
+            view.frame = .zero
+            view.isHidden = true
+        } else {
+            view.removeFromSuperviewWithoutNeedingDisplay()
         }
         usedViews.removeValue(forKey: key)
-        view.removeFromSuperviewWithoutNeedingDisplay()
     }
 
     /// Enqueues all views not in the given set.
