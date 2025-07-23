@@ -25,7 +25,6 @@ open class LineFragmentView: NSView {
 
     open override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
-    /// Initialize with random background color animation
     public override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
     }
