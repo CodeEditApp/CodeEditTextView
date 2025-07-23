@@ -62,7 +62,6 @@ open class LineFragmentView: NSView {
     }
 #endif
 
-    /// Prepare the view for reuse, clears the line fragment reference and restarts animation.
     open override func prepareForReuse() {
         super.prepareForReuse()
         lineFragment = nil
