@@ -220,7 +220,7 @@ struct TextLayoutManagerTests {
         textStorage.replaceCharacters(in: NSRange(start: 4, end: 4), with: "Z\n")
 
         let expectedLineIds = Array(
-            layoutManager.lineStorage.linesInRange(NSRange(location: 4, length: 9))
+            layoutManager.lineStorage.linesInRange(NSRange(location: 4, length: 4))
         ).map { $0.data.id }
 
         #expect(layoutManager.needsLayout == false) // No forced layout for entire view
