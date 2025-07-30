@@ -14,7 +14,7 @@ public enum EmphasisStyle: Equatable {
     /// Underline emphasis with a line color
     case underline(color: NSColor)
     /// Outline emphasis with a border color
-    case outline(color: NSColor)
+    case outline(color: NSColor, fill: Bool = false)
 
     public static func == (lhs: EmphasisStyle, rhs: EmphasisStyle) -> Bool {
         switch (lhs, rhs) {
@@ -22,8 +22,8 @@ public enum EmphasisStyle: Equatable {
             return true
         case (.underline(let lhsColor), .underline(let rhsColor)):
             return lhsColor == rhsColor
-        case (.outline(let lhsColor), .outline(let rhsColor)):
-            return lhsColor == rhsColor
+        case let (.outline(lhsColor, lhsFill), .outline(rhsColor, rhsFill)):
+            return lhsColor == rhsColor && lhsFill == rhsFill
         default:
             return false
         }

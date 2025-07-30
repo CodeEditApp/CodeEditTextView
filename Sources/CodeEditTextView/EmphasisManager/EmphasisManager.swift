@@ -233,11 +233,11 @@ public final class EmphasisManager {
             layer.fillColor = nil
             layer.opacity = emphasis.flash ? 0.0 : 1.0
             layer.zPosition = 1
-        case .outline(let color):
+        case let .outline(color, shouldFill):
             layer.cornerRadius = 2.5
             layer.borderColor = color.cgColor
             layer.borderWidth = 0.5
-            layer.fillColor = nil
+            layer.fillColor = shouldFill ? color.cgColor : nil
             layer.opacity = emphasis.flash ? 0.0 : 1.0
             layer.zPosition = 1
         }

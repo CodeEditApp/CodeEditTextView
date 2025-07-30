@@ -33,7 +33,7 @@ import TextStory
 /// [`NSTextInputClient`](https://developer.apple.com/documentation/appkit/nstextinputclient) to work well with system
 /// text interactions such as inserting text and marked text.
 ///
-public class TextView: NSView, NSTextContent {
+open class TextView: NSView, NSTextContent {
     // MARK: - Statics
 
     /// The default typing attributes:
@@ -356,7 +356,7 @@ public class TextView: NSView, NSTextContent {
         setUpDragGesture()
     }
 
-    required init?(coder: NSCoder) {
+    required public init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
