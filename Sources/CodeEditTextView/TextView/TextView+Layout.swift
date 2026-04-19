@@ -10,6 +10,39 @@ import Foundation
 extension TextView {
     override public func layout() {
         super.layout()
+
+        // let currentWidth = layoutManager.wrapLinesWidth
+        // let widthChanged = currentWidth != lastKnownLayoutWidth
+        // lastKnownLayoutWidth = currentWidth
+
+        // // When the only change is the available layout width (e.g. a split-view panel animating open/close),
+        // // every animation frame would otherwise re-lay out all visible lines because `maxLineLayoutWidth` changed.
+        // // Coalesce these into a single deferred pass after the width stabilises instead.
+        // //
+        // // Conditions for deferral:
+        // //   • wrap-lines is enabled (non-wrapping text uses .greatestFiniteMagnitude which never changes)
+        // //   • the width changed but no explicit content/layout invalidation is pending
+        // //   • there are already visible lines (avoids delaying the very first render)
+        // if layoutManager.wrapLines
+        //     && widthChanged
+        //     && !layoutManager.needsLayout
+        //     && !layoutManager.visibleLineIds.isEmpty {
+        //     pendingWidthRelayout?.cancel()
+        //     let task = DispatchWorkItem { [weak self] in
+        //         self?.pendingWidthRelayout = nil
+        //         self?.layoutManager.layoutLines()
+        //         self?.selectionManager.updateSelectionViews(skipTimerReset: true)
+        //     }
+        //     pendingWidthRelayout = task
+        //     // 50 ms coalesces all frames of a typical panel animation (~200 ms)
+        //     // while still being imperceptible after the animation completes.
+        //     DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: task)
+        // } else {
+        //     pendingWidthRelayout?.cancel()
+        //     pendingWidthRelayout = nil
+        //     layoutManager.layoutLines()
+        //     selectionManager.updateSelectionViews(skipTimerReset: true)
+        // }
         layoutManager.layoutLines()
         selectionManager.updateSelectionViews(skipTimerReset: true)
     }
@@ -28,6 +61,7 @@ extension TextView {
         if isSelectable {
             selectionManager.drawSelections(in: dirtyRect)
         }
+        layoutManager.drawLineDecorations(in: dirtyRect)
         emphasisManager?.updateLayerBackgrounds()
     }
 

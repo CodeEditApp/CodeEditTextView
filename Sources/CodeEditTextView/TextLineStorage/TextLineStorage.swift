@@ -150,6 +150,7 @@ public final class TextLineStorage<Data: Identifiable> {
     /// - Parameter position: The position to fetch for.
     /// - Returns: A  ``TextLineStorage/TextLinePosition`` struct with relevant position and line information.
     public func getLine(atPosition posY: CGFloat) -> TextLinePosition? {
+        guard posY >= 0 else { return first }
         guard posY < height else {
             return last
         }
@@ -159,7 +160,7 @@ public final class TextLineStorage<Data: Identifiable> {
         var currentYPosition: CGFloat = root?.leftSubtreeHeight ?? 0
         var currentIndex: Int = root?.leftSubtreeCount ?? 0
         while let node = currentNode {
-            // If index is in the range [currentOffset..<currentOffset + length) it's in the line
+            // If posY is in the range [currentYPosition..<currentYPosition + height) it's in the line
             if posY >= currentYPosition && posY < currentYPosition + node.height {
                 return TextLinePosition(
                     data: node.data,
@@ -173,13 +174,12 @@ public final class TextLineStorage<Data: Identifiable> {
                 currentOffset = (currentOffset - node.leftSubtreeOffset) + (node.left?.leftSubtreeOffset ?? 0)
                 currentYPosition = (currentYPosition - node.leftSubtreeHeight) + (node.left?.leftSubtreeHeight ?? 0)
                 currentIndex = (currentIndex - node.leftSubtreeCount) + (node.left?.leftSubtreeCount ?? 0)
-            } else if node.leftSubtreeHeight < posY {
+            } else {
+                // posY >= currentYPosition + node.height, so the target line is after this node.
                 currentNode = node.right
                 currentOffset += node.length + (node.right?.leftSubtreeOffset ?? 0)
                 currentYPosition += node.height + (node.right?.leftSubtreeHeight ?? 0)
                 currentIndex += 1 + (node.right?.leftSubtreeCount ?? 0)
-            } else {
-                currentNode = nil
             }
         }
 
@@ -350,13 +350,12 @@ private extension TextLineStorage {
                 currentOffset = (currentOffset - node.leftSubtreeOffset) + (node.left?.leftSubtreeOffset ?? 0)
                 currentYPosition = (currentYPosition - node.leftSubtreeHeight) + (node.left?.leftSubtreeHeight ?? 0)
                 currentIndex = (currentIndex - node.leftSubtreeCount) + (node.left?.leftSubtreeCount ?? 0)
-            } else if node.leftSubtreeOffset < offset {
+            } else {
+                // offset >= currentOffset + node.length, so the target is after this node.
                 currentNode = node.right
                 currentOffset += node.length + (node.right?.leftSubtreeOffset ?? 0)
                 currentYPosition += node.height + (node.right?.leftSubtreeHeight ?? 0)
                 currentIndex += 1 + (node.right?.leftSubtreeCount ?? 0)
-            } else {
-                currentNode = nil
             }
         }
         return nil

@@ -21,8 +21,19 @@ extension TextLayoutManager {
     /// Invalidates layout for the given range of text.
     /// - Parameter range: The range of text to invalidate.
     public func invalidateLayoutForRange(_ range: NSRange) {
-        for linePosition in lineStorage.linesInRange(range) {
-            linePosition.data.setNeedsLayout()
+        if range.isEmpty {
+            // For zero-length ranges (e.g. cursor position after insert/delete at a point), invalidate the line
+            // containing the location.
+            if let linePosition = lineStorage.getLine(atOffset: range.location) {
+                linePosition.data.setNeedsLayout()
+            } else if !lineStorage.isEmpty {
+                // If we can't find a line at the offset (e.g. offset == length), invalidate the last line.
+                lineStorage.last?.data.setNeedsLayout()
+            }
+        } else {
+            for linePosition in lineStorage.linesInRange(range) {
+                linePosition.data.setNeedsLayout()
+            }
         }
 
         // Special case where we've deleted from the very end, `linesInRange` correctly does not return any lines

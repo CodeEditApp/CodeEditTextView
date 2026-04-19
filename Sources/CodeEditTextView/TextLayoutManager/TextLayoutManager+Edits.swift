@@ -42,9 +42,32 @@ extension TextLayoutManager: NSTextStorageDelegate {
             return
         }
 
+        let lineCountBefore = lineStorage.count
+
         let insertedStringRange = NSRange(location: editedRange.location, length: editedRange.length - delta)
         removeLayoutLinesIn(range: insertedStringRange)
         insertNewLines(for: editedRange)
+
+        // Adjust view zone line numbers if the line count changed.
+        let lineCountAfter = lineStorage.count
+        let lineDelta = lineCountAfter - lineCountBefore
+        if lineDelta != 0, !viewZones.zones.isEmpty {
+            // Find which line the edit started at.
+            let editLine = lineStorage.getLine(atOffset: editedRange.location)?.index ?? 0
+            viewZones.adjustLineNumbers(afterLine: editLine, delta: lineDelta)
+        }
+
+        // Adjust line decoration ranges if the line count changed.
+        if lineDelta != 0, lineDecorations.count > 0 {
+            let editLine = lineStorage.getLine(atOffset: editedRange.location)?.index ?? 0
+            let oldLineCount = lineCountBefore > 0 ? max(1, abs(lineDelta)) : 1
+            let newLineCount = oldLineCount + lineDelta
+            lineDecorations.adjustForEdit(
+                editLineStart: editLine,
+                oldLineCount: oldLineCount,
+                newLineCount: newLineCount
+            )
+        }
 
         attachments.textUpdated(atOffset: editedRange.location, delta: delta)
 
@@ -55,23 +78,39 @@ extension TextLayoutManager: NSTextStorageDelegate {
     /// edit.
     /// - Parameter range: The range that was deleted.
     private func removeLayoutLinesIn(range: NSRange) {
-        // Loop through each line being replaced in reverse, updating and removing where necessary.
-        for linePosition in lineStorage.linesInRange(range).reversed() {
-            // Two cases: Updated line, deleted line entirely
-            guard let intersection = linePosition.range.intersection(range), !intersection.isEmpty else { continue }
-            if intersection == linePosition.range && linePosition.range.max != lineStorage.length {
-                // Delete line
-                lineStorage.delete(lineAt: linePosition.range.location)
-            } else if intersection.max == linePosition.range.max,
-                      let nextLine = lineStorage.getLine(atOffset: linePosition.range.max) {
-                // Need to merge line with one after it after updating this line to remove the end of the line
+        // Collect all line positions in the range first, snapshotting their indices in reverse order.
+        // We use indices rather than offsets because after each tree mutation the offsets shift, but re-fetching
+        // by index is stable (we process in reverse order so lower indices remain valid).
+        let linePositions = Array(lineStorage.linesInRange(range).reversed())
+        guard !linePositions.isEmpty else { return }
+
+        for linePosition in linePositions {
+            // Re-fetch the line by index to get a fresh position after prior mutations.
+            guard let freshPosition = lineStorage.getLine(atIndex: linePosition.index) else { continue }
+            guard let intersection = freshPosition.range.intersection(range), !intersection.isEmpty else { continue }
+
+            if intersection == freshPosition.range && freshPosition.range.max != lineStorage.length {
+                // Delete line entirely
+                lineStorage.delete(lineAt: freshPosition.range.location)
+            } else if intersection.max == freshPosition.range.max,
+                      let nextLine = lineStorage.getLine(atOffset: freshPosition.range.max) {
+                // Need to merge line with one after it after updating this line to remove the end of the line.
+                // Capture merge delta before mutating the tree.
+                let mergeDelta = -intersection.length + nextLine.range.length
                 lineStorage.delete(lineAt: nextLine.range.location)
-                let delta = -intersection.length + nextLine.range.length
-                if delta != 0 {
-                    lineStorage.update(atOffset: linePosition.range.location, delta: delta, deltaHeight: 0)
+                if mergeDelta != 0 {
+                    lineStorage.update(
+                        atOffset: freshPosition.range.location,
+                        delta: mergeDelta,
+                        deltaHeight: 0
+                    )
                 }
             } else {
-                lineStorage.update(atOffset: linePosition.range.location, delta: -intersection.length, deltaHeight: 0)
+                lineStorage.update(
+                    atOffset: freshPosition.range.location,
+                    delta: -intersection.length,
+                    deltaHeight: 0
+                )
             }
         }
     }
@@ -111,21 +150,26 @@ extension TextLayoutManager: NSTextStorageDelegate {
                     height: estimateLineHeight()
                 )
             } else {
-                // Need to split the line inserting into and create a new line with the split section of the line
+                // Need to split the line inserting into and create a new line with the split section of the line.
                 guard let linePosition = lineStorage.getLine(atOffset: location) else { return }
-                let splitLocation = location + insertedString.length
+                // Capture splitLength before any tree mutations so it uses the fresh linePosition.
                 let splitLength = linePosition.range.max - location
                 let lineDelta = insertedString.length - splitLength // The difference in the line being edited
-                if lineDelta != 0 {
-                    lineStorage.update(atOffset: location, delta: lineDelta, deltaHeight: 0.0)
-                }
 
+                // First, insert the new split line. We do this before updating the current line to avoid
+                // using stale values after tree rebalancing.
                 lineStorage.insert(
                     line: TextLine(),
-                    atOffset: splitLocation,
+                    atOffset: linePosition.range.max,
                     length: splitLength,
                     height: estimateLineHeight()
                 )
+
+                // Now update the current line's length. The inserted string replaces the portion that was
+                // split off, so the net delta on this line is `insertedString.length - splitLength`.
+                if lineDelta != 0 {
+                    lineStorage.update(atOffset: location, delta: lineDelta, deltaHeight: 0.0)
+                }
             }
         } else {
             lineStorage.update(atOffset: location, delta: insertedString.length, deltaHeight: 0.0)

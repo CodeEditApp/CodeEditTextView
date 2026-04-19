@@ -77,20 +77,61 @@ extension TextLayoutManager {
 
         let minY = max(visibleRect.minY - verticalLayoutPadding, 0)
         let maxY = max(visibleRect.maxY + verticalLayoutPadding, 0)
-        let originalHeight = lineStorage.height
+        let originalHeight = lineStorage.height + viewZones.totalHeight
         var usedFragmentIDs = Set<LineFragment.ID>()
         let forceLayout: Bool = needsLayout
         var didLayoutChange = false
         var newVisibleLines: Set<TextLine.ID> = []
         var yContentAdjustment: CGFloat = 0
         var maxFoundLineWidth = maxLineWidth
+        let hasViewZones = !viewZones.zones.isEmpty
+
+        // When view zones exist, line storage Y positions don't include whitespace.
+        // We subtract total whitespace from minY for a conservative lower bound on which lines to iterate,
+        // and keep maxY as-is (since line storage Y is always <= document Y).
+        let queryMinY = hasViewZones ? max(minY - viewZones.totalHeight, 0) : minY
+        let queryMaxY = maxY
 
 #if DEBUG
         var laidOutLines: Set<TextLine.ID> = []
 #endif
+        // Track which view zone views are still in use so we can remove stale ones.
+        var usedZoneIDs = Set<UUID>()
+
         // Layout all lines, fetching lines lazily as they are laid out.
-        for linePosition in linesStartingAt(minY, until: maxY).lazy {
-            guard linePosition.yPos < maxY else { continue }
+        for linePosition in linesStartingAt(queryMinY, until: queryMaxY).lazy {
+            // Compute the document Y (with view zone offsets) for visibility checks.
+            let whitespaceOffset = hasViewZones
+                ? viewZones.whitespaceHeightBeforeLine(linePosition.index)
+                : 0
+            let documentYPos = linePosition.yPos + whitespaceOffset
+
+            guard documentYPos < maxY else { continue }
+
+            // Layout any view zones that appear before this line.
+            if hasViewZones {
+                let zonesBeforeLine = viewZones.zones(afterLine: linePosition.index - 1)
+                for zone in zonesBeforeLine where zone.afterLineNumber == linePosition.index - 1
+                                                  || (linePosition.index == 0 && zone.afterLineNumber == 0) {
+                    // Compute the zone's document Y position: it sits between the previous line and this line.
+                    let zoneDocY: CGFloat
+                    if zone.afterLineNumber <= 0 {
+                        zoneDocY = viewZones.whitespaceHeightBeforeLine(0)
+                            - zone.heightInPoints // This zone is part of the whitespace before line 0
+                    } else {
+                        // Zone sits after the line it follows
+                        if let prevLine = lineStorage.getLine(atIndex: zone.afterLineNumber - 1) {
+                            let prevWhitespace = viewZones.whitespaceHeightBeforeLine(zone.afterLineNumber - 1)
+                            zoneDocY = prevLine.yPos + prevLine.height + prevWhitespace
+                        } else {
+                            zoneDocY = documentYPos - zone.heightInPoints
+                        }
+                    }
+                    layoutViewZone(zone, at: zoneDocY)
+                    usedZoneIDs.insert(zone.id)
+                }
+            }
+
             // Three ways to determine if a line needs to be re-calculated.
             let linePositionNeedsLayout = linePosition.data.needsLayout(maxWidth: maxLineLayoutWidth)
             let wasNotVisible = !visibleLineIds.contains(linePosition.data.id)
@@ -101,6 +142,7 @@ extension TextLayoutManager {
             func fullLineLayout() {
                 let (yAdjustment, wasLineHeightChanged) = layoutLine(
                     linePosition,
+                    whitespaceOffset: whitespaceOffset,
                     usedFragmentIDs: &usedFragmentIDs,
                     textStorage: textStorage,
                     yRange: minY..<maxY,
@@ -125,7 +167,7 @@ extension TextLayoutManager {
             } else {
                 if didLayoutChange || yContentAdjustment > 0 {
                     // Layout happened and this line needs to be moved but not necessarily re-added
-                    let needsFullLayout = updateLineViewPositions(linePosition)
+                    let needsFullLayout = updateLineViewPositions(linePosition, whitespaceOffset: whitespaceOffset)
                     if needsFullLayout {
                         fullLineLayout()
                         continue
@@ -134,6 +176,13 @@ extension TextLayoutManager {
 
                 // Make sure the used fragment views aren't dequeued.
                 usedFragmentIDs.formUnion(linePosition.data.lineFragments.map(\.data.id))
+            }
+        }
+
+        // Remove view zone views that are no longer in the viewport.
+        if hasViewZones {
+            for zone in viewZones.zones where !usedZoneIDs.contains(zone.id) {
+                zone.view?.removeFromSuperview()
             }
         }
 
@@ -159,8 +208,9 @@ extension TextLayoutManager {
             delegate?.layoutManagerYAdjustment(yContentAdjustment)
         }
 
-        if originalHeight != lineStorage.height || layoutView?.frame.size.height != lineStorage.height {
-            delegate?.layoutManagerHeightDidUpdate(newHeight: lineStorage.height)
+        if originalHeight != lineStorage.height + viewZones.totalHeight
+            || layoutView?.frame.size.height != lineStorage.height + viewZones.totalHeight {
+            delegate?.layoutManagerHeightDidUpdate(newHeight: lineStorage.height + viewZones.totalHeight)
         }
 
 #if DEBUG
@@ -174,6 +224,7 @@ extension TextLayoutManager {
 
     private func layoutLine(
         _ linePosition: TextLineStorage<TextLine>.TextLinePosition,
+        whitespaceOffset: CGFloat = 0,
         usedFragmentIDs: inout Set<LineFragment.ID>,
         textStorage: NSTextStorage,
         yRange: Range<CGFloat>,
@@ -181,6 +232,7 @@ extension TextLayoutManager {
     ) -> (CGFloat, wasLineHeightChanged: Bool) {
         let lineSize = layoutLineViews(
             linePosition,
+            whitespaceOffset: whitespaceOffset,
             textStorage: textStorage,
             layoutData: LineLayoutData(minY: yRange.lowerBound, maxY: yRange.upperBound, maxWidth: maxLineLayoutWidth),
             laidOutFragmentIDs: &usedFragmentIDs
@@ -217,6 +269,7 @@ extension TextLayoutManager {
     /// - Returns: A `CGSize` representing the max width and total height of the laid out portion of the line.
     private func layoutLineViews(
         _ position: TextLineStorage<TextLine>.TextLinePosition,
+        whitespaceOffset: CGFloat = 0,
         textStorage: NSTextStorage,
         layoutData: LineLayoutData,
         laidOutFragmentIDs: inout Set<LineFragment.ID>
@@ -254,13 +307,7 @@ extension TextLayoutManager {
 
         var height: CGFloat = 0
         var width: CGFloat = 0
-        let relativeMinY = max(layoutData.minY - position.yPos, 0)
-        let relativeMaxY = max(layoutData.maxY - position.yPos, relativeMinY)
 
-//        for lineFragmentPosition in line.lineFragments.linesStartingAt(
-//            relativeMinY,
-//            until: relativeMaxY
-//        ) {
         for lineFragmentPosition in line.lineFragments {
             let lineFragment = lineFragmentPosition.data
             lineFragment.documentRange = lineFragmentPosition.range.translate(location: position.range.location)
@@ -268,7 +315,7 @@ extension TextLayoutManager {
             layoutFragmentView(
                 inLine: position,
                 for: lineFragmentPosition,
-                at: position.yPos + lineFragmentPosition.yPos
+                at: position.yPos + whitespaceOffset + lineFragmentPosition.yPos
             )
 
             width = max(width, lineFragment.width)
@@ -280,6 +327,20 @@ extension TextLayoutManager {
     }
 
     // MARK: - Layout Fragment
+
+    /// Positions a view zone's view at the given document y position.
+    /// - Parameters:
+    ///   - zone: The view zone to layout.
+    ///   - yPos: The y position in document coordinates where the zone should be placed.
+    private func layoutViewZone(_ zone: ViewZone, at yPos: CGFloat) {
+        guard let zoneView = zone.view else { return }
+        zoneView.translatesAutoresizingMaskIntoConstraints = true
+        let width = (delegate?.textViewportSize().width ?? layoutView?.bounds.width) ?? 0
+        zoneView.frame = CGRect(x: 0, y: yPos, width: width, height: zone.heightInPoints)
+        if zoneView.superview !== layoutView {
+            layoutView?.addSubview(zoneView, positioned: .above, relativeTo: nil)
+        }
+    }
 
     /// Lays out a line fragment view for the given line fragment at the specified y value.
     /// - Parameters:
@@ -301,7 +362,10 @@ extension TextLayoutManager {
         view.needsDisplay = true
     }
 
-    private func updateLineViewPositions(_ position: TextLineStorage<TextLine>.TextLinePosition) -> Bool {
+    private func updateLineViewPositions(
+        _ position: TextLineStorage<TextLine>.TextLinePosition,
+        whitespaceOffset: CGFloat = 0
+    ) -> Bool {
         let line = position.data
         for lineFragmentPosition in line.lineFragments {
             guard let view = viewReuseQueue.getView(forKey: lineFragmentPosition.data.id) else {
@@ -310,7 +374,10 @@ extension TextLayoutManager {
             lineFragmentPosition.data.documentRange = lineFragmentPosition.range.translate(
                 location: position.range.location
             )
-            view.frame.origin = CGPoint(x: edgeInsets.left, y: position.yPos + lineFragmentPosition.yPos)
+            view.frame.origin = CGPoint(
+                x: edgeInsets.left,
+                y: position.yPos + whitespaceOffset + lineFragmentPosition.yPos
+            )
         }
         return false
     }

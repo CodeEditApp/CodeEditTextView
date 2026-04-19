@@ -66,6 +66,16 @@ public class TextLayoutManager: NSObject {
 
     public let attachments: TextAttachmentManager = TextAttachmentManager()
 
+    /// Manages view zones — horizontal bands of space inserted between lines of text.
+    /// View zones are used to display UI elements between lines, such as reference counts,
+    /// merge conflict buttons, inline diffs, and other features that need vertical space
+    /// in the document flow.
+    public let viewZones: ViewZoneManager = ViewZoneManager()
+
+    /// Manages line decorations — visual adornments applied to lines such as backgrounds, glyph margin
+    /// indicators, and overview ruler marks.
+    public let lineDecorations: LineDecorationManager = LineDecorationManager()
+
     public weak var invisibleCharacterDelegate: InvisibleCharactersDelegate? {
         didSet {
             lineFragmentRenderer.invisibleCharacterDelegate = invisibleCharacterDelegate
@@ -148,6 +158,12 @@ public class TextLayoutManager: NSObject {
         super.init()
         prepareTextLines()
         attachments.layoutManager = self
+        viewZones.onZonesChanged = { [weak self] in
+            self?.setNeedsLayout()
+        }
+        lineDecorations.onDecorationsChanged = { [weak self] in
+            self?.layoutView?.needsDisplay = true
+        }
     }
 
     /// Prepares the layout manager for use.
@@ -187,6 +203,7 @@ public class TextLayoutManager: NSObject {
         maxLineWidth = 0
         markedTextManager.removeAll()
         lineFragmentRenderer.textStorage = textStorage
+        lineDecorations.removeAllDecorations()
         prepareTextLines()
         setNeedsLayout()
     }

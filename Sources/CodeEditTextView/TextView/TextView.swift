@@ -258,6 +258,14 @@ open class TextView: NSView, NSTextContent {
 
     var isFirstResponder: Bool = false
 
+    // Tracks the layout width from the most recent `layout()` call. Used in ``layout()`` to detect resize-only
+    // passes (e.g. during a split-view panel animation) and debounce the resulting full text relayout.
+    // var lastKnownLayoutWidth: CGFloat = 0
+
+    // A pending work item that performs a deferred `layoutLines()` after the view width stabilises.
+    // Cancelled and replaced whenever a new width-change-only `layout()` call arrives.
+    // var pendingWidthRelayout: DispatchWorkItem?
+
     /// When dragging to create a selection, these enable us to scroll the view as the user drags outside the view's
     /// bounds.
     var mouseDragAnchor: CGPoint?

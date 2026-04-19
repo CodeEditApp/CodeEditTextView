@@ -50,19 +50,23 @@ extension TextSelectionManager {
         highlightedLines.insert(linePosition.data.id)
         context.saveGState()
 
-        let insetXPos = max(rect.minX, edgeInsets.left)
-        let maxWidth = (textView?.frame.width ?? 0) - insetXPos - edgeInsets.right
+        let padding = LineHighlightDrawing.horizontalPadding
+        let insetXPos = max(rect.minX, edgeInsets.left) + padding
+        let maxWidth = (textView?.frame.width ?? 0) - insetXPos - edgeInsets.right - padding
 
         let selectionRect = CGRect(
             x: insetXPos,
             y: linePosition.yPos,
-            width: min(rect.width, maxWidth),
+            width: min(rect.width - 2 * padding, maxWidth),
             height: linePosition.height
         ).pixelAligned
 
         if selectionRect.intersects(rect) {
-            context.setFillColor(selectedLineBackgroundColor.cgColor)
-            context.fill(selectionRect)
+            LineHighlightDrawing.fillRoundedRect(
+                selectionRect,
+                color: selectedLineBackgroundColor.cgColor,
+                in: context
+            )
         }
         context.restoreGState()
     }

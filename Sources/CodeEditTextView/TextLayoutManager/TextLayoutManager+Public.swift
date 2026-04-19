@@ -11,11 +11,50 @@ extension TextLayoutManager {
     // MARK: - Estimate
 
     public func estimatedHeight() -> CGFloat {
-        max(lineStorage.height, estimateLineHeight())
+        max(lineStorage.height + viewZones.totalHeight, estimateLineHeight())
     }
 
     public func estimatedWidth() -> CGFloat {
         maxLineWidth + edgeInsets.horizontal
+    }
+
+    // MARK: - View Zone Coordinate Translation
+
+    /// Converts a document Y position (which includes view zone whitespace) to a line-storage Y position
+    /// (which does not include view zone whitespace).
+    ///
+    /// This is needed because the line storage tree stores raw line heights without knowledge of view zones.
+    /// When the user clicks at a document Y position or when layout needs to determine which line is at a
+    /// given visual position, the view zone whitespace must be subtracted.
+    ///
+    /// - Parameter documentY: The Y position in the full document coordinate space (includes view zones).
+    /// - Returns: The Y position in line-storage coordinate space (excludes view zones).
+    func documentYToLineStorageY(_ documentY: CGFloat) -> CGFloat {
+        guard !viewZones.zones.isEmpty else { return documentY }
+
+        var adjustedY = documentY
+        var lastWhitespace: CGFloat = 0
+
+        // Iterate to convergence (usually 1-2 iterations)
+        for _ in 0..<10 {
+            // For the current adjustedY, find which line it would fall on without whitespace
+            guard let linePosition = lineStorage.getLine(atPosition: adjustedY) else { break }
+            let whitespace = viewZones.whitespaceHeightBeforeLine(linePosition.index)
+            if abs(whitespace - lastWhitespace) < 0.5 { break }
+            lastWhitespace = whitespace
+            adjustedY = documentY - whitespace
+        }
+
+        return adjustedY
+    }
+
+    /// Converts a line-storage Y position to a document Y position by adding view zone whitespace.
+    ///
+    /// - Parameter lineStorageY: The Y position in line-storage coordinate space.
+    /// - Parameter lineIndex: The line index, used to determine how much whitespace precedes this position.
+    /// - Returns: The Y position in document coordinate space (includes view zones).
+    func lineStorageYToDocumentY(_ lineStorageY: CGFloat, lineIndex: Int) -> CGFloat {
+        lineStorageY + viewZones.whitespaceHeightBeforeLine(lineIndex)
     }
 
     // MARK: - Text Lines
@@ -29,7 +68,8 @@ extension TextLayoutManager {
     /// - Parameter posY: The y position to find a line for.
     /// - Returns: A text line position, if a line could be found at the given y position.
     public func textLineForPosition(_ posY: CGFloat) -> TextLineStorage<TextLine>.TextLinePosition? {
-        determineVisiblePosition(for: lineStorage.getLine(atPosition: posY))?.position
+        let adjustedY = documentYToLineStorageY(posY)
+        return determineVisiblePosition(for: lineStorage.getLine(atPosition: adjustedY))?.position
     }
 
     /// Finds a text line for a given text offset.
@@ -69,14 +109,15 @@ extension TextLayoutManager {
         guard point.y <= estimatedHeight() else { // End position is a special case.
             return textStorage?.length
         }
-        guard let linePosition = determineVisiblePosition(for: lineStorage.getLine(atPosition: point.y))?.position,
+        let adjustedPoint = CGPoint(x: point.x, y: documentYToLineStorageY(point.y))
+        guard let linePosition = determineVisiblePosition(for: lineStorage.getLine(atPosition: adjustedPoint.y))?.position,
               let fragmentPosition = linePosition.data.typesetter.lineFragments.getLine(
-                atPosition: point.y - linePosition.yPos
+                atPosition: adjustedPoint.y - linePosition.yPos
               ) else {
             return nil
         }
 
-        return textOffsetAtPoint(point, fragmentPosition: fragmentPosition, linePosition: linePosition)
+        return textOffsetAtPoint(adjustedPoint, fragmentPosition: fragmentPosition, linePosition: linePosition)
     }
 
     func textOffsetAtPoint(
@@ -173,10 +214,16 @@ extension TextLayoutManager {
         guard let linePosition = determineVisiblePosition(for: lineStorage.getLine(atOffset: offset))?.position else {
             return nil
         }
+        let whitespaceOffset = viewZones.whitespaceHeightBeforeLine(linePosition.index)
         guard let fragmentPosition = linePosition.data.typesetter.lineFragments.getLine(
             atOffset: offset - linePosition.range.location
         ) else {
-            return CGRect(x: edgeInsets.left, y: linePosition.yPos, width: 0, height: linePosition.height)
+            return CGRect(
+                x: edgeInsets.left,
+                y: linePosition.yPos + whitespaceOffset,
+                width: 0,
+                height: linePosition.height
+            )
         }
 
         // Get the *real* length of the character at the offset. If this is a surrogate pair it'll return the correct
@@ -200,7 +247,7 @@ extension TextLayoutManager {
 
         return CGRect(
             x: minXPos + edgeInsets.left,
-            y: linePosition.yPos + fragmentPosition.yPos,
+            y: linePosition.yPos + whitespaceOffset + fragmentPosition.yPos,
             width: maxXPos - minXPos,
             height: fragmentPosition.data.scaledHeight
         )
@@ -223,9 +270,17 @@ extension TextLayoutManager {
     private func rectsFor(range: NSRange, in line: borrowing TextLineStorage<TextLine>.TextLinePosition) -> [CGRect] {
         guard let textStorage = (textStorage?.string as? NSString) else { return [] }
 
+        let storageLength = textStorage.length
+        guard range.lowerBound < storageLength, range.upperBound > 0 else { return [] }
+
+        // Clamp to valid text storage bounds before character sequence lookup
+        let clampedLower = min(range.lowerBound, storageLength - 1)
+        let clampedUpper = min(range.upperBound - 1, storageLength - 1)
+        guard clampedUpper >= clampedLower else { return [] }
+
         // Don't make rects in between characters
-        let realRangeStart = textStorage.rangeOfComposedCharacterSequence(at: range.lowerBound)
-        let realRangeEnd = textStorage.rangeOfComposedCharacterSequence(at: range.upperBound - 1)
+        let realRangeStart = textStorage.rangeOfComposedCharacterSequence(at: clampedLower)
+        let realRangeEnd = textStorage.rangeOfComposedCharacterSequence(at: clampedUpper)
 
         // Fragments are relative to the line
         let relativeRange = NSRange(
@@ -233,6 +288,7 @@ extension TextLayoutManager {
             end: realRangeEnd.upperBound - line.range.location
         )
 
+        let whitespaceOffset = viewZones.whitespaceHeightBeforeLine(line.index)
         var rects: [CGRect] = []
         for fragmentPosition in line.data.lineFragments.linesInRange(relativeRange) {
             guard let intersectingRange = fragmentPosition.range.intersection(relativeRange) else { continue }
@@ -241,7 +297,7 @@ extension TextLayoutManager {
             rects.append(
                 CGRect(
                     x: fragmentRect.minX + edgeInsets.left,
-                    y: fragmentPosition.yPos + line.yPos,
+                    y: fragmentPosition.yPos + line.yPos + whitespaceOffset,
                     width: fragmentRect.width,
                     height: fragmentRect.height
                 )
@@ -301,11 +357,17 @@ extension TextLayoutManager {
     /// - Returns: A CGRect if it could be created.
     private func rectForEndOffset() -> CGRect? {
         if let last = lineStorage.last {
+            let whitespaceOffset = viewZones.whitespaceHeightBeforeLine(last.index)
             if last.range.isEmpty {
                 // Return a 0-width rect at the end of the last line.
-                return CGRect(x: edgeInsets.left, y: last.yPos, width: 0, height: last.height)
+                return CGRect(
+                    x: edgeInsets.left,
+                    y: last.yPos + whitespaceOffset,
+                    width: 0,
+                    height: last.height
+                )
             } else if let rect = rectForOffset(last.range.max - 1) {
-                return  CGRect(x: rect.maxX, y: rect.minY, width: 0, height: rect.height)
+                return CGRect(x: rect.maxX, y: rect.minY, width: 0, height: rect.height)
             }
         } else if lineStorage.isEmpty {
             // Text is empty, create a new rect with estimated height at the origin
