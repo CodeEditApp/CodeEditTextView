@@ -34,7 +34,7 @@ final class TextLayoutLineStorageTests: XCTestCase { // swiftlint:disable:this t
     /// Recursively checks that the given tree has the correct metadata everywhere.
     /// - Parameter tree: The tree to check.
     fileprivate func assertTreeMetadataCorrect<T: Identifiable>(_ tree: TextLineStorage<T>) throws {
-        func checkChildren(_ node: TextLineStorage<T>.Node<T>?) -> ChildData {
+        func checkChildren(_ node: TextLineStorage<T>.NodeRef?) -> ChildData {
             guard let node else { return ChildData(length: 0, count: 0, height: 0.0) }
             let leftSubtreeData = checkChildren(node.left)
             let rightSubtreeData = checkChildren(node.right)
@@ -280,7 +280,6 @@ final class TextLayoutLineStorageTests: XCTestCase { // swiftlint:disable:this t
 
     func test_transplantWithExistingLeftNodes() throws { // swiftlint:disable:this function_body_length
         typealias Storage = TextLineStorage<UUID>
-        typealias Node = TextLineStorage<UUID>.Node
         // Test that when transplanting a node with no left nodes, with a node with left nodes, that
         // the resulting tree has valid 'left_' metadata
         //         1
@@ -293,92 +292,48 @@ final class TextLayoutLineStorageTests: XCTestCase { // swiftlint:disable:this t
         //             | |
         //             5 6
 
-        let node5 = Node(
-            length: 5,
-            data: UUID(),
-            leftSubtreeOffset: 0,
-            leftSubtreeHeight: 0,
-            leftSubtreeCount: 0,
-            height: 1,
-            left: nil,
-            right: nil,
-            parent: nil,
+        let storage = Storage()
+
+        // Build the arena manually so we can assert behavior on a specific tree shape —
+        // RB-tree rebalancing would otherwise pick its own structure on natural inserts.
+        let h5 = storage.allocNode(length: 5, data: UUID(), height: 1, color: .black)
+        let h6 = storage.allocNode(length: 6, data: UUID(), height: 1, color: .black)
+        let h4 = storage.allocNode(
+            length: 4, data: UUID(), height: 1,
+            leftSubtreeOffset: 5, leftSubtreeHeight: 1, leftSubtreeCount: 1,
             color: .black
         )
+        storage[h4].left = h5
+        storage[h4].right = h6
+        storage[h5].parent = h4
+        storage[h6].parent = h4
 
-        let node6 = Node(
-            length: 6,
-            data: UUID(),
-            leftSubtreeOffset: 0,
-            leftSubtreeHeight: 0,
-            leftSubtreeCount: 0,
-            height: 1,
-            left: nil,
-            right: nil,
-            parent: nil,
+        let h3 = storage.allocNode(length: 3, data: UUID(), height: 1, color: .black)
+        storage[h3].right = h4
+        storage[h4].parent = h3
+
+        let h2 = storage.allocNode(
+            length: 2, data: UUID(), height: 1,
+            leftSubtreeOffset: 18, leftSubtreeHeight: 4, leftSubtreeCount: 4,
             color: .black
         )
+        storage[h2].left = h3
+        storage[h3].parent = h2
 
-        let node4 = Node(
-            length: 4,
-            data: UUID(),
-            leftSubtreeOffset: 5,
-            leftSubtreeHeight: 1,
-            leftSubtreeCount: 1, // node5 is on the left
-            height: 1,
-            left: node5,
-            right: node6,
-            parent: nil,
+        let h7 = storage.allocNode(length: 7, data: UUID(), height: 1, color: .black)
+
+        let h1 = storage.allocNode(
+            length: 1, data: UUID(), height: 1,
+            leftSubtreeOffset: 7, leftSubtreeHeight: 1, leftSubtreeCount: 1,
             color: .black
         )
-        node5.parent = node4
-        node6.parent = node4
+        storage[h1].left = h7
+        storage[h1].right = h2
+        storage[h7].parent = h1
+        storage[h2].parent = h1
 
-        let node3 = Node(
-            length: 3,
-            data: UUID(),
-            leftSubtreeOffset: 0,
-            leftSubtreeHeight: 0,
-            leftSubtreeCount: 0,
-            height: 1,
-            left: nil,
-            right: node4,
-            parent: nil,
-            color: .black
-        )
-        node4.parent = node3
-
-        let node2 = Node(
-            length: 2,
-            data: UUID(),
-            leftSubtreeOffset: 18,
-            leftSubtreeHeight: 4,
-            leftSubtreeCount: 4, // node3 is on the left
-            height: 1,
-            left: node3,
-            right: nil,
-            parent: nil,
-            color: .black
-        )
-        node3.parent = node2
-
-        let node7 = Node(length: 7, data: UUID(), height: 1)
-
-        let node1 = Node(
-            length: 1,
-            data: UUID(),
-            leftSubtreeOffset: 7,
-            leftSubtreeHeight: 1,
-            leftSubtreeCount: 1,
-            height: 1,
-            left: node7,
-            right: node2,
-            parent: nil,
-            color: .black
-        )
-        node2.parent = node1
-
-        let storage = Storage(root: node1, count: 7, length: 28, height: 7)
+        storage.rootHandle = h1
+        storage._unsafeSetCounters(count: 7, length: 28, height: 7)
 
         storage.delete(lineAt: 7) // Delete the root
 
