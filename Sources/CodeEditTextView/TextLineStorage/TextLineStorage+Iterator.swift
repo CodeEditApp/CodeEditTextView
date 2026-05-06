@@ -72,8 +72,16 @@ public extension TextLineStorage {
 
         public mutating func next() -> TextLinePosition? {
             if let currentPosition {
-                guard currentPosition.range.max < range.max,
-                      let nextPosition = storage.getLine(atIndex: currentPosition.index + 1) else {
+                guard let nextPosition = storage.getLine(atIndex: currentPosition.index + 1) else {
+                    return nil
+                }
+                // An empty trailing line (length 0) sits at the same offset as the previous
+                // line's `range.max`. Without this exception, iterating to the end of the
+                // document would skip it — see issue #121 (Cmd+A highlight missing the last
+                // empty line on documents ending with a newline).
+                let isTrailingEmptyLineAtRangeEnd = nextPosition.range.length == 0
+                    && nextPosition.range.location == range.max
+                guard currentPosition.range.max < range.max || isTrailingEmptyLineAtRangeEnd else {
                     return nil
                 }
                 self.currentPosition = nextPosition
