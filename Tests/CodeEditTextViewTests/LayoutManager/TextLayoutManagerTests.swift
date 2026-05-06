@@ -181,6 +181,23 @@ struct TextLayoutManagerTests {
         }
     }
 
+    /// Documents that end with a line ending get an empty trailing line in storage. Iterating the
+    /// document range must include it, otherwise `Cmd+A` selects the line but never highlights it.
+    /// Regression test for https://github.com/CodeEditApp/CodeEditTextView/issues/121.
+    @Test
+    func rangeIteratorIncludesTrailingEmptyLine() {
+        textStorage.mutableString.setString("a\nb\nc\n")
+        layoutManager.layoutLines(in: NSRect(x: 0, y: 0, width: 1000, height: 1000))
+
+        let docRange = NSRange(location: 0, length: textStorage.length)
+        let iterated = Array(layoutManager.lineStorage.linesInRange(docRange))
+
+        #expect(layoutManager.lineStorage.count == 4, "Storage should hold 3 lines + 1 trailing empty line")
+        #expect(iterated.count == layoutManager.lineStorage.count, "Trailing empty line was skipped")
+        #expect(iterated.last?.range.length == 0)
+        #expect(iterated.last?.range.location == textStorage.length)
+    }
+
     @Test
     func afterLayoutDoesntNeedLayout() {
         layoutManager.layoutLines(in: NSRect(x: 0, y: 0, width: 1000, height: 1000))
