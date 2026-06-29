@@ -12,6 +12,7 @@ extension TextView {
         super.layout()
         layoutManager.layoutLines()
         selectionManager.updateSelectionViews(skipTimerReset: true)
+        inlineSuggestionManager?.updateLayout()
     }
 
     open override class var isCompatibleWithResponsiveScrolling: Bool {
@@ -29,6 +30,7 @@ extension TextView {
             selectionManager.drawSelections(in: dirtyRect)
         }
         emphasisManager?.updateLayerBackgrounds()
+        inlineSuggestionManager?.updateLayout()
     }
 
     override open var isFlipped: Bool {
