@@ -254,6 +254,9 @@ open class TextView: NSView, NSTextContent {
     /// Manages emphasized text ranges in the text view
     public var emphasisManager: EmphasisManager?
 
+    /// Manages inline "ghost text" suggestions in the text view.
+    public private(set) var inlineSuggestionManager: InlineSuggestionManager?
+
     // MARK: - Private Properties
 
     var isFirstResponder: Bool = false
@@ -322,6 +325,7 @@ open class TextView: NSView, NSTextContent {
         super.init(frame: .zero)
 
         self.emphasisManager = EmphasisManager(textView: self)
+        self.inlineSuggestionManager = InlineSuggestionManager(textView: self)
         if let storageDelegate = textStorage.delegate as? MultiStorageDelegate {
             self.storageDelegate = storageDelegate
         } else {
@@ -381,6 +385,7 @@ open class TextView: NSView, NSTextContent {
         layoutManager = nil
         selectionManager = nil
         textStorage = nil
+        inlineSuggestionManager = nil
         NotificationCenter.default.removeObserver(self)
     }
 }
