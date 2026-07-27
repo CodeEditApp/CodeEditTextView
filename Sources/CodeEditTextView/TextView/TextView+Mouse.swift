@@ -34,6 +34,11 @@ extension TextView {
             break
         }
 
+        // Anchor the drag at the press location. Waiting for the first drag event to set this anchors the selection
+        // wherever the pointer had already traveled to by then, which reads as the selection starting a character or
+        // two away from where the user clicked.
+        mouseDragAnchor = clampToTextArea(convert(event.locationInWindow, from: nil))
+
         setUpMouseAutoscrollTimer()
     }
 
@@ -119,11 +124,7 @@ extension TextView {
 
         // We receive global events because our view received the drag event, but we need to clamp the potentially
         // out-of-bounds positions to a position our layout manager can deal with.
-        let locationInWindow = convert(event.locationInWindow, from: nil)
-        let locationInView = CGPoint(
-            x: max(0.0, min(locationInWindow.x, frame.width)),
-            y: max(0.0, min(locationInWindow.y, frame.height))
-        )
+        let locationInView = clampToTextArea(convert(event.locationInWindow, from: nil))
 
         if mouseDragAnchor == nil {
             mouseDragAnchor = locationInView
@@ -145,6 +146,25 @@ extension TextView {
             setNeedsDisplay()
             self.autoscroll(with: event)
         }
+    }
+
+    /// Clamps a point to the region ``TextLayoutManager/textOffsetAtPoint(_:)`` can resolve into a text offset.
+    ///
+    /// Drag events are delivered in global coordinates, so the point can lie well outside the view. The horizontal
+    /// bounds also have to respect ``TextLayoutManager/edgeInsets``: text is laid out inset from the view's edges, and
+    /// any position left of the leading inset — the strip a gutter is drawn over, for instance — resolves to `nil`.
+    ///
+    /// A `nil` offset mid-drag strands the selection at its last resolvable value, so the selection stops responding
+    /// entirely while the pointer sits over the gutter. Clamping into the inset region instead maps those positions to
+    /// the start of a line, which is what AppKit does.
+    func clampToTextArea(_ point: CGPoint) -> CGPoint {
+        let insets = layoutManager.edgeInsets
+        let minX = insets.left
+        let maxX = max(minX, frame.width - insets.right)
+        return CGPoint(
+            x: min(max(point.x, minX), maxX),
+            y: min(max(point.y, 0.0), frame.height)
+        )
     }
 
     /// Extends the current selection to the offset. Only used when the user shift-clicks a location in the document.
