@@ -15,12 +15,12 @@ extension TextLineStorage {
                 guard let lastLine = _lastLine else {
                     #expect(line.index == 0)
                     _lastLine = line
-                    return
+                    continue
                 }
 
                 #expect(line.index == lastLine.index + 1)
                 #expect(line.yPos >= lastLine.yPos + lastLine.height)
-                #expect(line.range.location == lastLine.range.max + 1)
+                #expect(line.range.location == lastLine.range.max)
                 _lastLine = line
             }
         }

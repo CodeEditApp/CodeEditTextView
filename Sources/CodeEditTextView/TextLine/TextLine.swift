@@ -10,10 +10,23 @@ import AppKit
 
 /// Represents a displayable line of text.
 public final class TextLine: Identifiable, Equatable {
-    public let id: UUID = UUID()
+    public let id: UUID = UniqueIdentifier.makeUUID()
     private var needsLayout: Bool = true
     var maxWidth: CGFloat?
-    private(set) var typesetter: Typesetter = Typesetter()
+    /// Backing store for ``typesetter``. Created on first use: most lines of a large document are never
+    /// laid out, and every typesetter carries its own fragment storage, so eager typesetters made the
+    /// 26k `TextLine`s of a 2MB document cost more to construct than the text took to scan.
+    private var lazyTypesetter: Typesetter?
+
+    /// The typesetter for this line, created on first access.
+    var typesetter: Typesetter {
+        if let typesetter = lazyTypesetter {
+            return typesetter
+        }
+        let typesetter = Typesetter()
+        lazyTypesetter = typesetter
+        return typesetter
+    }
 
     /// The line fragments contained by this text line.
     public var lineFragments: TextLineStorage<LineFragment> {
@@ -23,7 +36,9 @@ public final class TextLine: Identifiable, Equatable {
     /// Marks this line as needing layout and clears all typesetting data.
     public func setNeedsLayout() {
         needsLayout = true
-        typesetter = Typesetter()
+        // Keep the typesetter and its fragment arena for the re-typeset that follows; `typeset` clears the
+        // fragments itself. Replacing it here cost three mallocs and three frees per edited line.
+        lazyTypesetter?.lineFragments.removeAll()
     }
 
     /// Determines if the line needs to be laid out again.

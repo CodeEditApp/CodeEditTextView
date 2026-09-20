@@ -1,3 +1,4 @@
 module CodeEditTextViewObjC {
     header "CGContextHidden.h"
+    header "UniqueIdentifier.h"
 }

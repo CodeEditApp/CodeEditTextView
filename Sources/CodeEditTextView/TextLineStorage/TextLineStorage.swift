@@ -12,7 +12,7 @@ import Foundation
 // MARK: - Performance notes
 //
 // `TextLineStorage` is a red-black tree keyed on document offset and index, with an
-// auxiliary Y-position metric. It is the hottest data structure in the text engine —
+// auxiliary Y-position metric. It is the hottest data structure in the text engine -
 // the layout loop walks it per-frame to find visible lines, selection drawing hits it
 // once per selection-fragment, and every edit mutates it.
 //
@@ -35,8 +35,12 @@ import Foundation
 //
 // All tree methods take `NodeHandle` (Int32); `Int32.min` is the nil sentinel. Freed
 // slots go on `freeList` and are reused on the next `allocNode`. We don't deinitialize
-// on free — the slot keeps its `Data` until assignment drops it on reuse or
+// on free - the slot keeps its `Data` until assignment drops it on reuse or
 // `removeAll`/`deinit` tears down the occupied range.
+//
+// The arena is allocated on first use: `nodesCapacity` is 0 and `nodesPtr` is a non-null
+// placeholder until then (see `init()`), so an instance that never holds a node costs one
+// object allocation and nothing else.
 
 /// Implements a red-black tree for efficiently editing, storing and retrieving lines of text in a document.
 public final class TextLineStorage<Data: Identifiable> {
@@ -117,15 +121,28 @@ public final class TextLineStorage<Data: Identifiable> {
     }
 
     public init() {
-        self.nodesCapacity = 16
-        self.nodesPtr = UnsafeMutablePointer<Node<Data>>.allocate(capacity: 16)
+        // No arena until the first node. Most instances are the per-line fragment stores owned by
+        // `Typesetter`, and most lines of a large document are never typeset; an eager 16-node arena
+        // (1KB) per line cost more than the line scan itself when opening a document. `emptyArena` is
+        // a non-null placeholder that is never dereferenced while `nodesCapacity == 0`.
+        self.nodesCapacity = 0
+        self.nodesPtr = Self.emptyArena
     }
 
     deinit {
         if nodesCount > 0 {
             nodesPtr.deinitialize(count: nodesCount)
         }
-        nodesPtr.deallocate()
+        if nodesCapacity > 0 {
+            nodesPtr.deallocate()
+        }
+    }
+
+    /// Placeholder for `nodesPtr` before the first allocation: aligned, non-null, never dereferenced.
+    /// Every node read is guarded by a handle below `nodesCount`, which is zero while the arena is empty.
+    @usableFromInline
+    internal static var emptyArena: UnsafeMutablePointer<Node<Data>> {
+        UnsafeMutablePointer(bitPattern: MemoryLayout<Node<Data>>.alignment)!
     }
 
     /// Test-only state injection for tree tests that need a specific hand-crafted shape
@@ -150,14 +167,14 @@ public final class TextLineStorage<Data: Identifiable> {
             self.height += height
         }
 
-        // Empty tree — first insert becomes the root.
+        // Empty tree - first insert becomes the root.
         guard rootHandle != Int32.min else {
             rootHandle = allocNode(length: length, data: line, height: height, color: .black)
             return
         }
 
         let inserted = allocNode(length: length, data: line, height: height, color: .red)
-        // `allocNode` may have grown the buffer — read `nodesPtr` AFTER it.
+        // `allocNode` may have grown the buffer - read `nodesPtr` AFTER it.
         let ptr = nodesPtr
 
         // Walk down to the correct parent position, tracking the target offset.
@@ -247,8 +264,10 @@ public final class TextLineStorage<Data: Identifiable> {
             return
         }
         if delta < 0 {
+            // A shrink starting at `offset` must stay within the line containing it;
+            // end-of-document updates shrink the last line as a whole.
             assert(
-                offset - position.textPos > delta,
+                -delta <= (offset == self.length ? position.length : position.textPos + position.length - offset),
                 "Delta too large. Deleting \(-delta) from line at position \(offset) extends beyond the line's range."
             )
         }
@@ -292,78 +311,161 @@ public final class TextLineStorage<Data: Identifiable> {
     /// Efficiently builds the tree from the given array of lines.
     /// - Note: Calls ``TextLineStorage/removeAll()`` before building.
     public func build(from lines: borrowing [BuildItem], estimatedLineHeight: CGFloat) {
-        removeAll()
-        // Reserve capacity up-front — one allocation for the full arena.
-        ensureNodeCapacity(lines.count)
-        let (handle, _, _, _) = buildSubtree(
-            lines: lines,
-            estimatedLineHeight: estimatedLineHeight,
-            left: 0,
-            right: lines.count,
-            parent: Int32.min
-        )
-        rootHandle = handle
-        count = lines.count
+        lines.withUnsafeBufferPointer { items in
+            buildBalanced(BufferBuildSource(items: items), estimatedLineHeight: estimatedLineHeight)
+        }
     }
 
-    // swiftlint:disable large_tuple
-    /// Recursively builds a subtree given an array of sorted lines, and a left and right indexes.
-    /// - Returns: (rootHandle, offsetSum, heightSum, count) for the built subtree.
-    private func buildSubtree(
-        lines: borrowing [BuildItem],
-        estimatedLineHeight: CGFloat,
+    /// Efficiently builds the tree from line lengths alone, creating each line's data with `makeData`.
+    ///
+    /// The document-open path uses this to go straight from the line scanner's output to the tree without
+    /// materializing an intermediate ``BuildItem`` array. Every line gets `estimatedLineHeight`.
+    /// - Note: Calls ``TextLineStorage/removeAll()`` before building.
+    func build(lengths: [Int], estimatedLineHeight: CGFloat, makeData: () -> Data) {
+        lengths.withUnsafeBufferPointer { lengths in
+            withoutActuallyEscaping(makeData) { makeData in
+                buildBalanced(
+                    LengthsBuildSource(lengths: lengths, makeData: makeData),
+                    estimatedLineHeight: estimatedLineHeight
+                )
+            }
+        }
+    }
+
+    /// Shared implementation of the bulk builders.
+    ///
+    /// The tree is midpoint-balanced: the node for item `mid` of a range parents the nodes for the two halves.
+    /// That node lives in arena slot `mid`, so slots are in document order and every handle (own, parent,
+    /// children) is known before a node is visited. Children are built first and the node is then written
+    /// exactly once with its subtree sums filled in: a single store per line and no fix-up pass. Document-order
+    /// slots also mean an in-order traversal of a freshly built tree walks memory sequentially.
+    ///
+    /// Depth of the tree is floor(log2(n)) + 1. Nodes on the deepest level are colored red and all others
+    /// black; sibling subtrees differ in size by at most one, so leaves only occur on the last two levels and
+    /// this coloring has uniform black-height - the tree starts as a valid red-black tree.
+    private func buildBalanced<Source: TextLineBuildSource>(
+        _ source: Source,
+        estimatedLineHeight: CGFloat
+    ) where Source.Data == Data {
+        removeAll()
+        let lineCount = source.count
+        guard lineCount > 0 else { return }
+        // One allocation for the full arena.
+        ensureNodeCapacity(lineCount)
+        let context = BuildContext(
+            nodes: nodesPtr,
+            source: source,
+            estimatedLineHeight: estimatedLineHeight,
+            maxDepth: Int.bitWidth - lineCount.leadingZeroBitCount
+        )
+        let (totalLength, totalHeight) = Self.buildSubtree(
+            context,
+            left: 0,
+            right: lineCount,
+            parent: Int32.min,
+            depth: 1
+        )
+        nodesCount = lineCount
+        rootHandle = NodeHandle(lineCount / 2)
+        count = lineCount
+        length = totalLength
+        height = totalHeight
+    }
+
+    /// Values shared by every level of ``buildSubtree``, hoisted out of the recursion.
+    private struct BuildContext<Source: TextLineBuildSource> where Source.Data == Data {
+        let nodes: UnsafeMutablePointer<Node<Data>>
+        let source: Source
+        let estimatedLineHeight: CGFloat
+        let maxDepth: Int
+    }
+
+    /// Builds the subtree for the items in `left ..< right` (which must be non-empty).
+    /// - Returns: The total length and height of the subtree.
+    private static func buildSubtree<Source>(
+        _ context: BuildContext<Source>,
         left: Int,
         right: Int,
-        parent: NodeHandle
-    ) -> (NodeHandle, Int, CGFloat, Int) {
-        guard left < right else { return (Int32.min, 0, 0, 0) }
+        parent: NodeHandle,
+        depth: Int
+    ) -> (length: Int, height: CGFloat) {
         let mid = left + (right - left) / 2
+        let handle = NodeHandle(mid)
 
-        let handle = allocNode(
-            length: lines[mid].length,
-            data: lines[mid].data,
-            height: lines[mid].height ?? estimatedLineHeight,
-            color: .black
-        )
-        self[handle].parent = parent
-
-        let (leftHandle, leftOffset, leftHeight, leftCount) = buildSubtree(
-            lines: lines,
-            estimatedLineHeight: estimatedLineHeight,
-            left: left,
-            right: mid,
-            parent: handle
-        )
-        let (rightHandle, rightOffset, rightHeight, rightCount) = buildSubtree(
-            lines: lines,
-            estimatedLineHeight: estimatedLineHeight,
-            left: mid + 1,
-            right: right,
-            parent: handle
-        )
-
-        // `allocNode` may have grown the buffer during the recursive calls — re-read.
-        let node = nodesPtr + Int(handle)
-        node.pointee.left = leftHandle
-        node.pointee.right = rightHandle
-
-        // Leaves are red; internal nodes black. Same coloring as the original.
-        if leftHandle == Int32.min && rightHandle == Int32.min {
-            node.pointee.color = .red
+        var leftHandle = Int32.min
+        var leftLength = 0
+        var leftHeight: CGFloat = 0
+        if left < mid {
+            leftHandle = NodeHandle(left + (mid - left) / 2)
+            (leftLength, leftHeight) = buildSubtree(context, left: left, right: mid, parent: handle, depth: depth + 1)
         }
 
-        length += node.pointee.length
-        height += node.pointee.height
-        node.pointee.leftSubtreeOffset = leftOffset
-        node.pointee.leftSubtreeHeight = leftHeight
-        node.pointee.leftSubtreeCount = leftCount
+        var rightHandle = Int32.min
+        var rightLength = 0
+        var rightHeight: CGFloat = 0
+        if mid + 1 < right {
+            rightHandle = NodeHandle(mid + 1 + (right - mid - 1) / 2)
+            (rightLength, rightHeight) = buildSubtree(
+                context,
+                left: mid + 1,
+                right: right,
+                parent: handle,
+                depth: depth + 1
+            )
+        }
 
-        return (
-            handle,
-            node.pointee.length + leftOffset + rightOffset,
-            node.pointee.height + leftHeight + rightHeight,
-            1 + leftCount + rightCount
+        let item = context.source.item(at: mid)
+        let lineHeight = item.height ?? context.estimatedLineHeight
+        (context.nodes + mid).initialize(
+            to: Node(
+                length: item.length,
+                data: item.data,
+                leftSubtreeOffset: leftLength,
+                leftSubtreeHeight: leftHeight,
+                leftSubtreeCount: mid - left,
+                height: lineHeight,
+                left: leftHandle,
+                right: rightHandle,
+                parent: parent,
+                color: depth > 1 && depth == context.maxDepth ? .red : .black
+            )
         )
+        return (leftLength + item.length + rightLength, leftHeight + lineHeight + rightHeight)
+    }
+}
+
+// MARK: - Build sources
+
+/// Random-access source of ``TextLineStorage/BuildItem``s for the bulk builder. A protocol rather than a
+/// closure so each source is specialized into the recursive builder with no indirect call per line.
+protocol TextLineBuildSource {
+    associatedtype Data: Identifiable
+    var count: Int { get }
+    func item(at index: Int) -> TextLineStorage<Data>.BuildItem
+}
+
+/// Items already materialized by the caller (``TextLineStorage/build(from:estimatedLineHeight:)``).
+struct BufferBuildSource<Data: Identifiable>: TextLineBuildSource {
+    let items: UnsafeBufferPointer<TextLineStorage<Data>.BuildItem>
+
+    var count: Int { items.count }
+
+    @inline(__always)
+    func item(at index: Int) -> TextLineStorage<Data>.BuildItem {
+        items[index]
+    }
+}
+
+/// Line lengths plus a factory for each line's data (the document-open path).
+struct LengthsBuildSource<Data: Identifiable>: TextLineBuildSource {
+    let lengths: UnsafeBufferPointer<Int>
+    let makeData: () -> Data
+
+    var count: Int { lengths.count }
+
+    @inline(__always)
+    func item(at index: Int) -> TextLineStorage<Data>.BuildItem {
+        TextLineStorage<Data>.BuildItem(data: makeData(), length: lengths[index], height: nil)
     }
 }
 
@@ -519,6 +621,10 @@ private extension TextLineStorage {
 
         var nodeY = nodeZ
         var nodeX: NodeHandle = Int32.min
+        // Fixup position when `nodeX` is nil: the parent and side of the child slot the
+        // removed node vacated (CLRS nil-sentinel technique).
+        var xParent: NodeHandle = Int32.min
+        var xIsLeftChild = false
         var originalColor = zNode.pointee.color
 
         let zLeft = zNode.pointee.left
@@ -526,6 +632,8 @@ private extension TextLineStorage {
 
         if zLeft == Int32.min || zRight == Int32.min {
             nodeX = zRight != Int32.min ? zRight : zLeft
+            xParent = zNode.pointee.parent
+            xIsLeftChild = xParent != Int32.min && (ptr + Int(xParent)).pointee.left == nodeZ
             transplant(nodeZ, with: nodeX)
         } else {
             nodeY = minimum(zRight)
@@ -543,10 +651,15 @@ private extension TextLineStorage {
             nodeX = yNode.pointee.right
 
             if yNode.pointee.parent == nodeZ {
+                xParent = nodeY
+                xIsLeftChild = false
                 if nodeX != Int32.min {
                     (ptr + Int(nodeX)).pointee.parent = nodeY
                 }
             } else {
+                // nodeY is the minimum of a subtree it isn't the root of - a left child.
+                xParent = yNode.pointee.parent
+                xIsLeftChild = true
                 transplant(nodeY, with: yNode.pointee.right)
 
                 let yRight = yNode.pointee.right
@@ -575,7 +688,7 @@ private extension TextLineStorage {
             yNode.pointee.leftSubtreeHeight = zNode.pointee.leftSubtreeHeight
             yNode.pointee.leftSubtreeOffset = zNode.pointee.leftSubtreeOffset
 
-            // nodeY re-inserted — bump metadata for its new position.
+            // nodeY re-inserted - bump metadata for its new position.
             metaFixup(
                 startingAt: nodeY,
                 delta: yNode.pointee.length,
@@ -584,8 +697,8 @@ private extension TextLineStorage {
             )
         }
 
-        if originalColor == .black && nodeX != Int32.min {
-            deleteFixup(handle: nodeX)
+        if originalColor == .black {
+            deleteFixup(handle: nodeX, parent: xParent, isLeftChild: xIsLeftChild)
         }
 
         // Return the removed slot to the free list.
@@ -651,100 +764,79 @@ private extension TextLineStorage {
         }
     }
 
-    // swiftlint:disable cyclomatic_complexity
-    func deleteFixup(handle: NodeHandle) {
+    // swiftlint:disable function_body_length
+    /// CLRS RB-delete fixup. `handle` may be the nil sentinel (`Int32.min`); the
+    /// doubly-black position is then identified by (`parent`, `isLeftChild`) - the
+    /// child slot the removed black node vacated. All rotations pivot the parent so the
+    /// sibling is lifted, per CLRS.
+    func deleteFixup(handle: NodeHandle, parent: NodeHandle, isLeftChild: Bool) {
         let ptr = nodesPtr
         var nodeX = handle
-        while nodeX != rootHandle && (ptr + Int(nodeX)).pointee.color == .black {
-            var siblingHandle = sibling(nodeX)
-            if siblingHandle != Int32.min && (ptr + Int(siblingHandle)).pointee.color == .red {
-                (ptr + Int(siblingHandle)).pointee.color = .black
-                let parent = (ptr + Int(nodeX)).pointee.parent
-                if parent != Int32.min {
-                    (ptr + Int(parent)).pointee.color = .red
-                    if isLeftChild(nodeX) {
-                        leftRotate(handle: nodeX)
-                    } else {
-                        rightRotate(handle: nodeX)
-                    }
-                }
-                siblingHandle = sibling(nodeX)
+        var xParent = parent
+        var xIsLeft = isLeftChild
+        while nodeX != rootHandle,
+              xParent != Int32.min,
+              nodeX == Int32.min || (ptr + Int(nodeX)).pointee.color == .black {
+            let parentNode = ptr + Int(xParent)
+            var sib = xIsLeft ? parentNode.pointee.right : parentNode.pointee.left
+            if sib != Int32.min && (ptr + Int(sib)).pointee.color == .red {
+                // Case 1: red sibling - rotate the parent to lift the sibling.
+                (ptr + Int(sib)).pointee.color = .black
+                parentNode.pointee.color = .red
+                rotate(handle: xParent, left: xIsLeft)
+                sib = xIsLeft ? parentNode.pointee.right : parentNode.pointee.left
             }
-
-            let sibLeft = siblingHandle != Int32.min ? (ptr + Int(siblingHandle)).pointee.left : Int32.min
-            let sibRight = siblingHandle != Int32.min ? (ptr + Int(siblingHandle)).pointee.right : Int32.min
-            let sibLeftBlack = sibLeft == Int32.min || (ptr + Int(sibLeft)).pointee.color == .black
-            let sibRightBlack = sibRight == Int32.min || (ptr + Int(sibRight)).pointee.color == .black
-
-            if sibLeftBlack && sibRightBlack {
-                if siblingHandle != Int32.min {
-                    (ptr + Int(siblingHandle)).pointee.color = .red
-                }
-                let parent = (ptr + Int(nodeX)).pointee.parent
-                if parent == Int32.min { break }
-                nodeX = parent
+            guard sib != Int32.min else {
+                // No sibling to borrow from - push the deficit up.
+                nodeX = xParent
+                xParent = (ptr + Int(nodeX)).pointee.parent
+                xIsLeft = xParent != Int32.min && (ptr + Int(xParent)).pointee.left == nodeX
+                continue
+            }
+            let sibNode = ptr + Int(sib)
+            let near = xIsLeft ? sibNode.pointee.left : sibNode.pointee.right
+            let far = xIsLeft ? sibNode.pointee.right : sibNode.pointee.left
+            let nearBlack = near == Int32.min || (ptr + Int(near)).pointee.color == .black
+            let farBlack = far == Int32.min || (ptr + Int(far)).pointee.color == .black
+            if nearBlack && farBlack {
+                // Case 2: both nephews black - recolor and push the deficit up.
+                sibNode.pointee.color = .red
+                nodeX = xParent
+                xParent = (ptr + Int(nodeX)).pointee.parent
+                xIsLeft = xParent != Int32.min && (ptr + Int(xParent)).pointee.left == nodeX
             } else {
-                if isLeftChild(nodeX) {
-                    if sibRightBlack {
-                        if sibLeft != Int32.min {
-                            (ptr + Int(sibLeft)).pointee.color = .black
-                        }
-                        if siblingHandle != Int32.min {
-                            (ptr + Int(siblingHandle)).pointee.color = .red
-                            rightRotate(handle: siblingHandle)
-                        }
-                        let parent = (ptr + Int(nodeX)).pointee.parent
-                        siblingHandle = parent != Int32.min ? (ptr + Int(parent)).pointee.right : Int32.min
+                var sibFinal = sib
+                if farBlack {
+                    // Case 3: near nephew red - rotate the sibling to expose a red far
+                    // nephew, then fall through to case 4.
+                    if near != Int32.min {
+                        (ptr + Int(near)).pointee.color = .black
                     }
-                    let parent = (ptr + Int(nodeX)).pointee.parent
-                    let parentColor: Color = parent != Int32.min ? (ptr + Int(parent)).pointee.color : .black
-                    if siblingHandle != Int32.min {
-                        let sibNode = ptr + Int(siblingHandle)
-                        sibNode.pointee.color = parentColor
-                        if sibNode.pointee.right != Int32.min {
-                            (ptr + Int(sibNode.pointee.right)).pointee.color = .black
-                        }
-                    }
-                    if parent != Int32.min {
-                        (ptr + Int(parent)).pointee.color = .black
-                    }
-                    leftRotate(handle: nodeX)
-                    nodeX = rootHandle
-                } else {
-                    if sibLeftBlack {
-                        if sibRight != Int32.min {
-                            (ptr + Int(sibRight)).pointee.color = .black
-                        }
-                        if siblingHandle != Int32.min {
-                            (ptr + Int(siblingHandle)).pointee.color = .red
-                            leftRotate(handle: siblingHandle)
-                        }
-                        let parent = (ptr + Int(nodeX)).pointee.parent
-                        siblingHandle = parent != Int32.min ? (ptr + Int(parent)).pointee.left : Int32.min
-                    }
-                    let parent = (ptr + Int(nodeX)).pointee.parent
-                    let parentColor: Color = parent != Int32.min ? (ptr + Int(parent)).pointee.color : .black
-                    if siblingHandle != Int32.min {
-                        let sibNode = ptr + Int(siblingHandle)
-                        sibNode.pointee.color = parentColor
-                        if sibNode.pointee.left != Int32.min {
-                            (ptr + Int(sibNode.pointee.left)).pointee.color = .black
-                        }
-                    }
-                    if parent != Int32.min {
-                        (ptr + Int(parent)).pointee.color = .black
-                    }
-                    rightRotate(handle: nodeX)
-                    nodeX = rootHandle
+                    sibNode.pointee.color = .red
+                    rotate(handle: sib, left: !xIsLeft)
+                    sibFinal = xIsLeft ? parentNode.pointee.right : parentNode.pointee.left
                 }
+                // Case 4: far nephew red - rotate the parent; the deficit is resolved.
+                if sibFinal != Int32.min {
+                    let sibFinalNode = ptr + Int(sibFinal)
+                    sibFinalNode.pointee.color = parentNode.pointee.color
+                    let newFar = xIsLeft ? sibFinalNode.pointee.right : sibFinalNode.pointee.left
+                    if newFar != Int32.min {
+                        (ptr + Int(newFar)).pointee.color = .black
+                    }
+                }
+                parentNode.pointee.color = .black
+                rotate(handle: xParent, left: xIsLeft)
+                nodeX = rootHandle
             }
         }
         if nodeX != Int32.min {
             (ptr + Int(nodeX)).pointee.color = .black
         }
     }
+    // swiftlint:enable function_body_length
 
-    /// Walk up the tree, updating any `leftSubtree` metadata. Hoisted-pointer version —
+    /// Walk up the tree, updating any `leftSubtree` metadata. Hoisted-pointer version -
     /// this is called on every insert/delete/update, and was previously (with the class
     /// Node implementation) the hottest function in the file.
     private func metaFixup(
@@ -835,7 +927,7 @@ private extension TextLineStorage {
         } else {
             yNode.pointee.right = handle
             // After a right rotation, `handle`'s new left subtree is what used to be
-            // nodeY's right subtree — recompute left-subtree metadata from that root.
+            // nodeY's right subtree - recompute left-subtree metadata from that root.
             let meta = subtreeMeta(rootedAt: hNode.pointee.left)
             hNode.pointee.leftSubtreeOffset = meta.offset
             hNode.pointee.leftSubtreeHeight = meta.height
@@ -845,7 +937,7 @@ private extension TextLineStorage {
     }
 
     /// Total (length, height, count) of the subtree rooted at `handle`, inclusive.
-    /// Iterative — walks the right spine, accumulating each node's left-subtree meta
+    /// Iterative - walks the right spine, accumulating each node's left-subtree meta
     /// plus the node itself. `O(log n)` on a balanced tree.
     func subtreeMeta(rootedAt handle: NodeHandle) -> NodeSubtreeMetadata {
         let ptr = nodesPtr

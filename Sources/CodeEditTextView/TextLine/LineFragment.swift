@@ -46,7 +46,7 @@ public final class LineFragment: Identifiable, Equatable {
         let offset: Int
     }
 
-    public let id = UUID()
+    public let id = UniqueIdentifier.makeUUID()
     public var documentRange: NSRange = .notFound
     public var contents: [FragmentContent]
     public var width: CGFloat

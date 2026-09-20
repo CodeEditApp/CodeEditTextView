@@ -19,7 +19,7 @@ import Foundation
 // addressor we only load the fields we touch.
 //
 // `Int32.min` is the nil handle sentinel. Freed slots go on `freeList` and are reused
-// on the next `allocNode`; we don't deinitialize on free — the slot keeps its old
+// on the next `allocNode`; we don't deinitialize on free - the slot keeps its old
 // `Data` until assignment drops it on reuse or `removeAll`/`deinit` tears it down.
 
 extension TextLineStorage {
@@ -35,7 +35,7 @@ extension TextLineStorage {
         case black
     }
 
-    /// A tree node. Value type — lives in `TextLineStorage.nodesPtr`.
+    /// A tree node. Value type - lives in `TextLineStorage.nodesPtr`.
     ///
     /// Fields are laid out with the hot traversal metadata first to improve packing.
     /// Size for `Data == TextLine` is ~72 bytes, comfortably small enough to prefetch.
@@ -96,7 +96,7 @@ extension TextLineStorage {
 // MARK: - Arena / handle access
 
 extension TextLineStorage {
-    /// Access a node by handle. Addressor-based — `self[h].field` projects directly to
+    /// Access a node by handle. Addressor-based - `self[h].field` projects directly to
     /// the field with no copy of the 72-byte `Node`. Preconditions: handle refers to a
     /// live slot (not `Int32.min`, not currently in the free list).
     @inlinable
@@ -109,7 +109,7 @@ extension TextLineStorage {
         }
     }
 
-    /// Safe read — returns nil for the nil sentinel. Copies the node by value; only use
+    /// Safe read - returns nil for the nil sentinel. Copies the node by value; only use
     /// for test/inspection paths.
     @inlinable
     func nodeOrNil(_ handle: NodeHandle) -> Node<Data>? {
@@ -126,7 +126,9 @@ extension TextLineStorage {
         if nodesCount > 0 {
             newPtr.moveInitialize(from: nodesPtr, count: nodesCount)
         }
-        nodesPtr.deallocate()
+        if nodesCapacity > 0 {
+            nodesPtr.deallocate()
+        }
         nodesPtr = newPtr
         nodesCapacity = newCap
     }
@@ -182,7 +184,7 @@ extension TextLineStorage {
 //
 // `NodeRef` wraps `(storage, handle)` so tests can chain `.root?.right?.left?.length`
 // the same way they did when nodes were classes. This is `@usableFromInline` rather
-// than `public` — the production layout path goes through handles directly and should
+// than `public` - the production layout path goes through handles directly and should
 // never allocate these wrappers.
 
 extension TextLineStorage {
@@ -254,7 +256,7 @@ extension TextLineStorage {
     }
 
     /// Transplants one node with another. Meta (left/parent updates at parent nodes)
-    /// is left to the caller — matches the original behavior.
+    /// is left to the caller - matches the original behavior.
     @inlinable
     func transplant(_ nodeU: NodeHandle, with nodeV: NodeHandle) {
         let ptr = nodesPtr
@@ -289,7 +291,7 @@ extension TextLineStorage {
         }
     }
 
-    /// Leftmost descendant of `handle` (inclusive). Iterative — avoids deep recursion
+    /// Leftmost descendant of `handle` (inclusive). Iterative - avoids deep recursion
     /// blowing the stack on long left spines.
     @inlinable
     func minimum(_ handle: NodeHandle) -> NodeHandle {

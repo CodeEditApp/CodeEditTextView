@@ -9,27 +9,29 @@ import AppKit
 
 extension TextLineStorage where Data == TextLine {
     /// Builds the line storage object from the given `NSTextStorage`.
+    ///
+    /// Lines are split by ``UTF16LineScanner``, which reproduces `NSString.getLineStart` exactly (the edit
+    /// path splits inserted text with the same Foundation call, so both agree on every terminator).
     /// - Parameters:
     ///   - textStorage: The text storage object to use.
     ///   - estimatedLineHeight: The estimated height of each individual line.
     func buildFromTextStorage(_ textStorage: NSTextStorage, estimatedLineHeight: CGFloat) {
-        var index = 0
-        var lines: [BuildItem] = []
-        while let range = textStorage.getNextLine(startingAt: index) {
-            lines.append(BuildItem(data: TextLine(), length: range.max - index, height: estimatedLineHeight))
-            index = NSMaxRange(range)
-        }
-        // Create the last line
-        if textStorage.length - index > 0 {
-            lines.append(BuildItem(data: TextLine(), length: textStorage.length - index, height: estimatedLineHeight))
+        // `NSTextStorage.string` bridges through a copy-on-write snapshot of the backing `NSBigMutableString`;
+        // it is O(1), and the cast back hands over that same immutable object.
+        let string = textStorage.string as NSString
+        let totalLength = string.length
+
+        var lengths: [Int] = []
+        // Average source line is ~35 UTF-16 units including its terminator; over-reserving slightly is
+        // cheaper than a regrowth copy mid-scan.
+        lengths.reserveCapacity(totalLength / 32 + 1)
+        let terminalUnit = string.scanLineLengths(into: &lengths)
+
+        // An empty document, or one whose final line ends in `\n` or `\r`, gets a trailing empty line.
+        if totalLength == 0 || terminalUnit == 0x0A || terminalUnit == 0x0D {
+            lengths.append(0)
         }
 
-        if textStorage.length == 0
-            || LineEnding(rawValue: textStorage.mutableString.substring(from: textStorage.length - 1)) != nil {
-            lines.append(BuildItem(data: TextLine(), length: 0, height: estimatedLineHeight))
-        }
-
-        // Use an efficient tree building algorithm rather than adding lines sequentially
-        self.build(from: lines, estimatedLineHeight: estimatedLineHeight)
+        build(lengths: lengths, estimatedLineHeight: estimatedLineHeight) { TextLine() }
     }
 }

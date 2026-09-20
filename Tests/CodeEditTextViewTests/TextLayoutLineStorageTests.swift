@@ -112,7 +112,7 @@ final class TextLayoutLineStorageTests: XCTestCase { // swiftlint:disable:this t
 
         // Update Last
         tree = createBalancedTree()
-        tree.update(atOffset: tree.length - 1, delta: -14, deltaHeight: 1.75)
+        tree.update(atOffset: tree.length - 15, delta: -14, deltaHeight: 1.75)
         XCTAssertEqual(tree.height, 16.75, "Tree height incorrect")
         XCTAssertEqual(tree.count, 15, "Tree count changed")
         XCTAssertEqual(tree.length, 106, "Tree length incorrect")
@@ -294,7 +294,7 @@ final class TextLayoutLineStorageTests: XCTestCase { // swiftlint:disable:this t
 
         let storage = Storage()
 
-        // Build the arena manually so we can assert behavior on a specific tree shape —
+        // Build the arena manually so we can assert behavior on a specific tree shape -
         // RB-tree rebalancing would otherwise pick its own structure on natural inserts.
         let h5 = storage.allocNode(length: 5, data: UUID(), height: 1, color: .black)
         let h6 = storage.allocNode(length: 6, data: UUID(), height: 1, color: .black)
