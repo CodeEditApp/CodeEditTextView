@@ -44,17 +44,89 @@ final public class Typesetter {
         lineFragments.removeAll()
 
         // Fast path
-        if string.length == 0 || displayData.maxWidth <= 0 {
+        if string.length == 0 {
             typesetEmptyLine(displayData: displayData, string: string)
             return
         }
+
+        // A degenerate wrap width (zero, negative, NaN) must not typeset non-empty content as empty
+        // fragments or stall layout; treat it as unwrapped instead.
+        let displayData = displayData.maxWidth > 0 ? displayData : TextLine.DisplayData(
+            maxWidth: .greatestFiniteMagnitude,
+            lineHeightMultiplier: displayData.lineHeightMultiplier,
+            estimatedLineHeight: displayData.estimatedLineHeight,
+            breakStrategy: displayData.breakStrategy
+        )
+
+        // Cache lookup. We skip caching whenever the result depends on per-instance state we
+        // don't fold into the key (attachments and marked ranges). That's the rare path; the
+        // hot path is unchanged unedited lines, which always hit cache.
+        let cacheable = attachments.isEmpty && markedRanges == nil
+        let cacheKey: TypesetCacheKey? = cacheable ? .make(string: string, displayData: displayData) : nil
+
+        if let key = cacheKey, let cached = TypesetCache.shared.get(key) {
+            let lines = buildItems(from: cached.fragments, lineHeightMultiplier: displayData.lineHeightMultiplier)
+            lineFragments.build(from: lines, estimatedLineHeight: cached.maxHeight)
+            return
+        }
+
         let (lines, maxHeight) = typesetLineFragments(
             string: string,
             documentRange: documentRange,
             displayData: displayData,
             attachments: attachments
         )
+
+        if let key = cacheKey {
+            // Snapshot the typeset output for future hits. We store metrics + CTLines (immutable)
+            // and reconstruct LineFragment instances per hit since `documentRange` is mutated by
+            // the layout manager downstream.
+            var fragmentsSnapshot: [CachedFragment] = []
+            fragmentsSnapshot.reserveCapacity(lines.count)
+            for item in lines {
+                guard let single = item.data.contents.first,
+                      case let .text(ctLine) = single.data else {
+                    // Mixed content (attachments) - shouldn't reach here because cacheable=false,
+                    // but bail defensively rather than caching a partial result.
+                    fragmentsSnapshot.removeAll()
+                    break
+                }
+                fragmentsSnapshot.append(
+                    CachedFragment(
+                        ctLine: ctLine,
+                        length: item.length,
+                        width: item.data.width,
+                        height: item.data.height,
+                        descent: item.data.descent
+                    )
+                )
+            }
+            if !fragmentsSnapshot.isEmpty {
+                TypesetCache.shared.set(key, CachedTypesetResult(fragments: fragmentsSnapshot, maxHeight: maxHeight))
+            }
+        }
+
         lineFragments.build(from: lines, estimatedLineHeight: maxHeight)
+    }
+
+    /// Rebuild `BuildItem`s (with fresh `LineFragment` instances) from a cached typeset result.
+    private func buildItems(
+        from cached: [CachedFragment],
+        lineHeightMultiplier: CGFloat
+    ) -> [TextLineStorage<LineFragment>.BuildItem] {
+        var out: [TextLineStorage<LineFragment>.BuildItem] = []
+        out.reserveCapacity(cached.count)
+        for c in cached {
+            let fragment = LineFragment(
+                contents: [.init(data: .text(line: c.ctLine), width: c.width)],
+                width: c.width,
+                height: c.height,
+                descent: c.descent,
+                lineHeightMultiplier: lineHeightMultiplier
+            )
+            out.append(.init(data: fragment, length: c.length, height: fragment.scaledHeight))
+        }
+        return out
     }
 
     private func makeString(string: NSAttributedString, markedRanges: MarkedRanges?) -> NSAttributedString {
@@ -171,22 +243,31 @@ final public class Typesetter {
 
         // Layout as many fragments as possible in this content run
         while context.currentPosition < range.max {
-            // The line break indicates the distance from the range we’re typesetting on that should be broken at.
-            // It's relative to the range being typeset, not the line
-            let lineBreak = typesetter.suggestLineBreak(
+            // Offsets relative to `range`: where the next fragment's text starts, and the suggested end of the
+            // break. Both are relative to the range being typeset, not the line.
+            let relativeStart = context.currentPosition - range.location
+            var lineBreak = typesetter.suggestLineBreak(
                 using: substring,
                 strategy: displayData.breakStrategy,
-                subrange: NSRange(start: context.currentPosition - range.location, end: range.length),
+                subrange: NSRange(start: relativeStart, end: range.length),
                 constrainingWidth: displayData.maxWidth - context.fragmentContext.width
             )
 
-            // Indicates the subrange on the range that the typesetter knows about. This may not be the entire line
-            let typesetSubrange = NSRange(location: context.currentPosition - range.location, length: lineBreak)
+            if lineBreak <= relativeStart {
+                // Forward progress invariant: always consume at least one composed character sequence.
+                let sequence = (substring.string as NSString).rangeOfComposedCharacterSequence(at: relativeStart)
+                lineBreak = min(sequence.max, range.length)
+            }
+
+            // The subrange of `range` making up the next fragment's text. This may not be the entire line
+            let typesetSubrange = NSRange(start: relativeStart, end: lineBreak)
             let typesetData = typesetLine(typesetter: typesetter, range: typesetSubrange)
 
-            // The typesetter won't tell us if 0 characters can fit in the constrained space. This checks to
-            // make sure we can fit something. If not, we pop and continue
-            if lineBreak == 1 && context.fragmentContext.width + typesetData.width > displayData.maxWidth {
+            // The typesetter won't tell us if 0 characters can fit in the constrained space. If the suggested
+            // text overflows a fragment that already has content, break here and retry it on a fresh fragment.
+            // Overflowing text on an empty fragment is kept as-is so layout always advances.
+            if context.fragmentContext.width + typesetData.width > displayData.maxWidth
+                && !context.fragmentContext.contents.isEmpty {
                 context.popCurrentData()
                 continue
             }

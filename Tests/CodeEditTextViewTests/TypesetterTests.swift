@@ -163,9 +163,9 @@ class TypesetterTests: XCTestCase {
         XCTAssertEqual(typesetter.lineFragments.count, 1)
         let fragment = try XCTUnwrap(typesetter.lineFragments.first?.data)
         XCTAssertEqual(fragment.contents.count, 3)
-        XCTAssertTrue(fragment.contents[0].isText)
-        XCTAssertFalse(fragment.contents[1].isText)
-        XCTAssertTrue(fragment.contents[2].isText)
+        XCTAssertTrue(fragment.contents[0].isTextContent)
+        XCTAssertFalse(fragment.contents[1].isTextContent)
+        XCTAssertTrue(fragment.contents[2].isTextContent)
         XCTAssertEqual(
             fragment.contents[1],
             .init(
@@ -193,7 +193,7 @@ class TypesetterTests: XCTestCase {
         XCTAssertEqual(typesetter.lineFragments.count, 1)
         let fragment = try XCTUnwrap(typesetter.lineFragments.first?.data)
         XCTAssertEqual(fragment.contents.count, 1)
-        XCTAssertFalse(fragment.contents[0].isText)
+        XCTAssertFalse(fragment.contents[0].isTextContent)
         XCTAssertEqual(
             fragment.contents[0],
             .init(
@@ -224,13 +224,13 @@ class TypesetterTests: XCTestCase {
 
         var fragment = try XCTUnwrap(typesetter.lineFragments.first?.data)
         XCTAssertEqual(fragment.contents.count, 3) // First fragment includes the attachment and characters after
-        XCTAssertTrue(fragment.contents[0].isText)
-        XCTAssertFalse(fragment.contents[1].isText)
-        XCTAssertTrue(fragment.contents[2].isText)
+        XCTAssertTrue(fragment.contents[0].isTextContent)
+        XCTAssertFalse(fragment.contents[1].isTextContent)
+        XCTAssertTrue(fragment.contents[2].isTextContent)
 
         fragment = try XCTUnwrap(typesetter.lineFragments.getLine(atIndex: 1)?.data)
         XCTAssertEqual(fragment.contents.count, 1) // Second fragment is only text
-        XCTAssertTrue(fragment.contents[0].isText)
+        XCTAssertTrue(fragment.contents[0].isTextContent)
     }
 
     func test_wrapLinesWithWideAttachment() throws {
@@ -255,15 +255,15 @@ class TypesetterTests: XCTestCase {
 
         var fragment = try XCTUnwrap(typesetter.lineFragments.first?.data)
         XCTAssertEqual(fragment.contents.count, 1)
-        XCTAssertTrue(fragment.contents[0].isText)
+        XCTAssertTrue(fragment.contents[0].isTextContent)
 
         fragment = try XCTUnwrap(typesetter.lineFragments.getLine(atIndex: 1)?.data)
         XCTAssertEqual(fragment.contents.count, 1)
-        XCTAssertFalse(fragment.contents[0].isText)
+        XCTAssertFalse(fragment.contents[0].isTextContent)
 
         fragment = try XCTUnwrap(typesetter.lineFragments.getLine(atIndex: 2)?.data)
         XCTAssertEqual(fragment.contents.count, 1)
-        XCTAssertTrue(fragment.contents[0].isText)
+        XCTAssertTrue(fragment.contents[0].isTextContent)
     }
 
     func test_wrapLinesDoesNotBreakOnLastNewline() throws {
@@ -283,5 +283,12 @@ class TypesetterTests: XCTestCase {
         )
 
         XCTAssertEqual(typesetter.lineFragments.count, 1)
+    }
+}
+
+private extension LineFragment.FragmentContent {
+    var isTextContent: Bool {
+        if case .text = data { return true }
+        return false
     }
 }

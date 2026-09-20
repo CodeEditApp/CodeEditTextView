@@ -134,10 +134,12 @@ public final class LineFragmentRenderer {
     }
 
     private func createTextRange(for drawingContext: InvisibleDrawingContext) -> NSRange {
-        return NSRange(
-            start: drawingContext.lineFragment.documentRange.location + drawingContext.contentOffset,
-            end: drawingContext.lineFragment.documentRange.max
-        )
+        // Scan only this text content's characters. The fragment may contain further contents
+        // (attachments, more text) whose characters are scanned by their own passes.
+        let start = drawingContext.lineFragment.documentRange.location + drawingContext.contentOffset
+        let contentLength = CTLineGetStringRange(drawingContext.ctLine).length
+        let end = min(start + contentLength, drawingContext.lineFragment.documentRange.max)
+        return NSRange(start: start, end: max(start, end))
     }
 
     private func processInvisibleCharacters(

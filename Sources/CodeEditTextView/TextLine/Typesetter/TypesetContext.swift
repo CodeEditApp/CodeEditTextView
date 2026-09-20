@@ -28,7 +28,7 @@ struct TypesetContext {
     /// - Parameter attachment: The type-erased attachment to append.
     mutating func appendAttachment(_ attachment: AnyTextAttachment) {
         // Check if we can append this attachment to the current line
-        if fragmentContext.width + attachment.width > displayData.maxWidth {
+        if fragmentContext.width + attachment.width > displayData.maxWidth && !fragmentContext.contents.isEmpty {
             popCurrentData()
         }
 

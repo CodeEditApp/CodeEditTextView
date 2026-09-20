@@ -46,13 +46,10 @@ public final class TextLine: Identifiable, Equatable {
     /// - Returns: True, if this line has been marked as needing layout using ``TextLine/setNeedsLayout()`` or if the
     ///            line needs to find new line breaks due to a new constraining width.
     func needsLayout(maxWidth: CGFloat) -> Bool {
-        needsLayout // Force layout
-        || (
-            // Both max widths we're comparing are finite
-            maxWidth.isFinite
-            && (self.maxWidth ?? 0.0).isFinite
-            && maxWidth != (self.maxWidth ?? 0.0)
-        )
+        // Any width change invalidates line breaks, including transitions to or from the infinite
+        // width used when no scroll view constrains the viewport. A `nil` stored width only occurs
+        // alongside `needsLayout` being true.
+        needsLayout || self.maxWidth != maxWidth
     }
 
     /// Prepares the line for display, generating all potential line breaks and calculating the real height of the line.
@@ -70,7 +67,7 @@ public final class TextLine: Identifiable, Equatable {
         attachments: [AnyTextAttachment]
     ) {
         let string = stringRef.attributedSubstring(from: range)
-        let maxWidth = typesetter.typeset(
+        typesetter.typeset(
             string,
             documentRange: range,
             displayData: displayData,
