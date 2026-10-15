@@ -54,23 +54,60 @@ public final class LineFragment: Identifiable, Equatable {
     public var descent: CGFloat
     public var scaledHeight: CGFloat
 
+    /// How far the fragment's pixels reach above the top of its drawing rect (`scaledHeight` tall), in points.
+    ///
+    /// Glyphs can paint outside their line: stacked combining marks, tall fallback fonts, and the antialiased edge of
+    /// a descender that ends right at the rect's bottom. A redraw of a neighboring line clears those pixels, so the
+    /// fragment has to be drawn again with it - see ``VisibleFragment/drawMinY``.
+    public private(set) var inkOverflowAbove: CGFloat = 0
+
+    /// How far the fragment's pixels reach below the bottom of its drawing rect, in points. See ``inkOverflowAbove``.
+    public private(set) var inkOverflowBelow: CGFloat = 0
+
+    /// Whether any glyph is positioned off the baseline - combining marks stacked by the font, for instance.
+    /// ``LineFragmentRenderer`` draws such text in an unflipped space so the offsets point the right way.
+    public private(set) var hasVerticalGlyphOffsets: Bool = false
+
     /// The difference between the real text height and the scaled height
     public var heightDifference: CGFloat {
         scaledHeight - height
     }
 
+    /// The glyph ink this fragment's contents paint, y-up from the baseline. ``TypesetCache`` keeps it with the
+    /// typeset lines so a cache hit doesn't measure again.
+    let ink: LineInk
+
+    /// - Parameter ink: The contents' ink when it is already known (a ``TypesetCache`` hit); measured otherwise.
     init(
         contents: [FragmentContent],
         width: CGFloat,
         height: CGFloat,
         descent: CGFloat,
-        lineHeightMultiplier: CGFloat
+        lineHeightMultiplier: CGFloat,
+        ink: LineInk? = nil
     ) {
         self.contents = contents
         self.width = width
         self.height = height
         self.descent = descent
         self.scaledHeight = height * lineHeightMultiplier
+        let ink = ink ?? LineInk.measure(contents)
+        self.ink = ink
+        applyInk(ink)
+    }
+
+    /// Slack added to measured ink: the drawn baseline is rounded to a whole point (up to half a point away), and
+    /// antialiasing touches the pixel past an exact path edge - a whole point at 1x.
+    private static let inkSlack: CGFloat = 2
+
+    /// Converts the contents' ink into how far it reaches past the drawing rect, using the baseline the renderer
+    /// draws at. An empty bound (`-inf` top, `+inf` bottom) yields no overflow.
+    private func applyInk(_ ink: LineInk) {
+        let baseline = height - descent + heightDifference / 2
+        // Line bounds are y-up from the baseline; the fragment is drawn top-down.
+        inkOverflowAbove = max(0, ink.top - baseline + Self.inkSlack)
+        inkOverflowBelow = max(0, baseline - ink.bottom - scaledHeight + Self.inkSlack)
+        hasVerticalGlyphOffsets = ink.hasVerticalGlyphOffsets
     }
 
     public static func == (lhs: LineFragment, rhs: LineFragment) -> Bool {
@@ -79,12 +116,15 @@ public final class LineFragment: Identifiable, Equatable {
 
     /// Finds the x position of the offset in the string the fragment represents.
     ///
-    /// Underscored, because although this needs to be accessible outside this class, the relevant layout manager method
-    /// should be used.
+    /// Prefer `TextLayoutManager.characterXPosition(in:for:)` at API boundaries - it honors the render delegate
+    /// override used by the minimap. Inside the text view proper, where no render delegate is installed, callers can
+    /// inline this directly; `TextLayoutManager` does exactly that for its hot selection/cursor paths.
     ///
-    /// - Parameter offset: The offset, relative to the start of the *line*.
+    /// - Parameter offset: The offset, relative to the start of the *fragment* (content offsets accumulate from 0
+    ///   within a fragment).
     /// - Returns: The x position of the character in the drawn line, from the left.
-    func _xPos(for offset: Int) -> CGFloat {
+    @inline(__always)
+    package func _xPos(for offset: Int) -> CGFloat {
         guard let (content, position) = findContent(at: offset) else {
             return width
         }

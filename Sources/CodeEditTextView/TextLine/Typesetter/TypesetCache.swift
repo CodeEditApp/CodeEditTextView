@@ -18,6 +18,8 @@ struct CachedFragment {
     let width: CGFloat
     let height: CGFloat
     let descent: CGFloat
+    /// The line's glyph ink, measured when it was typeset (see ``LineInk``).
+    let ink: LineInk
 }
 
 struct CachedTypesetResult {
@@ -29,8 +31,16 @@ struct CachedTypesetResult {
 /// string, and equality compares actual characters and every attribute run (via `isEqual(to:)`),
 /// never hashes alone. Two distinct lines therefore can never alias, and any content or
 /// attribute-only change produces a new key.
+///
+/// A *probe* key (``probe(_:range:displayData:)``) instead refers to a range of a live attributed
+/// string, the document's text storage, without copying it. It only looks entries up and is never
+/// stored, so a cache hit costs no `attributedSubstring(from:)`: that substring was most of the
+/// ~1.9 µs every typeset of a 90-character line paid, hits included.
 struct TypesetCacheKey: Hashable {
+    /// The snapshot, or for a probe the live string `range` refers into.
     let string: NSAttributedString
+    /// For a probe, the range of `string` the key stands for; nil for a stored snapshot.
+    let range: NSRange?
     let maxWidth: CGFloat
     let breakStrategy: LineBreakStrategy
     let lineHeightMultiplier: CGFloat
@@ -38,12 +48,14 @@ struct TypesetCacheKey: Hashable {
 
     init(
         string: NSAttributedString,
+        range: NSRange? = nil,
         maxWidth: CGFloat,
         breakStrategy: LineBreakStrategy,
         lineHeightMultiplier: CGFloat,
         contentHash: Int
     ) {
         self.string = string
+        self.range = range
         self.maxWidth = maxWidth
         self.breakStrategy = breakStrategy
         self.lineHeightMultiplier = lineHeightMultiplier
@@ -51,11 +63,66 @@ struct TypesetCacheKey: Hashable {
     }
 
     static func == (lhs: TypesetCacheKey, rhs: TypesetCacheKey) -> Bool {
-        lhs.contentHash == rhs.contentHash
+        guard lhs.contentHash == rhs.contentHash
             && lhs.maxWidth == rhs.maxWidth
             && lhs.breakStrategy == rhs.breakStrategy
-            && lhs.lineHeightMultiplier == rhs.lineHeightMultiplier
-            && lhs.string.isEqual(to: rhs.string)
+            && lhs.lineHeightMultiplier == rhs.lineHeightMultiplier else {
+            return false
+        }
+        switch (lhs.range, rhs.range) {
+        case (nil, nil):
+            return lhs.string.isEqual(to: rhs.string)
+        case (nil, let range?):
+            return snapshot(lhs.string, matches: rhs.string, in: range)
+        case (let range?, nil):
+            return snapshot(rhs.string, matches: lhs.string, in: range)
+        case (let lhsRange?, let rhsRange?):
+            let lhsString = lhs.string.attributedSubstring(from: lhsRange)
+            return lhsString.isEqual(to: rhs.string.attributedSubstring(from: rhsRange))
+        }
+    }
+
+    /// Whether `snapshot` holds exactly the characters and attributes `source` holds in `range` - what
+    /// `isEqual(to:)` would answer for `source`'s substring, without creating that substring.
+    private static func snapshot(
+        _ snapshot: NSAttributedString,
+        matches source: NSAttributedString,
+        in range: NSRange
+    ) -> Bool {
+        let length = range.length
+        guard snapshot.length == length, range.max <= source.length else { return false }
+        guard length > 0 else { return true }
+        let charactersMatch = withUnsafeTemporaryAllocation(of: UInt16.self, capacity: length * 2) { buffer in
+            guard let base = buffer.baseAddress else { return false }
+            (snapshot.string as NSString).getCharacters(base, range: NSRange(location: 0, length: length))
+            (source.string as NSString).getCharacters(base + length, range: range)
+            return memcmp(base, base + length, length * MemoryLayout<UInt16>.stride) == 0
+        }
+        guard charactersMatch else { return false }
+
+        // Attributes, one maximal run at a time. Core Foundation calls: the Swift overlay would bridge every
+        // attribute dictionary.
+        let snapshotCF = snapshot as CFAttributedString
+        let sourceCF = source as CFAttributedString
+        let sourceRange = CFRange(location: range.location, length: length)
+        var offset = 0
+        while offset < length {
+            var snapshotRun = CFRange()
+            var sourceRun = CFRange()
+            let snapshotAttributes = CFAttributedStringGetAttributesAndLongestEffectiveRange(
+                snapshotCF, offset, CFRange(location: 0, length: length), &snapshotRun
+            )
+            let sourceAttributes = CFAttributedStringGetAttributesAndLongestEffectiveRange(
+                sourceCF, range.location + offset, sourceRange, &sourceRun
+            )
+            let snapshotEnd = snapshotRun.location + snapshotRun.length
+            guard snapshotEnd == sourceRun.location + sourceRun.length - range.location,
+                  CFEqual(snapshotAttributes, sourceAttributes) else {
+                return false
+            }
+            offset = snapshotEnd
+        }
+        return true
     }
 
     func hash(into hasher: inout Hasher) {
@@ -180,14 +247,47 @@ extension TypesetCacheKey {
         let snapshot = string.copy() as? NSAttributedString ?? NSAttributedString(attributedString: string)
         // Hash the full character content; attribute differences only affect bucket placement,
         // equality still compares every run.
-        var hasher = Hasher()
-        hasher.combine(snapshot.string)
         return TypesetCacheKey(
             string: snapshot,
             maxWidth: displayData.maxWidth,
             breakStrategy: displayData.breakStrategy,
             lineHeightMultiplier: displayData.lineHeightMultiplier,
-            contentHash: hasher.finalize()
+            contentHash: contentHash(
+                of: snapshot.string as NSString,
+                in: NSRange(location: 0, length: snapshot.length)
+            )
         )
+    }
+
+    /// A lookup-only key for `range` of `source` (the document's text storage), equal to the key
+    /// ``make(string:displayData:)`` builds from that range's substring. Copies nothing.
+    static func probe(
+        _ source: NSAttributedString,
+        range: NSRange,
+        displayData: TextLine.DisplayData
+    ) -> TypesetCacheKey {
+        TypesetCacheKey(
+            string: source,
+            range: range,
+            maxWidth: displayData.maxWidth,
+            breakStrategy: displayData.breakStrategy,
+            lineHeightMultiplier: displayData.lineHeightMultiplier,
+            contentHash: contentHash(of: source.string as NSString, in: range)
+        )
+    }
+
+    /// Hashes the raw UTF-16 code units of `range`, the units `isEqual(to:)` compares. Hashing the
+    /// characters as a Swift `String` bridged them and hashed with Unicode normalization.
+    private static func contentHash(of characters: NSString, in range: NSRange) -> Int {
+        var hasher = Hasher()
+        hasher.combine(range.length)
+        if range.length > 0 {
+            withUnsafeTemporaryAllocation(of: UInt16.self, capacity: range.length) { buffer in
+                guard let base = buffer.baseAddress else { return }
+                characters.getCharacters(base, range: range)
+                hasher.combine(bytes: UnsafeRawBufferPointer(buffer))
+            }
+        }
+        return hasher.finalize()
     }
 }

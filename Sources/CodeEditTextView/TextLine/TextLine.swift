@@ -12,6 +12,10 @@ import AppKit
 public final class TextLine: Identifiable, Equatable {
     public let id: UUID = UniqueIdentifier.makeUUID()
     private var needsLayout: Bool = true
+    /// The generation of the last layout pass that walked this line (see
+    /// ``TextLayoutManager/lastCompletedPassGeneration``); 0 before any. Declared here, after `needsLayout`, so it sits
+    /// in that field's padding and the instance stays 64 bytes.
+    var visibleStamp: UInt32 = 0
     var maxWidth: CGFloat?
     /// Backing store for ``typesetter``. Created on first use: most lines of a large document are never
     /// laid out, and every typesetter carries its own fragment storage, so eager typesetters made the
@@ -66,6 +70,13 @@ public final class TextLine: Identifiable, Equatable {
         markedRanges: MarkedRanges?,
         attachments: [AnyTextAttachment]
     ) {
+        // Unchanged lines hit the typeset cache; probing it with the storage range skips creating the substring.
+        if markedRanges == nil, attachments.isEmpty,
+           typesetter.typesetFromCache(stringRef, range: range, displayData: displayData) {
+            self.maxWidth = displayData.maxWidth
+            needsLayout = false
+            return
+        }
         let string = stringRef.attributedSubstring(from: range)
         typesetter.typeset(
             string,

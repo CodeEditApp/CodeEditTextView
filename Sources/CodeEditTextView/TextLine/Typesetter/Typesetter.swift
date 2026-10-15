@@ -97,7 +97,8 @@ final public class Typesetter {
                         length: item.length,
                         width: item.data.width,
                         height: item.data.height,
-                        descent: item.data.descent
+                        descent: item.data.descent,
+                        ink: item.data.ink
                     )
                 )
             }
@@ -107,6 +108,21 @@ final public class Typesetter {
         }
 
         lineFragments.build(from: lines, estimatedLineHeight: maxHeight)
+    }
+
+    /// Typesets `range` of `source` from ``TypesetCache`` if it holds that exact content, without creating the
+    /// range's attributed substring. Returns false on a miss (or content the cache never holds); the caller then
+    /// typesets normally.
+    func typesetFromCache(_ source: NSAttributedString, range: NSRange, displayData: TextLine.DisplayData) -> Bool {
+        // Empty lines and degenerate widths take paths in `typeset` that never consult the cache.
+        guard range.length > 0, displayData.maxWidth > 0,
+              let cached = TypesetCache.shared.get(.probe(source, range: range, displayData: displayData)) else {
+            return false
+        }
+        lineFragments.removeAll()
+        let lines = buildItems(from: cached.fragments, lineHeightMultiplier: displayData.lineHeightMultiplier)
+        lineFragments.build(from: lines, estimatedLineHeight: cached.maxHeight)
+        return true
     }
 
     /// Rebuild `BuildItem`s (with fresh `LineFragment` instances) from a cached typeset result.
@@ -122,7 +138,8 @@ final public class Typesetter {
                 width: c.width,
                 height: c.height,
                 descent: c.descent,
-                lineHeightMultiplier: lineHeightMultiplier
+                lineHeightMultiplier: lineHeightMultiplier,
+                ink: c.ink
             )
             out.append(.init(data: fragment, length: c.length, height: fragment.scaledHeight))
         }
