@@ -19,8 +19,9 @@ import Foundation
 // addressor we only load the fields we touch.
 //
 // `Int32.min` is the nil handle sentinel. Freed slots go on `freeList` and are reused
-// on the next `allocNode`; we don't deinitialize on free - the slot keeps its old
-// `Data` until assignment drops it on reuse or `removeAll`/`deinit` tears it down.
+// on the next `allocNode`. Freeing a slot releases its `Data` (the slot stays initialized,
+// holding `nil`), so a deleted line's `TextLine` - with its typesetter and CTLines - does
+// not outlive the line until the slot happens to be reused.
 
 extension TextLineStorage {
     @usableFromInline
@@ -51,12 +52,14 @@ extension TextLineStorage {
         @usableFromInline var right: NodeHandle
         @usableFromInline var parent: NodeHandle
         @usableFromInline var color: Color
-        @usableFromInline var data: NodeData
+        /// `nil` until first read for nodes added without data (see `TextLineStorage.dataFactory`), and in freed
+        /// slots. Optional costs no space when `NodeData` is a class.
+        @usableFromInline var data: NodeData?
 
         @inlinable
         init(
             length: Int,
-            data: NodeData,
+            data: NodeData?,
             leftSubtreeOffset: Int,
             leftSubtreeHeight: CGFloat,
             leftSubtreeCount: Int,
@@ -79,7 +82,7 @@ extension TextLineStorage {
         }
 
         @inlinable
-        init(length: Int, data: NodeData, height: CGFloat) {
+        init(length: Int, data: NodeData?, height: CGFloat) {
             self.init(
                 length: length,
                 data: data,
@@ -137,7 +140,7 @@ extension TextLineStorage {
     @inlinable
     func allocNode(
         length: Int,
-        data: Data,
+        data: Data?,
         height: CGFloat,
         leftSubtreeOffset: Int = 0,
         leftSubtreeHeight: CGFloat = 0,
@@ -154,7 +157,7 @@ extension TextLineStorage {
             color: color
         )
         if let reused = freeList.popLast() {
-            // Slot is still initialized (we don't deinitialize on free); assignment
+            // Slot is still initialized (freeing only clears its data); assignment
             // destroys the old value and stores the new one.
             nodesPtr.advanced(by: Int(reused)).pointee = node
             return reused
@@ -166,10 +169,10 @@ extension TextLineStorage {
         return handle
     }
 
-    /// Return a node's slot to the free list. The slot's `Data` reference is kept alive
-    /// until the slot is reused (assignment drops it) or the storage is cleared.
+    /// Return a node's slot to the free list, releasing its `Data`.
     @inlinable
     func freeNode(_ handle: NodeHandle) {
+        nodesPtr.advanced(by: Int(handle)).pointee.data = nil
         freeList.append(handle)
     }
 
@@ -220,7 +223,7 @@ extension TextLineStorage {
         @usableFromInline var leftSubtreeOffset: Int { storage[handle].leftSubtreeOffset }
         @usableFromInline var leftSubtreeHeight: CGFloat { storage[handle].leftSubtreeHeight }
         @usableFromInline var leftSubtreeCount: Int { storage[handle].leftSubtreeCount }
-        @usableFromInline var data: Data { storage[handle].data }
+        @usableFromInline var data: Data { storage.data(at: handle) }
     }
 
     /// Root node as a chainable reference. `nil` when the tree is empty.

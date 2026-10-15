@@ -8,16 +8,18 @@
 import AppKit
 
 extension TextLineStorage where Data == TextLine {
-    /// Builds the line storage object from the given `NSTextStorage`.
+    /// Builds the line storage object from the given `NSTextStorage`. Each line's ``TextLine`` is created when the line
+    /// is first read.
     ///
-    /// Lines are split by ``UTF16LineScanner``, which reproduces `NSString.getLineStart` exactly (the edit
-    /// path splits inserted text with the same Foundation call, so both agree on every terminator).
+    /// Lines end at LF, CR and CR LF, found by ``UTF16LineScanner`` - the scanner the edit path splits inserted text
+    /// with, so a document opens with the line structure any sequence of edits produces.
     /// - Parameters:
     ///   - textStorage: The text storage object to use.
     ///   - estimatedLineHeight: The estimated height of each individual line.
     func buildFromTextStorage(_ textStorage: NSTextStorage, estimatedLineHeight: CGFloat) {
-        // `NSTextStorage.string` bridges through a copy-on-write snapshot of the backing `NSBigMutableString`;
-        // it is O(1), and the cast back hands over that same immutable object.
+        // The storage's live backing string, with no copy: the bridge round trip is elided. Fine for a synchronous
+        // scan; anything reading it later or on another thread needs `(string as NSString).copy()`, an O(1)
+        // copy-on-write snapshot.
         let string = textStorage.string as NSString
         let totalLength = string.length
 
@@ -33,5 +35,14 @@ extension TextLineStorage where Data == TextLine {
         }
 
         build(lengths: lengths, estimatedLineHeight: estimatedLineHeight) { TextLine() }
+    }
+
+    /// Inserts a line whose ``TextLine`` is created when the line is first read.
+    /// - Complexity: `O(log n)`
+    func insertLine(atOffset index: Int, length: Int, height: CGFloat) {
+        if dataFactory == nil {
+            dataFactory = { TextLine() }
+        }
+        insertNode(data: nil, atOffset: index, length: length, height: height)
     }
 }

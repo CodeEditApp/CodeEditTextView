@@ -34,7 +34,7 @@ public enum LineEnding: String, CaseIterable {
             $0[$1] = 0
         }
         var shouldContinue = true
-        var lineIterator = lineStorage.makeIterator()
+        var lineIterator = lineStorage.lineSpans()
 
         while let line = lineIterator.next(), shouldContinue {
             guard let lineString = textStorage.substring(from: line.range),

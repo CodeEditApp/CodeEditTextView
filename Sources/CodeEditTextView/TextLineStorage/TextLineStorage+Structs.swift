@@ -19,8 +19,8 @@ extension TextLineStorage where Data: Identifiable {
         }
 
         @usableFromInline
-        init(position: NodePosition) {
-            self.data = position.data
+        init(position: NodePosition, data: Data) {
+            self.data = data
             self.range = NSRange(location: position.textPos, length: position.length)
             self.yPos = position.yPos
             self.height = position.height
@@ -40,25 +40,24 @@ extension TextLineStorage where Data: Identifiable {
     }
 
     /// Internal result type for tree searches. Carries the handle for mutation plus a
-    /// snapshot of the node's user-facing fields so callers that only need to *read*
-    /// the node don't have to go back through the arena subscript.
+    /// snapshot of the node's metrics so callers that only need to *read* them don't have
+    /// to go back through the arena subscript. It leaves out the node's data, which a read
+    /// may have to create (``TextLineStorage/data(at:)``).
     @usableFromInline
     struct NodePosition {
-        let handle: NodeHandle
-        let data: Data
-        let length: Int
-        let height: CGFloat
+        @usableFromInline let handle: NodeHandle
+        @usableFromInline let length: Int
+        @usableFromInline let height: CGFloat
         /// The y position of the data, on a top down y axis
-        let yPos: CGFloat
+        @usableFromInline let yPos: CGFloat
         /// The location of the node in the document
-        let textPos: Int
+        @usableFromInline let textPos: Int
         /// The index of the node in the document.
-        let index: Int
+        @usableFromInline let index: Int
 
         @usableFromInline
-        init(handle: NodeHandle, data: Data, length: Int, height: CGFloat, yPos: CGFloat, textPos: Int, index: Int) {
+        init(handle: NodeHandle, length: Int, height: CGFloat, yPos: CGFloat, textPos: Int, index: Int) {
             self.handle = handle
-            self.data = data
             self.length = length
             self.height = height
             self.yPos = yPos

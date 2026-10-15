@@ -34,9 +34,16 @@ import Foundation
 // in-place and the loss from re-loading `nodesPtr` on a handful of writes is small.
 //
 // All tree methods take `NodeHandle` (Int32); `Int32.min` is the nil sentinel. Freed
-// slots go on `freeList` and are reused on the next `allocNode`. We don't deinitialize
-// on free - the slot keeps its `Data` until assignment drops it on reuse or
-// `removeAll`/`deinit` tears down the occupied range.
+// slots go on `freeList` and are reused on the next `allocNode`. Freeing a slot releases
+// its `Data` but leaves the slot initialized; `removeAll`/`deinit` tear down the occupied
+// range.
+//
+// A node's `Data` may be created lazily. The document-open build and the edit path add
+// lines without data, and `data(at:)` creates it with `dataFactory` the first time the
+// line is read. Most lines of a large document are never read, and one `TextLine` per
+// line cost more to allocate and free than the rest of the tree. Walks that need only
+// ranges and heights use the `LineSpan` iterators, which never create data. Because a
+// read can create data, the storage must not be read from two threads at once.
 //
 // The arena is allocated on first use: `nodesCapacity` is 0 and `nodesPtr` is a non-null
 // placeholder until then (see `init()`), so an instance that never holds a node costs one
@@ -51,8 +58,14 @@ public final class TextLineStorage<Data: Identifiable> {
     }
 
     // MARK: - Arena state
+    //
+    // The two fields every search and walk reads are `@exclusivity(unchecked)`. A dynamic exclusivity check costs
+    // more than the load itself, and an iterator inlined into a loop pays it per line wherever the optimizer can't
+    // hoist it - about 20% of a layout-manager walk. Nothing holds a long access to either field: the storage is
+    // used from one thread, and they are only ever assigned.
 
     @usableFromInline
+    @exclusivity(unchecked)
     internal var nodesPtr: UnsafeMutablePointer<Node<Data>>
 
     @usableFromInline
@@ -65,7 +78,15 @@ public final class TextLineStorage<Data: Identifiable> {
     internal var freeList: [NodeHandle] = []
 
     @usableFromInline
+    @exclusivity(unchecked)
     internal var rootHandle: NodeHandle = Int32.min
+
+    /// Creates the data of a node added without any, the first time it is read (see ``data(at:)``). Set by
+    /// ``build(lengths:estimatedLineHeight:makeData:)`` and the internal lazy insert. Unchecked: a dynamic exclusivity
+    /// check on every line's first read cost more than creating the line.
+    @usableFromInline
+    @exclusivity(unchecked)
+    internal var dataFactory: (() -> Data)?
 
     // MARK: - Public state
 
@@ -83,7 +104,7 @@ public final class TextLineStorage<Data: Identifiable> {
         let h = minimum(rootHandle)
         let node = nodesPtr + Int(h)
         return TextLinePosition(
-            data: node.pointee.data,
+            data: data(of: node),
             range: NSRange(location: 0, length: node.pointee.length),
             yPos: 0,
             height: node.pointee.height,
@@ -96,7 +117,7 @@ public final class TextLineStorage<Data: Identifiable> {
         let h = maximum(rootHandle)
         let node = nodesPtr + Int(h)
         return TextLinePosition(
-            data: node.pointee.data,
+            data: data(of: node),
             range: NSRange(location: length - node.pointee.length, length: node.pointee.length),
             yPos: height - node.pointee.height,
             height: node.pointee.height,
@@ -111,7 +132,6 @@ public final class TextLineStorage<Data: Identifiable> {
         let node = nodesPtr + Int(h)
         return NodePosition(
             handle: h,
-            data: node.pointee.data,
             length: node.pointee.length,
             height: node.pointee.height,
             yPos: height - node.pointee.height,
@@ -160,6 +180,12 @@ public final class TextLineStorage<Data: Identifiable> {
     /// Inserts a new line for the given range.
     /// - Complexity: `O(log n)` where `n` is the number of lines in the storage object.
     public func insert(line: Data, atOffset index: Int, length: Int, height: CGFloat) {
+        insertNode(data: line, atOffset: index, length: length, height: height)
+    }
+
+    /// Inserts a new line for the given range. With `nil` data, the line's data is created by ``dataFactory`` when
+    /// it is first read.
+    func insertNode(data line: Data?, atOffset index: Int, length: Int, height: CGFloat) {
         assert(index >= 0 && index <= self.length, "Invalid index, expected between 0 and \(self.length). Got \(index)")
         defer {
             self.count += 1
@@ -222,7 +248,7 @@ public final class TextLineStorage<Data: Identifiable> {
     @inlinable
     public func getLine(atOffset offset: Int) -> TextLinePosition? {
         guard let position = search(for: offset) else { return nil }
-        return TextLinePosition(position: position)
+        return TextLinePosition(position: position, data: data(at: position.handle))
     }
 
     /// Fetches a line for the given index.
@@ -230,7 +256,7 @@ public final class TextLineStorage<Data: Identifiable> {
     @inlinable
     public func getLine(atIndex index: Int) -> TextLinePosition? {
         guard let position = search(forIndex: index) else { return nil }
-        return TextLinePosition(position: position)
+        return TextLinePosition(position: position, data: data(at: position.handle))
     }
 
     /// Fetches a line for the given `y` value.
@@ -241,8 +267,9 @@ public final class TextLineStorage<Data: Identifiable> {
         guard posY < height else {
             return last
         }
-        guard let position = search(forYPosition: posY) else { return nil }
-        return TextLinePosition(position: position)
+        // Past the last line's computed end but below `height`: rounding, so the last line.
+        guard let position = search(forYPosition: posY) else { return last }
+        return TextLinePosition(position: position, data: data(at: position.handle))
     }
 
     /// Applies a length change at the given index.
@@ -316,19 +343,19 @@ public final class TextLineStorage<Data: Identifiable> {
         }
     }
 
-    /// Efficiently builds the tree from line lengths alone, creating each line's data with `makeData`.
+    /// Efficiently builds the tree from line lengths alone. Each line's data is created with `makeData` when the line
+    /// is first read, so the build itself allocates nothing per line.
     ///
     /// The document-open path uses this to go straight from the line scanner's output to the tree without
     /// materializing an intermediate ``BuildItem`` array. Every line gets `estimatedLineHeight`.
     /// - Note: Calls ``TextLineStorage/removeAll()`` before building.
-    func build(lengths: [Int], estimatedLineHeight: CGFloat, makeData: () -> Data) {
+    func build(lengths: [Int], estimatedLineHeight: CGFloat, makeData: @escaping () -> Data) {
+        dataFactory = makeData
         lengths.withUnsafeBufferPointer { lengths in
-            withoutActuallyEscaping(makeData) { makeData in
-                buildBalanced(
-                    LengthsBuildSource(lengths: lengths, makeData: makeData),
-                    estimatedLineHeight: estimatedLineHeight
-                )
-            }
+            buildBalanced(
+                LengthsBuildSource<Data>(lengths: lengths),
+                estimatedLineHeight: estimatedLineHeight
+            )
         }
     }
 
@@ -414,12 +441,12 @@ public final class TextLineStorage<Data: Identifiable> {
             )
         }
 
-        let item = context.source.item(at: mid)
-        let lineHeight = item.height ?? context.estimatedLineHeight
+        let lineLength = context.source.length(at: mid)
+        let lineHeight = context.source.height(at: mid) ?? context.estimatedLineHeight
         (context.nodes + mid).initialize(
             to: Node(
-                length: item.length,
-                data: item.data,
+                length: lineLength,
+                data: context.source.data(at: mid),
                 leftSubtreeOffset: leftLength,
                 leftSubtreeHeight: leftHeight,
                 leftSubtreeCount: mid - left,
@@ -430,18 +457,22 @@ public final class TextLineStorage<Data: Identifiable> {
                 color: depth > 1 && depth == context.maxDepth ? .red : .black
             )
         )
-        return (leftLength + item.length + rightLength, leftHeight + lineHeight + rightHeight)
+        return (leftLength + lineLength + rightLength, leftHeight + lineHeight + rightHeight)
     }
 }
 
 // MARK: - Build sources
 
-/// Random-access source of ``TextLineStorage/BuildItem``s for the bulk builder. A protocol rather than a
-/// closure so each source is specialized into the recursive builder with no indirect call per line.
+/// Random-access source of lines for the bulk builder. A protocol rather than a closure so each source is
+/// specialized into the recursive builder with no indirect call per line.
 protocol TextLineBuildSource {
     associatedtype Data: Identifiable
     var count: Int { get }
-    func item(at index: Int) -> TextLineStorage<Data>.BuildItem
+    func length(at index: Int) -> Int
+    /// `nil` for the builder's estimated line height.
+    func height(at index: Int) -> CGFloat?
+    /// `nil` to create the line's data when it is first read.
+    func data(at index: Int) -> Data?
 }
 
 /// Items already materialized by the caller (``TextLineStorage/build(from:estimatedLineHeight:)``).
@@ -451,156 +482,210 @@ struct BufferBuildSource<Data: Identifiable>: TextLineBuildSource {
     var count: Int { items.count }
 
     @inline(__always)
-    func item(at index: Int) -> TextLineStorage<Data>.BuildItem {
-        items[index]
-    }
+    func length(at index: Int) -> Int { items[index].length }
+
+    @inline(__always)
+    func height(at index: Int) -> CGFloat? { items[index].height }
+
+    @inline(__always)
+    func data(at index: Int) -> Data? { items[index].data }
 }
 
-/// Line lengths plus a factory for each line's data (the document-open path).
+/// Line lengths alone (the document-open path). Lines get their data on first read.
 struct LengthsBuildSource<Data: Identifiable>: TextLineBuildSource {
     let lengths: UnsafeBufferPointer<Int>
-    let makeData: () -> Data
 
     var count: Int { lengths.count }
 
     @inline(__always)
-    func item(at index: Int) -> TextLineStorage<Data>.BuildItem {
-        TextLineStorage<Data>.BuildItem(data: makeData(), length: lengths[index], height: nil)
+    func length(at index: Int) -> Int { lengths[index] }
+
+    @inline(__always)
+    func height(at index: Int) -> CGFloat? { nil }
+
+    @inline(__always)
+    func data(at index: Int) -> Data? { nil }
+}
+
+// MARK: - Lazy data
+
+extension TextLineStorage {
+    /// The data of the node at `handle`, created with ``dataFactory`` and stored if the node has none yet.
+    @inlinable
+    func data(at handle: NodeHandle) -> Data {
+        data(of: nodesPtr + Int(handle))
+    }
+
+    /// ``data(at:)`` for a caller that already holds the node's pointer (the iterators).
+    ///
+    /// The value is always loaded from the node, after creating it if needed. Returning the factory's result on one
+    /// path and the loaded value on the other left ARC a merged owned value, so every line paid a retain and release
+    /// of its data even when the caller never read it; walks were 25-30% slower.
+    @inlinable
+    func data(of node: UnsafeMutablePointer<Node<Data>>) -> Data {
+        if node.pointee.data == nil {
+            createData(in: node)
+        }
+        return node.pointee.data.unsafelyUnwrapped
+    }
+
+    /// The data of the node at `handle` if it exists. Never creates it.
+    @inlinable
+    func existingData(at handle: NodeHandle) -> Data? {
+        (nodesPtr + Int(handle)).pointee.data
+    }
+
+    /// Calls `body` with the data of every line whose data exists, in no particular order.
+    func forEachExistingData(_ body: (Data) -> Void) {
+        // Freed slots hold no data, so a scan of the occupied arena visits exactly the live lines with data.
+        for slot in 0..<nodesCount {
+            if let data = (nodesPtr + slot).pointee.data {
+                body(data)
+            }
+        }
+    }
+
+    /// Creates and stores the data of `node`, which has none.
+    @usableFromInline
+    @inline(never)
+    func createData(in node: UnsafeMutablePointer<Node<Data>>) {
+        guard let dataFactory else {
+            preconditionFailure("A line was added without data to a storage that has no data factory")
+        }
+        node.pointee.data = dataFactory()
     }
 }
 
 // MARK: - Search
+//
+// Each search descends from the root carrying the totals of everything before the current subtree, so a node's
+// position is `base + leftSubtree...`: sums only. Deriving a child's position from its parent's by subtracting
+// left-subtree totals is exact for offsets and indices but not for heights. With heights like 16.959375 the residue
+// put the first line of some documents at y = 2.5e-14, a search for y = 0 found no line, and every layout pass whose
+// padded band started at the top of the document laid out nothing: the text near the top of those files went blank,
+// and the gutter too once scrolled all the way up.
 
 extension TextLineStorage {
-    /// Searches for the given offset.
+    /// Searches for the line containing the given offset.
     @inlinable
     func search(for offset: Int) -> NodePosition? {
-        guard rootHandle != Int32.min else { return nil }
         let ptr = nodesPtr
-        let rootNode = ptr + Int(rootHandle)
-        var currentHandle = rootHandle
-        var currentOffset = rootNode.pointee.leftSubtreeOffset
-        var currentYPosition = rootNode.pointee.leftSubtreeHeight
-        var currentIndex = rootNode.pointee.leftSubtreeCount
-        while currentHandle != Int32.min {
-            let node = ptr + Int(currentHandle)
+        var handle = rootHandle
+        var baseOffset = 0
+        var baseY: CGFloat = 0
+        var baseIndex = 0
+        while handle != Int32.min {
+            let node = ptr + Int(handle)
+            let nodeOffset = baseOffset + node.pointee.leftSubtreeOffset
             let nodeLength = node.pointee.length
-            if offset == currentOffset || (offset >= currentOffset && offset < currentOffset + nodeLength) {
+            if offset == nodeOffset || (offset > nodeOffset && offset < nodeOffset + nodeLength) {
                 return NodePosition(
-                    handle: currentHandle,
-                    data: node.pointee.data,
+                    handle: handle,
                     length: nodeLength,
                     height: node.pointee.height,
-                    yPos: currentYPosition,
-                    textPos: currentOffset,
-                    index: currentIndex
+                    yPos: baseY + node.pointee.leftSubtreeHeight,
+                    textPos: nodeOffset,
+                    index: baseIndex + node.pointee.leftSubtreeCount
                 )
-            } else if currentOffset > offset {
-                let left = node.pointee.left
-                if left == Int32.min { return nil }
-                let leftNode = ptr + Int(left)
-                currentOffset += leftNode.pointee.leftSubtreeOffset - node.pointee.leftSubtreeOffset
-                currentYPosition += leftNode.pointee.leftSubtreeHeight - node.pointee.leftSubtreeHeight
-                currentIndex += leftNode.pointee.leftSubtreeCount - node.pointee.leftSubtreeCount
-                currentHandle = left
+            } else if nodeOffset > offset {
+                handle = node.pointee.left
             } else {
-                let right = node.pointee.right
-                if right == Int32.min { return nil }
-                let rightNode = ptr + Int(right)
-                currentOffset += nodeLength + rightNode.pointee.leftSubtreeOffset
-                currentYPosition += node.pointee.height + rightNode.pointee.leftSubtreeHeight
-                currentIndex += 1 + rightNode.pointee.leftSubtreeCount
-                currentHandle = right
+                baseOffset = nodeOffset + nodeLength
+                baseY += node.pointee.leftSubtreeHeight + node.pointee.height
+                baseIndex += node.pointee.leftSubtreeCount + 1
+                handle = node.pointee.right
             }
         }
         return nil
     }
 
-    /// Searches for the given index.
+    /// Searches for the line at the given index.
     @inlinable
     func search(forIndex index: Int) -> NodePosition? {
-        guard rootHandle != Int32.min else { return nil }
         let ptr = nodesPtr
-        let rootNode = ptr + Int(rootHandle)
-        var currentHandle = rootHandle
-        var currentOffset = rootNode.pointee.leftSubtreeOffset
-        var currentYPosition = rootNode.pointee.leftSubtreeHeight
-        var currentIndex = rootNode.pointee.leftSubtreeCount
-        while currentHandle != Int32.min {
-            let node = ptr + Int(currentHandle)
-            if index == currentIndex {
+        var handle = rootHandle
+        var baseOffset = 0
+        var baseY: CGFloat = 0
+        var baseIndex = 0
+        while handle != Int32.min {
+            let node = ptr + Int(handle)
+            let nodeIndex = baseIndex + node.pointee.leftSubtreeCount
+            if index == nodeIndex {
                 return NodePosition(
-                    handle: currentHandle,
-                    data: node.pointee.data,
+                    handle: handle,
                     length: node.pointee.length,
                     height: node.pointee.height,
-                    yPos: currentYPosition,
-                    textPos: currentOffset,
-                    index: currentIndex
+                    yPos: baseY + node.pointee.leftSubtreeHeight,
+                    textPos: baseOffset + node.pointee.leftSubtreeOffset,
+                    index: nodeIndex
                 )
-            } else if currentIndex > index {
-                let left = node.pointee.left
-                if left == Int32.min { return nil }
-                let leftNode = ptr + Int(left)
-                currentOffset += leftNode.pointee.leftSubtreeOffset - node.pointee.leftSubtreeOffset
-                currentYPosition += leftNode.pointee.leftSubtreeHeight - node.pointee.leftSubtreeHeight
-                currentIndex += leftNode.pointee.leftSubtreeCount - node.pointee.leftSubtreeCount
-                currentHandle = left
+            } else if nodeIndex > index {
+                handle = node.pointee.left
             } else {
-                let right = node.pointee.right
-                if right == Int32.min { return nil }
-                let rightNode = ptr + Int(right)
-                currentOffset += node.pointee.length + rightNode.pointee.leftSubtreeOffset
-                currentYPosition += node.pointee.height + rightNode.pointee.leftSubtreeHeight
-                currentIndex += 1 + rightNode.pointee.leftSubtreeCount
-                currentHandle = right
+                baseOffset += node.pointee.leftSubtreeOffset + node.pointee.length
+                baseY += node.pointee.leftSubtreeHeight + node.pointee.height
+                baseIndex = nodeIndex + 1
+                handle = node.pointee.right
             }
         }
         return nil
     }
 
-    /// Searches for the node containing the given y position.
+    /// Searches for the line containing the given y position.
+    ///
+    /// Within the document a line is always found: when rounding leaves `posY` just outside every line at a
+    /// boundary, the line after the boundary is returned, as an exact computation would have. `nil` means `posY` is
+    /// past the last line (or the storage is empty).
     @inlinable
     func search(forYPosition posY: CGFloat) -> NodePosition? {
-        guard rootHandle != Int32.min else { return nil }
         let ptr = nodesPtr
-        let rootNode = ptr + Int(rootHandle)
-        var currentHandle = rootHandle
-        var currentOffset = rootNode.pointee.leftSubtreeOffset
-        var currentYPosition = rootNode.pointee.leftSubtreeHeight
-        var currentIndex = rootNode.pointee.leftSubtreeCount
-        while currentHandle != Int32.min {
-            let node = ptr + Int(currentHandle)
+        var handle = rootHandle
+        var baseOffset = 0
+        var baseY: CGFloat = 0
+        var baseIndex = 0
+        // The nearest line after the current subtree: the last node the descent went left at.
+        var successor = Int32.min
+        var successorY: CGFloat = 0
+        var successorOffset = 0
+        var successorIndex = 0
+        while handle != Int32.min {
+            let node = ptr + Int(handle)
+            let nodeY = baseY + node.pointee.leftSubtreeHeight
             let nodeHeight = node.pointee.height
-            if posY >= currentYPosition && posY < currentYPosition + nodeHeight {
-                return NodePosition(
-                    handle: currentHandle,
-                    data: node.pointee.data,
-                    length: node.pointee.length,
-                    height: nodeHeight,
-                    yPos: currentYPosition,
-                    textPos: currentOffset,
-                    index: currentIndex
-                )
-            } else if currentYPosition > posY {
-                let left = node.pointee.left
-                if left == Int32.min { return nil }
-                let leftNode = ptr + Int(left)
-                currentOffset += leftNode.pointee.leftSubtreeOffset - node.pointee.leftSubtreeOffset
-                currentYPosition += leftNode.pointee.leftSubtreeHeight - node.pointee.leftSubtreeHeight
-                currentIndex += leftNode.pointee.leftSubtreeCount - node.pointee.leftSubtreeCount
-                currentHandle = left
+            let nodeOffset = baseOffset + node.pointee.leftSubtreeOffset
+            let nodeIndex = baseIndex + node.pointee.leftSubtreeCount
+            if posY < nodeY {
+                // Nothing before this line in its subtree: it is the first line at or after `posY`.
+                guard node.pointee.left != Int32.min else {
+                    return NodePosition(
+                        handle: handle, length: node.pointee.length, height: nodeHeight,
+                        yPos: nodeY, textPos: nodeOffset, index: nodeIndex
+                    )
+                }
+                successor = handle
+                successorY = nodeY
+                successorOffset = nodeOffset
+                successorIndex = nodeIndex
+                handle = node.pointee.left
+            } else if posY >= nodeY + nodeHeight {
+                guard node.pointee.right != Int32.min else { break }
+                baseOffset = nodeOffset + node.pointee.length
+                baseY = nodeY + nodeHeight
+                baseIndex = nodeIndex + 1
+                handle = node.pointee.right
             } else {
-                let right = node.pointee.right
-                if right == Int32.min { return nil }
-                let rightNode = ptr + Int(right)
-                currentOffset += node.pointee.length + rightNode.pointee.leftSubtreeOffset
-                currentYPosition += nodeHeight + rightNode.pointee.leftSubtreeHeight
-                currentIndex += 1 + rightNode.pointee.leftSubtreeCount
-                currentHandle = right
+                return NodePosition(
+                    handle: handle, length: node.pointee.length, height: nodeHeight,
+                    yPos: nodeY, textPos: nodeOffset, index: nodeIndex
+                )
             }
         }
-        return nil
+        guard successor != Int32.min else { return nil }
+        let node = ptr + Int(successor)
+        return NodePosition(
+            handle: successor, length: node.pointee.length, height: node.pointee.height,
+            yPos: successorY, textPos: successorOffset, index: successorIndex
+        )
     }
 }
 
