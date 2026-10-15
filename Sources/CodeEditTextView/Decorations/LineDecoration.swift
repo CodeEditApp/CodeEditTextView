@@ -40,7 +40,7 @@ public struct LineDecoration: Identifiable {
         /// Used for current line highlight, error line backgrounds, search match highlights, etc.
         case lineBackground(color: NSColor)
 
-        /// An overview ruler decoration — a small colored mark on the scrollbar.
+        /// An overview ruler decoration - a small colored mark on the scrollbar.
         /// Used to show the position of errors, search results, and other items in the scrollbar.
         case overviewRuler(color: NSColor)
 
