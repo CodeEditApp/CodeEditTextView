@@ -12,28 +12,32 @@ extension TextView {
     fileprivate typealias Direction = TextSelectionManager.Direction
     fileprivate typealias TextSelection = TextSelectionManager.TextSelection
 
+    /// Line heights are estimates until a line is typeset, so a scroll target computed from layout can move once the
+    /// destination viewport is laid out. Each pass scrolls, lays out the new viewport, and re-derives the target rect
+    /// until it's stable. Bounded to guarantee termination if line heights oscillate.
+    private static let maxScrollStabilizationPasses = 8
+
     /// Scrolls the upmost selection to the visible rect if `scrollView` is not `nil`.
     public func scrollSelectionToVisible() {
-        guard let scrollView else {
+        guard let scrollView, let selection = getSelection() else {
             return
         }
+        let offset = offsetNotPivot(selection)
 
-        // There's a bit of a chicken-and-the-egg issue going on here. We need to know the rect to scroll to, but we
-        // can't know the exact rect to make visible without laying out the text. Then, once text is laid out the
-        // selection rect may be different again. To solve this, we loop until the frame doesn't change after a layout
-        // pass and scroll to that rect.
+        // The frame is resized lazily on layout passes. After an edit that grows the document, the frame may not
+        // include the target rect yet, which would make `scrollToVisible` a no-op (the clip view can't scroll past
+        // the document's current bounds). Resize first so the scroll target is reachable.
+        updateFrameIfNeeded()
 
-        var lastFrame: CGRect = .zero
-        while let boundingRect = getSelection()?.boundingRect, lastFrame != boundingRect {
-            lastFrame = boundingRect
+        var lastRect: CGRect = .zero
+        var remainingPasses = Self.maxScrollStabilizationPasses
+        while remainingPasses > 0, let rect = layoutManager.rectForOffset(offset), rect != lastRect {
+            remainingPasses -= 1
+            lastRect = rect
+            scrollToVisible(rect)
+            scrollView.reflectScrolledClipView(scrollView.contentView)
             layoutManager.layoutLines()
             selectionManager.updateSelectionViews()
-            selectionManager.drawSelections(in: visibleRect)
-
-            if lastFrame != .zero {
-                scrollView.contentView.scrollToVisible(lastFrame)
-                scrollView.reflectScrolledClipView(scrollView.contentView)
-            }
         }
     }
 
@@ -48,55 +52,52 @@ extension TextView {
     public func scrollToRange(_ range: NSRange, center: Bool = true) {
         guard let scrollView else { return }
 
-        guard let boundingRect = layoutManager.rectForOffset(range.location) else { return }
+        // See `scrollSelectionToVisible()`: after an edit that grows the document the frame may be stale, and the
+        // clip view clamps scrolls to it - the first pass would land short and the loop can exit before the
+        // frame catches up. Resize first so the target is reachable.
+        updateFrameIfNeeded()
 
-        // Check if the range is already visible
-        if visibleRect.contains(boundingRect) {
-            return // No scrolling needed
+        guard var targetRect = layoutManager.rectForOffset(range.location) else { return }
+
+        // An already-visible target only short-circuits when not centering; centering always repositions.
+        // Measured against the unobscured rect - a range hidden under the host's chrome is on screen but not
+        // readable, so it still needs scrolling.
+        if !center && unobscuredVisibleRect.contains(targetRect) {
+            return
         }
 
-        // Calculate the target offset based on the center flag
-        let targetOffset: CGPoint
-        if center {
-            targetOffset = CGPoint(
-                x: max(boundingRect.midX - visibleRect.width / 2, 0),
-                y: max(boundingRect.midY - visibleRect.height / 2, 0)
-            )
-        } else {
-            targetOffset = CGPoint(
-                x: max(boundingRect.origin.x, 0),
-                y: max(boundingRect.origin.y, 0)
-            )
-        }
+        let clipView = scrollView.contentView
+        var lastRect: CGRect = .zero
+        var remainingPasses = Self.maxScrollStabilizationPasses
+        while remainingPasses > 0, lastRect != targetRect {
+            remainingPasses -= 1
+            lastRect = targetRect
 
-        var lastFrame: CGRect = .zero
+            let unobscured = unobscuredVisibleRect
+            var origin = if center {
+                // Centered in the region the user can actually read, not in the full clip view (part of which
+                // sits under the host's chrome).
+                CGPoint(
+                    x: targetRect.midX - (unobscured.width / 2),
+                    y: targetRect.midY - (unobscured.height / 2)
+                )
+            } else {
+                targetRect.origin
+            }
+            // `scroll(to:)` sets the clip's bounds origin verbatim without constraining it, and document (0, 0) sits
+            // at a bounds origin of (-contentInsets.left, -contentInsets.top).
+            origin.x -= scrollView.contentInsets.left
+            origin.y -= scrollView.contentInsets.top
+            var proposedBounds = clipView.bounds
+            proposedBounds.origin = origin
+            clipView.scroll(to: clipView.constrainBoundsRect(proposedBounds).origin)
+            scrollView.reflectScrolledClipView(clipView)
 
-        // Set a timeout to avoid an infinite loop
-        let timeout: TimeInterval = 0.5
-        let startTime = Date()
-
-        // Adjust layout until stable
-        while let newRect = layoutManager.rectForOffset(range.location),
-              lastFrame != newRect,
-              Date().timeIntervalSince(startTime) < timeout {
-            lastFrame = newRect
             layoutManager.layoutLines()
             selectionManager.updateSelectionViews()
-            selectionManager.drawSelections(in: visibleRect)
-        }
 
-        // Scroll to make the range appear at the desired position
-        if lastFrame != .zero {
-            let animated = false // feature flag
-            if animated {
-                NSAnimationContext.runAnimationGroup { context in
-                    context.duration = 0.15 // Adjust duration as needed
-                    context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                    scrollView.contentView.animator().setBoundsOrigin(targetOffset)
-                }
-            } else {
-                scrollView.contentView.scroll(to: targetOffset)
-            }
+            guard let newRect = layoutManager.rectForOffset(range.location) else { return }
+            targetRect = newRect
         }
     }
 
