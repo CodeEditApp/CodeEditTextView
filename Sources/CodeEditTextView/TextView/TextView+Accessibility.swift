@@ -58,6 +58,12 @@ extension TextView {
     }
 
     override open func accessibilityString(for range: NSRange) -> String? {
+        // `rangeOfComposedCharacterSequences` expands an empty mid-document range to cover the next character.
+        // Checked before the intersection guard: an empty range at the document end doesn't "intersect" the
+        // document range but is still a valid (empty) query.
+        if range.isEmpty {
+            return range.location >= 0 && range.location <= documentRange.max ? "" : nil
+        }
         guard documentRange.intersection(range) == range else {
             return nil
         }
@@ -95,8 +101,11 @@ extension TextView {
     }
 
     override open func accessibilitySelectedTextRanges() -> [NSValue]? {
-        selectionManager.textSelections.map { selection in
-            textStorage.mutableString.rangeOfComposedCharacterSequences(for: selection.range) as NSValue
+        selectionManager.textSelections.map { selection -> NSValue in
+            if selection.range.isEmpty {
+                return selection.range as NSValue
+            }
+            return textStorage.mutableString.rangeOfComposedCharacterSequences(for: selection.range) as NSValue
         }
     }
 
@@ -110,7 +119,12 @@ extension TextView {
     }
 
     override open func setAccessibilitySelectedTextRange(_ accessibilitySelectedTextRange: NSRange) {
-        selectionManager.setSelectedRange(accessibilitySelectedTextRange)
+        // AX clients can legitimately send stale ranges (computed just before an edit shrank the document),
+        // so clamp instead of storing a range that later range/string queries would raise on.
+        let documentLength = textStorage.length
+        let location = min(max(accessibilitySelectedTextRange.location, 0), documentLength)
+        let length = min(max(accessibilitySelectedTextRange.length, 0), documentLength - location)
+        selectionManager.setSelectedRange(NSRange(location: location, length: length))
     }
 
     override open func setAccessibilitySelectedTextRanges(_ accessibilitySelectedTextRanges: [NSValue]?) {
@@ -120,25 +134,32 @@ extension TextView {
 
     // MARK: Text Ranges
 
+    /// AX indexes and ranges are UTF-16 units, matching ``TextView/documentRange``, so this must report the
+    /// UTF-16 length rather than a grapheme-cluster count.
     override open func accessibilityNumberOfCharacters() -> Int {
-        string.count
+        textStorage.length
     }
 
     override open func accessibilityRange(forLine line: Int) -> NSRange {
         guard line >= 0 && layoutManager.lineStorage.count > line,
               let linePosition = layoutManager.textLineForIndex(line) else {
-            return .zero
+            return .notFound
         }
         return linePosition.range
     }
 
+    /// - Parameter point: The point to test, in *screen* coordinates.
     override open func accessibilityRange(for point: NSPoint) -> NSRange {
-        guard let location = layoutManager.textOffsetAtPoint(point) else { return .zero }
+        guard let windowPoint = window?.convertPoint(fromScreen: point) else {
+            return .notFound
+        }
+        let localPoint = convert(windowPoint, from: nil)
+        guard let location = layoutManager.textOffsetAtPoint(localPoint) else { return .notFound }
         return NSRange(location: location, length: 0)
     }
 
     override open func accessibilityRange(for index: Int) -> NSRange {
-        guard index < documentRange.length else { return .notFound }
+        guard index >= 0 && index < documentRange.length else { return .notFound }
         return textStorage.mutableString.rangeOfComposedCharacterSequence(at: index)
     }
 
@@ -155,6 +176,7 @@ extension TextView {
         return textLine.index
     }
 
+    /// - Returns: The bounding rect of the range's laid-out fragments, in *screen* coordinates.
     override open func accessibilityFrame(for range: NSRange) -> NSRect {
         guard documentRange.intersection(range) == range else {
             return .zero
@@ -162,7 +184,8 @@ extension TextView {
         if range.isEmpty {
             return .zero
         }
-        let rects = layoutManager.rectsFor(range: range)
-        return rects.boundingRect()
+        let localRect = layoutManager.rectsFor(range: range).boundingRect()
+        let windowRect = convert(localRect, to: nil)
+        return window?.convertToScreen(windowRect) ?? .zero
     }
 }
