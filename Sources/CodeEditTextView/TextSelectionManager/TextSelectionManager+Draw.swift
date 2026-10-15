@@ -31,6 +31,10 @@ extension TextSelectionManager {
     }
 
     /// Draws a highlighted line in the given rect.
+    ///
+    /// The highlight's geometry depends only on the line and the view's width, never on `rect`: a partial redraw
+    /// must reproduce exactly the pixels a full one draws, or rounded corners appear at the edge of every rect that
+    /// happened to be redrawn.
     /// - Parameters:
     ///   - rect: The rect to draw in.
     ///   - textSelection: The selection to draw.
@@ -51,13 +55,16 @@ extension TextSelectionManager {
         context.saveGState()
 
         let padding = LineHighlightDrawing.horizontalPadding
-        let insetXPos = max(rect.minX, edgeInsets.left) + padding
-        let maxWidth = (textView?.frame.width ?? 0) - insetXPos - edgeInsets.right - padding
+        let insetXPos = edgeInsets.left + padding
+        let width = (textView?.bounds.width ?? 0) - insetXPos - edgeInsets.right - padding
+        // Line storage y leaves out the view zones above the line; the highlight belongs at the line's document y.
+        let documentY = layoutManager?.lineStorageYToDocumentY(linePosition.yPos, lineIndex: linePosition.index)
+            ?? linePosition.yPos
 
         let selectionRect = CGRect(
             x: insetXPos,
-            y: linePosition.yPos,
-            width: min(rect.width - 2 * padding, maxWidth),
+            y: documentY,
+            width: max(width, 0),
             height: linePosition.height
         ).pixelAligned
 

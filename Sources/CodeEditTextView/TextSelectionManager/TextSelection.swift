@@ -17,6 +17,12 @@ public extension TextSelectionManager {
         /// The position this selection should 'rotate' around when modifying selections.
         var pivot: Int?
 
+        /// Memoized fill rects for this selection. Keyed on `(range, layoutRevision)`, the cache is reused as long as
+        /// neither the selected range nor the layout manager's revision counter has changed since the last build.
+        var cachedFillRectsRange: NSRange?
+        var cachedFillRectsRevision: UInt64 = .max
+        var cachedFillRects: ContiguousArray<CGRect> = []
+
         init(range: NSRange, view: CursorView? = nil) {
             self.range = range
             self.view = view
