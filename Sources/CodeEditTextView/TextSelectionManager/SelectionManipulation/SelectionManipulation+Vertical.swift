@@ -25,9 +25,14 @@ package extension TextSelectionManager {
     ) -> NSRange {
         // If moving up and on first line, jump to beginning of the line
         // If moving down and on last line, jump to end of document.
-        if up && layoutManager?.lineStorage.first?.range.contains(offset) ?? false {
+        // `NSRange.contains` excludes `range.max`, so the end of the document (== the last line's `range.max`)
+        // is special-cased for both directions.
+        if up, let firstLine = layoutManager?.lineStorage.first,
+           firstLine.range.contains(offset)
+            || (offset == firstLine.range.max && firstLine.range.max == layoutManager?.lineStorage.length) {
             return NSRange(location: 0, length: offset)
-        } else if !up && layoutManager?.lineStorage.last?.range.contains(offset) ?? false {
+        } else if !up, let lastLine = layoutManager?.lineStorage.last,
+                  lastLine.range.contains(offset) || offset == lastLine.range.max {
             return NSRange(start: offset, end: (textStorage?.length ?? offset))
         }
 
@@ -95,11 +100,11 @@ package extension TextSelectionManager {
             return NSRange(location: offset, length: 0)
         }
         if up && line.range.location != offset {
-            return NSRange(location: line.range.location, length: offset - line.index)
-        } else if !up && line.range.max - (layoutManager?.detectedLineEnding.length ?? 0) != offset {
+            return NSRange(location: line.range.location, length: offset - line.range.location)
+        } else if !up && line.range.max - lineEndingLength(for: line.range) != offset {
             return NSRange(
                 location: offset,
-                length: line.range.max - offset - (layoutManager?.detectedLineEnding.length ?? 0)
+                length: line.range.max - offset - lineEndingLength(for: line.range)
             )
         } else {
             let nextQueryIndex = up ? max(line.range.location - 1, 0) : min(line.range.max, (textStorage?.length ?? 0))
@@ -108,7 +113,7 @@ package extension TextSelectionManager {
             }
             return NSRange(
                 start: up ? nextLine.range.location : offset,
-                end: up ? offset : nextLine.range.max - (layoutManager?.detectedLineEnding.length ?? 0)
+                end: up ? offset : nextLine.range.max - lineEndingLength(for: nextLine.range)
             )
         }
     }
@@ -126,16 +131,20 @@ package extension TextSelectionManager {
         }
 
         let pageHeight = textView.visibleRect.height
+        let targetYPos = min(textView.frame.height, max(0, currentYPos + (delta > 0 ? -pageHeight : pageHeight)))
 
-        // Grab the line where the next selection should be. Then use the suggestedXPos to find where in the line the
-        // selection should be extended to.
-        layoutManager.layoutLines(
-            in: NSRect(x: 0, y: currentYPos, width: layoutManager.maxLineWidth, height: pageHeight)
-        )
-        guard let nextPageOffset = layoutManager.textOffsetAtPoint(CGPoint(
-            x: suggestedXPos ?? 0,
-            y: min(textView.frame.height, max(0, currentYPos + (delta > 0 ? -pageHeight : pageHeight)))
-        )) else {
+        // Lay out the band the query below actually reaches into - for a backwards page that band sits *above*
+        // the caret, which a rect anchored at the caret never covered. A pass is bounded to the rect it is
+        // given, so asking for the wrong side simply leaves the queried point untypeset.
+        layoutManager.layoutLines(in: NSRect(
+            x: 0,
+            y: min(currentYPos, targetYPos),
+            width: layoutManager.maxLineWidth,
+            height: abs(targetYPos - currentYPos) + layoutManager.estimateLineHeight()
+        ))
+        guard let nextPageOffset = layoutManager.textOffsetAtPoint(
+            CGPoint(x: suggestedXPos ?? 0, y: targetYPos)
+        ) else {
             return NSRange(location: offset, length: 0)
         }
 

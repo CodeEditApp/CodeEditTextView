@@ -101,7 +101,7 @@ package extension TextSelectionManager {
         string.enumerateSubstrings(
             in: NSRange(location: delta > 0 ? offset : 0, length: delta > 0 ? string.length - offset : offset),
             options: enumerationOptions
-        ) { substring, _, _, stop in
+        ) { substring, substringRange, _, stop in
             guard let substring = substring else {
                 stop.pointee = true
                 return
@@ -116,10 +116,11 @@ package extension TextSelectionManager {
             } else if CharacterSet.codeIdentifierCharacters.isSuperset(of: CharacterSet(charactersIn: substring)) {
                 hasFoundValidWordChar = true
             }
-            rangeToDelete.length += substring.count
+            // Accumulate UTF-16 units, not grapheme counts - composed characters span multiple units.
+            rangeToDelete.length += substringRange.length
 
             if delta < 0 {
-                rangeToDelete.location -= substring.count
+                rangeToDelete.location = substringRange.location
             }
         }
 
@@ -158,11 +159,25 @@ package extension TextSelectionManager {
         let lineBound = delta > 0
         ? line.range.location + min(
             lineFragment.range.max,
-            line.range.max - line.range.location - (layoutManager?.detectedLineEnding.length ?? 1)
+            max(0, line.range.length - lineEndingLength(for: line.range))
         )
         : line.range.location + lineFragment.range.location
 
         return _extendSelectionLine(string: string, lineBound: lineBound, offset: offset, delta: delta)
+    }
+
+    /// Finds the length of the line ending that terminates the given line range, `0` if the line has no line ending
+    /// (eg: the last line of a document that doesn't end with a newline).
+    ///
+    /// Only the last two UTF-16 units of the line are inspected, so this stays cheap for very long lines.
+    /// - Parameter lineRange: The full range of the line, including any trailing line ending.
+    /// - Returns: The UTF-16 length of the line's terminator.
+    func lineEndingLength(for lineRange: NSRange) -> Int {
+        guard lineRange.length > 0 else { return 0 }
+        let tailLength = min(2, lineRange.length)
+        let tailRange = NSRange(location: lineRange.max - tailLength, length: tailLength)
+        guard let tail = textStorage?.substring(from: tailRange) else { return 0 }
+        return LineEnding(line: tail)?.length ?? 0
     }
 
     /// Extends the selection by one real line in the direction specified.
@@ -176,12 +191,11 @@ package extension TextSelectionManager {
     ///   - delta: The direction the selection should be extended. `1` for forwards, `-1` for backwards.
     /// - Returns: The range of the extended selection.
     private func extendSelectionLine(string: NSString, from offset: Int, delta: Int) -> NSRange {
-        guard let line = layoutManager?.textLineForOffset(offset),
-              let lineText = textStorage?.substring(from: line.range) else {
+        guard let line = layoutManager?.textLineForOffset(offset) else {
             return NSRange(location: offset, length: 0)
         }
         let lineBound = delta > 0
-        ? line.range.max - (LineEnding(line: lineText)?.length ?? 0)
+        ? line.range.max - lineEndingLength(for: line.range)
         : line.range.location
 
         return _extendSelectionLine(string: string, lineBound: lineBound, offset: offset, delta: delta)

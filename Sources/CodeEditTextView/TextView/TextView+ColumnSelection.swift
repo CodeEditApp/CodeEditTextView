@@ -18,8 +18,12 @@ extension TextView {
         let start = CGPoint(x: min(pointA.x, pointB.x), y: min(pointA.y, pointB.y))
         let end = CGPoint(x: max(pointA.x, pointB.x), y: max(pointA.y, pointB.y))
 
+        // The line iterator works in line-storage coordinates, which exclude view zone whitespace.
+        let startY = layoutManager.documentYToLineStorageY(start.y)
+        let endY = layoutManager.documentYToLineStorageY(end.y)
+
         // Collect all overlapping text ranges
-        var selectedRanges: [NSRange] = layoutManager.linesStartingAt(start.y, until: end.y).flatMap { textLine in
+        var selectedRanges: [NSRange] = layoutManager.linesStartingAt(startY, until: endY).flatMap { textLine in
             // Collect fragment ranges
             return textLine.data.lineFragments.compactMap { lineFragment -> NSRange? in
                 let startOffset = self.layoutManager.textOffsetAtPoint(
@@ -34,7 +38,8 @@ extension TextView {
                 )
                 guard let startOffset, let endOffset else { return nil }
 
-                return NSRange(start: startOffset, end: endOffset)
+                // In right-to-left runs the left-most point maps to the larger offset.
+                return NSRange(start: min(startOffset, endOffset), end: max(startOffset, endOffset))
             }
         }
 
