@@ -18,6 +18,10 @@ extension TextView {
     /// Set a new text storage object for the view.
     /// - Parameter textStorage: The new text storage to use.
     public func setTextStorage(_ textStorage: NSTextStorage) {
+        // No layout pass may run while the storage swap leaves the layout manager's lineStorage referencing the
+        // old storage's contents.
+        layoutManager.beginTransaction()
+        defer { layoutManager.endTransaction() }
         self.textStorage = textStorage
 
         if let storageDelegate = textStorage.delegate as? MultiStorageDelegate {
