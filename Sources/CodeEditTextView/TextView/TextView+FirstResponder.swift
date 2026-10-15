@@ -8,10 +8,18 @@
 import AppKit
 
 extension TextView {
+    /// Posted, with the text view as its object, when the text view becomes or stops being the first responder.
+    /// Selections are drawn in other colors while it isn't; a view that draws its selections elsewhere (a minimap)
+    /// redraws them.
+    public static let firstResponderDidChangeNotification = Notification.Name(
+        "com.CodeEdit.TextView.FirstResponderDidChange"
+    )
+
     open override func becomeFirstResponder() -> Bool {
         isFirstResponder = true
         selectionManager.cursorTimer.resetTimer()
         needsDisplay = true
+        NotificationCenter.default.post(name: Self.firstResponderDidChangeNotification, object: self)
         return super.becomeFirstResponder()
     }
 
@@ -19,6 +27,7 @@ extension TextView {
         isFirstResponder = false
         selectionManager.removeCursors()
         needsDisplay = true
+        NotificationCenter.default.post(name: Self.firstResponderDidChangeNotification, object: self)
         return super.resignFirstResponder()
     }
 
