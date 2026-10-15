@@ -9,7 +9,7 @@ import AppKit
 
 extension TextView {
     override public func insertNewline(_ sender: Any?) {
-        var attachments: [AnyTextAttachment] = selectionManager.textSelections.compactMap({ selection in
+        let attachments: [AnyTextAttachment] = selectionManager.textSelections.compactMap({ selection in
             let content = layoutManager.contentRun(at: selection.range.location)
             if case let .attachment(attachment) = content?.data, attachment.range == selection.range {
                 return attachment
@@ -46,19 +46,27 @@ extension TextView {
     private func insertMultipleString(_ strings: [String]) {
         let selectedRanges = selectionManager.textSelections.map(\.range)
 
-        guard selectedRanges.count > 0 else { return }
+        guard !selectedRanges.isEmpty && !strings.isEmpty else { return }
 
+        // One yank gesture across multiple cursors must land in a single undo group.
+        let shouldGroupUndo = !(_undoManager?.isGrouping ?? true)
+        if shouldGroupUndo {
+            _undoManager?.beginUndoGrouping()
+        }
         for idx in (0..<selectedRanges.count).reversed() {
-            guard idx < strings.count else { break }
             let range = selectedRanges[idx]
 
-            if idx == selectedRanges.count - 1 && idx != strings.count - 1 {
+            if idx == selectedRanges.count - 1 && idx < strings.count - 1 {
                 // Last range, still have strings remaining. Concatenate them.
                 let remainingString = strings[idx..<strings.count].joined(separator: "\n")
                 replaceCharacters(in: range, with: remainingString)
             } else {
-                replaceCharacters(in: range, with: strings[idx])
+                // With more cursors than strings, the last string is repeated at the extra cursors.
+                replaceCharacters(in: range, with: strings[min(idx, strings.count - 1)])
             }
+        }
+        if shouldGroupUndo {
+            _undoManager?.endUndoGrouping()
         }
     }
 }

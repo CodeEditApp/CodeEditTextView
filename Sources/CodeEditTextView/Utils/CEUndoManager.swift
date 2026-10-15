@@ -78,17 +78,9 @@ public class CEUndoManager: UndoManager {
 
         _isUndoing = true
         NotificationCenter.default.post(name: .NSUndoManagerWillUndoChange, object: self)
-        textView.textStorage.beginEditing()
-        for mutation in item.mutations.reversed() {
-            textView.replaceCharacters(
-                in: mutation.inverse.range,
-                with: mutation.inverse.string,
-                skipUpdateSelection: true
-            )
-        }
-        textView.textStorage.endEditing()
+        let restoredRanges = applyMutationsTrackingRanges(item.mutations.reversed().map(\.inverse), on: textView)
 
-        updateSelectionsForMutations(mutations: item.mutations.map { $0.mutation })
+        updateSelections(for: restoredRanges)
         textView.scrollSelectionToVisible()
 
         NotificationCenter.default.post(name: .NSUndoManagerDidUndoChange, object: self)
@@ -110,17 +102,9 @@ public class CEUndoManager: UndoManager {
         _isRedoing = true
         NotificationCenter.default.post(name: .NSUndoManagerWillRedoChange, object: self)
         textView.selectionManager.removeCursors()
-        textView.textStorage.beginEditing()
-        for mutation in item.mutations {
-            textView.replaceCharacters(
-                in: mutation.mutation.range,
-                with: mutation.mutation.string,
-                skipUpdateSelection: true
-            )
-        }
-        textView.textStorage.endEditing()
+        let appliedRanges = applyMutationsTrackingRanges(item.mutations.map(\.mutation), on: textView)
 
-        updateSelectionsForMutations(mutations: item.mutations.map { $0.inverse })
+        updateSelections(for: appliedRanges)
         textView.scrollSelectionToVisible()
 
         NotificationCenter.default.post(name: .NSUndoManagerDidRedoChange, object: self)
@@ -128,23 +112,50 @@ public class CEUndoManager: UndoManager {
         _isRedoing = false
     }
 
-    /// We often undo/redo a group of mutations that contain updated ranges that are next to each other but for a user
-    /// should be one continuous range. This merges those ranges into a set of disjoint ranges before updating the
-    /// selection manager.
-    private func updateSelectionsForMutations(mutations: [TextMutation]) {
-        if mutations.reduce(0, { $0 + $1.range.length }) == 0 {
-            if let minimumMutation = mutations.min(by: { $0.range.location < $1.range.location }) {
-                // If the mutations are only deleting text (no replacement), we just place the cursor at the last range,
-                // since all the ranges are the same but the other method will return no ranges (empty range).
-                textView?.selectionManager.setSelectedRange(
-                    NSRange(location: minimumMutation.range.location, length: 0)
-                )
+    /// Applies a group's mutations in order and tracks, in the *final* document's coordinates, the range each
+    /// mutation's replacement text occupies.
+    ///
+    /// A mutation's stored range is only valid in the document state it was originally applied against. Later
+    /// mutations in the group at lower offsets shift it (e.g. a multi-cursor group applied top-of-document last),
+    /// so every previously-applied range at or after an edit is shifted by that edit's length delta. The returned
+    /// ranges are therefore always valid in the post-replay document, in application order.
+    ///
+    /// The group is applied as one batched edit (see `TextView.replaceCharacters(batch:)`): one storage transaction,
+    /// one line-storage resync and one change notification, with the line storage consistent again before any
+    /// observer or selection code runs. The range arithmetic below is independent of how the edits are applied.
+    private func applyMutationsTrackingRanges(_ mutations: [TextMutation], on textView: TextView) -> [NSRange] {
+        var appliedRanges: [NSRange] = []
+        appliedRanges.reserveCapacity(mutations.count)
+        for mutation in mutations {
+            let insertedLength = (mutation.string as NSString).length
+            let delta = insertedLength - mutation.range.length
+            if delta != 0 {
+                for idx in appliedRanges.indices where appliedRanges[idx].location >= mutation.range.location {
+                    appliedRanges[idx].location += delta
+                }
             }
+            appliedRanges.append(NSRange(location: mutation.range.location, length: insertedLength))
+        }
+        textView.replaceCharacters(batch: mutations.map { (range: $0.range, string: $0.string) })
+        return appliedRanges
+    }
+
+    /// Updates the selection for the post-replay ranges produced by ``applyMutationsTrackingRanges(_:on:)``.
+    ///
+    /// Zero-length ranges (undone insertions, redone deletions) become one caret per unique location so
+    /// multi-cursor groups restore every cursor. Non-empty ranges that touch (e.g. coalesced typing) are merged
+    /// into continuous selections.
+    private func updateSelections(for ranges: [NSRange]) {
+        guard let selectionManager = textView?.selectionManager, !ranges.isEmpty else { return }
+        if ranges.allSatisfy({ $0.length == 0 }) {
+            var seenLocations = Set<Int>()
+            let carets = ranges.filter { seenLocations.insert($0.location).inserted }
+            selectionManager.setSelectedRanges(carets)
         } else {
-            let mergedRanges = mutations.reduce(into: IndexSet(), { set, mutation in
-                set.insert(range: mutation.range)
+            let mergedRanges = ranges.reduce(into: IndexSet(), { set, range in
+                set.insert(range: range)
             })
-            textView?.selectionManager.setSelectedRanges(mergedRanges.rangeView.map { NSRange($0) })
+            selectionManager.setSelectedRanges(mergedRanges.rangeView.map { NSRange($0) })
         }
     }
 
@@ -170,7 +181,8 @@ public class CEUndoManager: UndoManager {
         guard let textView,
               let textStorage = textView.textStorage,
               !isUndoing,
-              !isRedoing else {
+              !isRedoing,
+              !isDisabled else {
             return
         }
         let newMutation = Mutation(mutation: mutation, inverse: textStorage.inverseMutation(for: mutation))
@@ -236,6 +248,13 @@ public class CEUndoManager: UndoManager {
         } else {
             // Inserting
 
+            // A multi-character insert (paste, completion) closes its own group - following keystrokes must not
+            // coalesce into it, matching NSTextView. Single *characters* still coalesce, including surrogate
+            // pairs and composed sequences (emoji) that span multiple UTF-16 units.
+            if lastMutation.mutation.string.count > 1 {
+                return false
+            }
+
             // Only attempt this check if the mutations are small enough.
             // If the last mutation was not whitespace, and the new one is, break the group.
             if lastMutation.mutation.string.count < 1024
@@ -245,8 +264,11 @@ public class CEUndoManager: UndoManager {
                 return false
             }
 
+            // An insert mutation's range is empty, so the next sequential insertion happens at the previous
+            // location advanced by the previous string's UTF-16 length (eg: 2 for an emoji, not 1).
             return (
-                lastMutation.mutation.range.max + 1 == mutation.mutation.range.location
+                lastMutation.mutation.range.max + (lastMutation.mutation.string as NSString).length
+                    == mutation.mutation.range.location
                 && LineEnding(line: mutation.mutation.string) == nil
             )
         }
