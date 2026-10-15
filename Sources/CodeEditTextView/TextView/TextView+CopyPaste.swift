@@ -9,9 +9,11 @@ import AppKit
 
 extension TextView {
     @objc open func copy(_ sender: AnyObject) {
+        // Caret-only (empty) selections must not clobber the pasteboard, matching the standard macOS text system.
         guard let textSelections = selectionManager?
             .textSelections
-            .compactMap({ textStorage.attributedSubstring(from: $0.range) }),
+            .filter({ !$0.range.isEmpty })
+            .map({ textStorage.attributedSubstring(from: $0.range) }),
               !textSelections.isEmpty else {
             return
         }
@@ -25,6 +27,10 @@ extension TextView {
     }
 
     @objc open func cut(_ sender: AnyObject) {
+        // Cut with only carets is a no-op: nothing is copied, and no text may be deleted.
+        guard selectionManager?.textSelections.contains(where: { !$0.range.isEmpty }) == true else {
+            return
+        }
         copy(sender)
         deleteBackward(sender)
     }

@@ -9,7 +9,11 @@ import AppKit
 
 extension TextView {
     override public func menu(for event: NSEvent) -> NSMenu? {
-        guard event.type == .rightMouseDown else { return nil }
+        // Control-click enters this method with the original left-mouse-down event.
+        guard event.type == .rightMouseDown
+                || (event.type == .leftMouseDown && event.modifierFlags.contains(.control)) else {
+            return super.menu(for: event)
+        }
 
         let menu = NSMenu()
 

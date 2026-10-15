@@ -61,6 +61,20 @@ extension TextView {
             textSelection.range.formUnion(extendedRange)
         }
         selectionManager.textSelections.sort(by: { $0.range.location < $1.range.location })
+        // Adjacent cursors can extend into overlapping or touching ranges. They must be merged before deleting:
+        // applying them separately would delete shared text twice and push later ranges past the end of the
+        // shrunken storage.
+        var idx = selectionManager.textSelections.count - 1
+        while idx > 0 {
+            let previous = selectionManager.textSelections[idx - 1]
+            let current = selectionManager.textSelections[idx]
+            if previous.range.max >= current.range.location {
+                previous.range.formUnion(current.range)
+                current.view?.removeFromSuperview()
+                selectionManager.textSelections.remove(at: idx)
+            }
+            idx -= 1
+        }
         KillRing.shared.kill(
             strings: selectionManager.textSelections.map(\.range).compactMap({ textStorage.substring(from: $0) })
         )

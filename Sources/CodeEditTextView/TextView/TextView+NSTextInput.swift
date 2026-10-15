@@ -42,6 +42,20 @@ extension TextView: NSTextInputClient {
         }
     }
 
+    /// Clamps a range provided by a system input service to the document's bounds.
+    /// Input services can hold stale ranges after an edit shrank the document, and out-of-bounds ranges raise
+    /// `NSRangeException` when handed to `NSString`/`NSTextStorage` APIs.
+    /// - Parameter range: The range to clamp.
+    /// - Returns: The clamped range, or `nil` if the range's location lies entirely outside the document.
+    private func clampedClientRange(_ range: NSRange) -> NSRange? {
+        let documentLength = textStorage.length
+        guard (0...documentLength).contains(range.location) else {
+            return nil
+        }
+        let clampedLength = min(max(range.length, 0), documentLength - range.location)
+        return NSRange(location: range.location, length: clampedLength)
+    }
+
     /// Inserts the string at the replacement range. If replacement range is `NSNotFound`, uses the selection ranges.
     private func _insertText(insertString: String, replacementRange: NSRange) {
         var insertString = insertString
@@ -51,9 +65,15 @@ extension TextView: NSTextInputClient {
         }
 
         if replacementRange.location == NSNotFound {
-            replaceCharacters(in: selectionManager.textSelections.map(\.range), with: insertString)
-        } else {
-            replaceCharacters(in: replacementRange, with: insertString)
+            // Fast path: single selection avoids array allocation entirely.
+            let selections = selectionManager.textSelections
+            if selections.count == 1 {
+                replaceCharacters(in: selections[0].range, with: insertString)
+            } else {
+                replaceCharacters(in: selections.map(\.range), with: insertString)
+            }
+        } else if let clampedRange = clampedClientRange(replacementRange) {
+            replaceCharacters(in: clampedRange, with: insertString)
         }
 
         selectionManager.textSelections.forEach { $0.suggestedXPos = nil }
@@ -94,24 +114,43 @@ extension TextView: NSTextInputClient {
         // Needs to insert text, but not notify the undo manager.
         _undoManager?.disable()
         let shouldInsert = layoutManager.markedTextManager.markedRanges.isEmpty
+        let insertLength = (insertString as NSString).length
 
         // Copy the text selections *before* we modify them.
         let selectionCopies = selectionManager.textSelections.map(\.range)
 
         if shouldInsert {
+            // A concrete (non-`NSNotFound`) replacement range anchors the marked text at the replacement
+            // location, not at the (stale) selection locations.
+            let clampedReplacement = replacementRange.location == NSNotFound
+                ? nil
+                : clampedClientRange(replacementRange)
             _insertText(insertString: insertString, replacementRange: replacementRange)
+            if let clampedReplacement {
+                layoutManager.markedTextManager.updateMarkedRanges(
+                    insertLength: insertLength,
+                    textSelections: [clampedReplacement]
+                )
+            } else if replacementRange.location == NSNotFound {
+                layoutManager.markedTextManager.updateMarkedRanges(
+                    insertLength: insertLength,
+                    textSelections: selectionCopies
+                )
+            }
         } else {
             replaceCharacters(in: layoutManager.markedTextManager.markedRanges, with: insertString)
+            layoutManager.markedTextManager.updateMarkedRanges(
+                insertLength: insertLength,
+                textSelections: selectionCopies
+            )
         }
-        layoutManager.markedTextManager.updateMarkedRanges(
-            insertLength: (insertString as NSString).length,
-            textSelections: selectionCopies
-        )
 
         // Reset the selected ranges to reflect the replaced text.
-        selectionManager.setSelectedRanges(layoutManager.markedTextManager.markedRanges.map({
-            NSRange(location: $0.max, length: 0)
-        }))
+        if layoutManager.markedTextManager.hasMarkedText {
+            selectionManager.setSelectedRanges(layoutManager.markedTextManager.markedRanges.map({
+                NSRange(location: $0.max, length: 0)
+            }))
+        }
 
         _undoManager?.enable()
     }
@@ -205,7 +244,12 @@ extension TextView: NSTextInputClient {
         forProposedRange range: NSRange,
         actualRange: NSRangePointer?
     ) -> NSAttributedString? {
-        let realRange = (textStorage.string as NSString).rangeOfComposedCharacterSequences(for: range)
+        guard let clampedRange = clampedClientRange(range) else { return nil }
+        let realRange = if clampedRange.isEmpty {
+            clampedRange
+        } else {
+            (textStorage.string as NSString).rangeOfComposedCharacterSequences(for: clampedRange)
+        }
         actualRange?.pointee = realRange
         return textStorage.attributedSubstring(from: realRange)
     }
@@ -226,8 +270,8 @@ extension TextView: NSTextInputClient {
     /// - Returns: The boundary rectangle for the given range of characters, in *screen* coordinates.
     ///            The rectangle’s size value can be negative if the text flows to the left.
     @objc public func firstRect(forCharacterRange range: NSRange, actualRange: NSRangePointer?) -> NSRect {
-        if actualRange != nil {
-            let realRange = (textStorage.string as NSString).rangeOfComposedCharacterSequences(for: range)
+        if actualRange != nil, let clampedRange = clampedClientRange(range), !clampedRange.isEmpty {
+            let realRange = (textStorage.string as NSString).rangeOfComposedCharacterSequences(for: clampedRange)
             if realRange != range {
                 actualRange?.pointee = realRange
             }
@@ -269,9 +313,17 @@ extension TextView: NSTextInputClient {
     ///            is not within the bounding rectangle of a glyph (0 if the point is to the left or above the glyph;
     ///            1 if it's to the right or below).
     @objc public func fractionOfDistanceThroughGlyph(for point: NSPoint) -> CGFloat {
-        guard let offset = layoutManager.textOffsetAtPoint(point),
-              let characterRect = layoutManager.rectForOffset(offset) else { return 0 }
-        return (point.x - characterRect.minX)/characterRect.width
+        // `point` is in screen coordinates.
+        guard let windowPoint = window?.convertPoint(fromScreen: point) else {
+            return 0
+        }
+        let localPoint = convert(windowPoint, from: nil)
+        guard let offset = layoutManager.textOffsetAtPoint(localPoint),
+              let characterRect = layoutManager.rectForOffset(offset),
+              characterRect.width > 0 else {
+            return 0
+        }
+        return min(max((localPoint.x - characterRect.minX)/characterRect.width, 0), 1)
     }
 
     /// Returns the baseline position of a given character relative to the origin of rectangle returned by

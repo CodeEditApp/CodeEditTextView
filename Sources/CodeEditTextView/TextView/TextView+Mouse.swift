@@ -10,15 +10,19 @@ import AppKit
 extension TextView {
     override public func mouseDown(with event: NSEvent) {
         // Set cursor
+        let clickPoint = self.convert(event.locationInWindow, from: nil)
         guard isSelectable,
               event.type == .leftMouseDown,
-              let offset = layoutManager.textOffsetAtPoint(self.convert(event.locationInWindow, from: nil)) else {
+              let offset = layoutManager.textOffsetAtPoint(clickPoint) else {
             super.mouseDown(with: event)
             return
         }
 
+        // Hit-testing returns caret indices: a click on the trailing half of the character before an attachment
+        // resolves to the attachment's offset, so require the click to be inside the attachment's own rect.
         if let content = layoutManager.contentRun(at: offset),
-           case let .attachment(attachment) = content.data, event.clickCount < 3 {
+           case let .attachment(attachment) = content.data, event.clickCount < 3,
+           clickPoint.x >= (layoutManager.rectForOffset(offset)?.minX ?? -.infinity) {
             handleAttachmentClick(event: event, offset: offset, attachment: attachment)
             return
         }
@@ -43,10 +47,6 @@ extension TextView {
     fileprivate func handleSingleClick(event: NSEvent, offset: Int) {
         cursorSelectionMode = .character
 
-        guard isEditable else {
-            super.mouseDown(with: event)
-            return
-        }
         let eventFlags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         if eventFlags == [.control, .shift] {
             unmarkText()
@@ -142,7 +142,8 @@ extension TextView {
                 dragSelection(startPosition: startPosition, endPosition: endPosition, mouseDragAnchor: mouseDragAnchor)
             }
 
-            setNeedsDisplay()
+            // No repaint request here: both branches above go through the selection manager, which dirties the
+            // bands the selection left and the bands it now covers.
             self.autoscroll(with: event)
         }
     }
@@ -170,8 +171,8 @@ extension TextView {
                 end: max(offset, selectedRange.max)
             ))
         }
+        // `setSelectedRange` dirties the old and new selection bands itself.
         selectionManager.setSelectedRange(selectedRange)
-        setNeedsDisplay()
     }
 
     // MARK: - Mouse Autoscroll

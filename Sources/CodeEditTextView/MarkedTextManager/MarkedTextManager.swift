@@ -75,7 +75,7 @@ class MarkedTextManager {
 
     /// Updates marked text ranges for a new set of selections.
     /// - Parameter textSelections: The new text selections.
-    /// - Returns: `True` if the marked text needs layout.
+    /// - Returns: `true` if the marked text should be discarded and needs layout.
     func updateForNewSelections(textSelections: [TextSelectionManager.TextSelection]) -> Bool {
         // Ensure every marked range has a matching selection.
         // If any marked ranges do not have a matching selection, unmark.
@@ -92,11 +92,8 @@ class MarkedTextManager {
             }
         }
 
-        // If any remaining marked ranges, we need to unmark.
-        if !markedRanges.isEmpty {
-            return false
-        } else {
-            return true
-        }
+        // If any marked ranges remain without a matching selection, we need to unmark. If every marked range
+        // matched a selection, the composition is still active and must be kept.
+        return !markedRanges.isEmpty
     }
 }
