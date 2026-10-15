@@ -23,7 +23,14 @@ public protocol TextLayoutManagerRenderDelegate: AnyObject {
 
     func estimatedLineHeight() -> CGFloat?
 
-    func lineFragmentView(for lineFragment: LineFragment) -> LineFragmentView
+    /// Build the renderer used to draw every fragment laid out by this layout manager. Called once during layout
+    /// manager init; to swap renderers at runtime set `TextLayoutManager.lineFragmentRenderer` directly.
+    ///
+    /// Return `nil` to use the default `LineFragmentRenderer`.
+    func makeLineFragmentRenderer(
+        textStorage: NSTextStorage?,
+        invisibleCharacterDelegate: InvisibleCharactersDelegate?
+    ) -> LineFragmentRenderer?
 
     func characterXPosition(in lineFragment: LineFragment, for offset: Int) -> CGFloat
 }
@@ -50,8 +57,11 @@ public extension TextLayoutManagerRenderDelegate {
         nil
     }
 
-    func lineFragmentView(for lineFragment: LineFragment) -> LineFragmentView {
-        LineFragmentView()
+    func makeLineFragmentRenderer(
+        textStorage: NSTextStorage?,
+        invisibleCharacterDelegate: InvisibleCharactersDelegate?
+    ) -> LineFragmentRenderer? {
+        nil
     }
 
     func characterXPosition(in lineFragment: LineFragment, for offset: Int) -> CGFloat {

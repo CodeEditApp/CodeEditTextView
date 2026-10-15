@@ -8,6 +8,13 @@
 import AppKit
 
 extension TextView: TextLayoutManagerDelegate {
+    /// During responsive scrolling AppKit pre-renders a band larger than `visibleRect` (`preparedContentRect`).
+    /// Every rect-less layout pass must cover that band, or its fragments are dropped and the next draw blanks
+    /// pixels AppKit considers valid - a fast momentum scroll then blits blank space.
+    public var preferredLayoutRect: NSRect {
+        preparedContentRect.isEmpty ? visibleRect : preparedContentRect.union(visibleRect)
+    }
+
     public func layoutManagerHeightDidUpdate(newHeight: CGFloat) {
         updateFrameIfNeeded()
     }

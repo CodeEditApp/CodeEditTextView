@@ -22,7 +22,8 @@ import TextStory
 /// |  |-> [TextLine]              Represents a line of text.
 /// |  |   |-> Typesetter          Calculates line breaks and other layout information for text lines.
 /// |  |   |-> [LineFragment]      Represents a visual line of text, stored in an internal line storage object.
-/// |  |-> [LineFragmentView]      Reusable line fragment view that draws a line fragment.
+/// |  |-> [VisibleFragment]       Laid-out fragments in the viewport, drawn directly into the text view's context.
+/// |  |-> LineFragmentRenderer    Draws a fragment (and its invisibles) into a CGContext. Subclass to customize.
 /// |  |-> MarkedRangeManager      Manages marked ranges, updates layout if needed.
 /// |
 /// |-> TextSelectionManager       Maintains, modifies, and renders text selections
@@ -59,6 +60,10 @@ open class TextView: NSView, NSTextContent {
         }
         set {
             textStorage.setAttributedString(NSAttributedString(string: newValue, attributes: typingAttributes))
+            // Stacked mutations reference offsets in the replaced document and can no longer be applied safely.
+            _undoManager?.clearStack()
+            // The whole document is pending attribute fixing again (see `TextLayoutManager+AttributeFixing`).
+            layoutManager?.scheduleAttributeFixing()
         }
     }
 
@@ -66,6 +71,9 @@ open class TextView: NSView, NSTextContent {
     public var typingAttributes: [NSAttributedString.Key: Any] = [:] {
         didSet {
             setNeedsDisplay()
+            // Estimate-based queries (end-of-document caret rects, empty-document height, vertical navigation
+            // fallback) must not read a stale per-line height estimate between now and the next layout pass.
+            layoutManager?.invalidateLineHeightEstimate()
             layoutManager?.setNeedsLayout()
         }
     }
@@ -254,6 +262,25 @@ open class TextView: NSView, NSTextContent {
     /// Manages emphasized text ranges in the text view
     public var emphasisManager: EmphasisManager?
 
+    /// Draws the text view's content into tiles; see ``TextTileManager``.
+    private(set) var tileManager: TextTileManager!
+
+    /// Whether the view renders through tiles (when layer-backed) or into its own backing store.
+    var usesTiledRendering: Bool = true {
+        didSet {
+            guard usesTiledRendering != oldValue else { return }
+            tileManager.isEnabled = usesTiledRendering
+            if usesTiledRendering {
+                layoutManager.setNeedsLayout()
+            } else {
+                tileManager.detach()
+                layoutManager.invalidateRasterizedRegion()
+            }
+            needsDisplay = true
+            layoutManager.tilingDidChange()
+        }
+    }
+
     // MARK: - Private Properties
 
     var isFirstResponder: Bool = false
@@ -277,7 +304,18 @@ open class TextView: NSView, NSTextContent {
     var draggingCursorView: NSView?
     var isDragging: Bool = false
 
+    /// Set when ``performDragOperation(_:)`` runs for a drag session that originated in this view - i.e. this
+    /// view was both source and destination, and all source-side cleanup happened there. The session-ended
+    /// callback uses it to detect a `.move` dropped into a *different* view, which requires this (source) view
+    /// to delete the dragged text.
+    var dragHandledInSelf: Bool = false
+
     var isOptionPressed: Bool = false
+
+    /// Tokens for the block-based scroll observers registered in `setUpScrollListeners(scrollView:)`.
+    /// `NotificationCenter.removeObserver(self)` does not unregister block-based observers, so these are
+    /// removed individually when listeners are torn down or replaced.
+    var scrollViewObserverTokens: [NSObjectProtocol] = []
 
     private var fontCharWidth: CGFloat {
         (" " as NSString).size(withAttributes: [.font: font]).width
@@ -337,6 +375,8 @@ open class TextView: NSView, NSTextContent {
         }
 
         wantsLayer = true
+        // Content lives in tiles, which redraw only what changed; resizing must not repaint the view.
+        layerContentsRedrawPolicy = .onSetNeedsDisplay
         postsFrameChangedNotifications = true
         postsBoundsChangedNotifications = true
         autoresizingMask = [.width, .height]
@@ -352,6 +392,15 @@ open class TextView: NSView, NSTextContent {
 
         layoutManager = setUpLayoutManager(lineHeightMultiplier: lineHeightMultiplier, wrapLines: wrapLines)
         storageDelegate.addDelegate(layoutManager)
+
+        tileManager = TextTileManager(view: self) { [weak self] rect in
+            self?.draw(rect)
+        }
+        layoutManager.tileManager = tileManager
+        if let layer {
+            // Emphasis layers are inserted at index 1 and expect a sublayer below them.
+            tileManager.attach(to: layer)
+        }
 
         selectionManager = setUpSelectionManager()
         selectionManager.useSystemCursor = useSystemCursor
@@ -378,14 +427,42 @@ open class TextView: NSView, NSTextContent {
     /// - Parameter point: The point to find.
     /// - Returns: A view at the given point, if any.
     override public func hitTest(_ point: NSPoint) -> NSView? {
-        if visibleRect.contains(point) {
+        // `point` is in the superview's coordinate space.
+        let localPoint = convert(point, from: superview)
+        // View zones host caller-supplied interactive views (buttons, inline diffs). Give them first refusal so
+        // their controls receive mouse events; zones can opt out via `suppressMouseDown`. Cursor views are
+        // transparent to hit testing (their `hitTest` returns `nil`) and never intercept here.
+        if let zoneHit = viewZoneHitTest(localPoint) {
+            return zoneHit
+        }
+        if visibleRect.contains(localPoint) {
             return self
         } else {
             return super.hitTest(point)
         }
     }
 
+    /// Hit tests the views hosted by view zones.
+    /// - Parameter localPoint: The point to test, in this view's coordinate space.
+    /// - Returns: The deepest zone-hosted view at the point, or `nil` if no interactive zone contains it.
+    private func viewZoneHitTest(_ localPoint: NSPoint) -> NSView? {
+        guard let layoutManager, !layoutManager.viewZones.zones.isEmpty else { return nil }
+        for zone in layoutManager.viewZones.zones {
+            guard !zone.suppressMouseDown,
+                  let zoneView = zone.view,
+                  zoneView.superview === self,
+                  zoneView.frame.contains(localPoint) else {
+                continue
+            }
+            if let hit = zoneView.hitTest(localPoint) {
+                return hit
+            }
+        }
+        return nil
+    }
+
     deinit {
+        removeScrollListeners()
         layoutManager = nil
         selectionManager = nil
         textStorage = nil

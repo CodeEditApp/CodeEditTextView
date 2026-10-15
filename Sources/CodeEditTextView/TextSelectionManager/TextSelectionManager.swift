@@ -11,6 +11,9 @@ public protocol TextSelectionManagerDelegate: AnyObject {
     var visibleTextRange: NSRange? { get }
 
     func setNeedsDisplay()
+    /// Dirties `rect`, expressed in the delegate's own coordinate space. `NSView` satisfies this requirement
+    /// with its own method of the same name.
+    func setNeedsDisplay(_ rect: NSRect)
     func estimatedLineHeight() -> CGFloat
 }
 
@@ -30,8 +33,16 @@ public class TextSelectionManager: NSObject {
         }
     }
     public var highlightSelectedLine: Bool = true
-    public var selectedLineBackgroundColor: NSColor = NSColor.selectedTextBackgroundColor.withSystemEffect(.disabled)
-    public var selectionBackgroundColor: NSColor = NSColor.selectedTextBackgroundColor
+    public var selectedLineBackgroundColor: NSColor = NSColor.selectedTextBackgroundColor.withSystemEffect(.disabled) {
+        didSet {
+            if selectedLineBackgroundColor != oldValue { delegate?.setNeedsDisplay() }
+        }
+    }
+    public var selectionBackgroundColor: NSColor = NSColor.selectedTextBackgroundColor {
+        didSet {
+            if selectionBackgroundColor != oldValue { delegate?.setNeedsDisplay() }
+        }
+    }
     public var useSystemCursor: Bool = false {
         didSet {
             updateSelectionViews()
@@ -48,9 +59,23 @@ public class TextSelectionManager: NSObject {
     internal(set) public var textSelections: [TextSelection] = []
     weak var layoutManager: TextLayoutManager?
     weak var textStorage: NSTextStorage?
+
+    /// Selects in `textStorage` from now on. A selection manager that draws a text view's selections in another view
+    /// (a minimap's) needs this when the text view's storage is replaced; it holds the storage weakly.
+    public func setTextStorage(_ textStorage: NSTextStorage) {
+        self.textStorage = textStorage
+    }
     weak var textView: TextView?
     weak var delegate: TextSelectionManagerDelegate?
     var cursorTimer: CursorTimer
+
+    /// The bands the selections painted into as of the last scoped invalidation, in the text view's
+    /// coordinates. `nil` means the last invalidation could not resolve the selections' geometry and dirtied
+    /// the whole viewport instead, so there is no narrower claim to repaint.
+    ///
+    /// Held as rects rather than ranges: the layout a range referred to may be gone by the time the next
+    /// change lands, and the pixels left behind are at the old *rect*, not the old range.
+    var lastInvalidatedSelectionRects: [NSRect]?
 
     public init(
         layoutManager: TextLayoutManager,
@@ -72,36 +97,64 @@ public class TextSelectionManager: NSObject {
     // MARK: - Selected Ranges
 
     /// Set the selected ranges to a single range. Overrides any existing selections.
+    ///
+    /// Out-of-bounds or negative-length ranges are clamped to the document's bounds.
     /// - Parameter range: The range to set.
     public func setSelectedRange(_ range: NSRange) {
+        let range = clampedToDocument(range)
         textSelections.forEach { $0.view?.removeFromSuperview() }
         let selection = TextSelection(range: range)
         selection.suggestedXPos = layoutManager?.rectForOffset(range.location)?.minX
         textSelections = [selection]
         updateSelectionViews()
+        // Unconditional: `updateSelectionViews` only reports a change when a *cursor view* moved, so replacing
+        // a non-empty selection would otherwise never repaint the highlight it removed or added.
+        setNeedsDisplayForSelections()
         NotificationCenter.default.post(Notification(name: Self.selectionChangedNotification, object: self))
     }
 
     /// Set the selected ranges to new ranges. Overrides any existing selections.
+    ///
+    /// Duplicate ranges, out-of-bounds ranges, and negative-length ranges are dropped. Intersecting ranges are
+    /// merged into a single selection spanning them, upholding the invariant that selections never overlap -
+    /// overlapping selections would double-apply edits against a shrunken document.
     /// - Parameter range: The selected ranges to set.
     public func setSelectedRanges(_ ranges: [NSRange]) {
         let oldRanges = textSelections.map(\.range)
 
         textSelections.forEach { $0.view?.removeFromSuperview() }
         // Remove duplicates, invalid ranges, update suggested X position.
-        textSelections = Set(ranges)
+        let documentRange = 0...(textStorage?.length ?? 0)
+        let sortedRanges = Set(ranges)
             .filter {
-                (0...(textStorage?.length ?? 0)).contains($0.location)
-                && (0...(textStorage?.length ?? 0)).contains($0.max)
+                $0.length >= 0 && documentRange.contains($0.location) && documentRange.contains($0.max)
             }
-            .sorted(by: { $0.location < $1.location })
+            .sorted(by: { lhs, rhs in
+                // Sort longer ranges first at equal locations so a caret at a selection's start merges into it.
+                lhs.location != rhs.location ? lhs.location < rhs.location : lhs.length > rhs.length
+            })
+        // Classic interval merge. Ranges that share at least one character (or a caret inside a selection)
+        // collapse into one; touching-but-disjoint ranges and distinct carets are kept separate.
+        var mergedRanges: [NSRange] = []
+        mergedRanges.reserveCapacity(sortedRanges.count)
+        for range in sortedRanges {
+            if let last = mergedRanges.last, range.location < last.max {
+                mergedRanges[mergedRanges.count - 1] = NSRange(
+                    start: last.location,
+                    end: max(last.max, range.max)
+                )
+            } else {
+                mergedRanges.append(range)
+            }
+        }
+        textSelections = mergedRanges
             .map {
                 let selection = TextSelection(range: $0)
                 selection.suggestedXPos = layoutManager?.rectForOffset($0.location)?.minX
                 return selection
             }
         updateSelectionViews()
-        delegate?.setNeedsDisplay()
+        setNeedsDisplayForSelections()
 
         if oldRanges != textSelections.map(\.range) {
             NotificationCenter.default.post(Notification(name: Self.selectionChangedNotification, object: self))
@@ -109,43 +162,77 @@ public class TextSelectionManager: NSObject {
     }
 
     /// Append a new selected range to the existing ones.
+    ///
+    /// Any existing selections the new range intersects or borders are merged into a single selection spanning
+    /// all of them, so selections never overlap.
     /// - Parameter range: The new range to add.
     public func addSelectedRange(_ range: NSRange) {
-        let newTextSelection = TextSelection(range: range)
-        var didHandle = false
-        for textSelection in textSelections {
-            if textSelection.range == newTextSelection.range {
-                // Duplicate range, ignore
-                return
-            } else if (range.length > 0 && textSelection.range.intersection(range) != nil)
-                        || textSelection.range.max == range.location {
-                // Range intersects existing range, modify this range to be the union of both and don't add the new
-                // selection
-                textSelection.range = textSelection.range.union(range)
-                didHandle = true
+        let range = clampedToDocument(range)
+        guard !textSelections.contains(where: { $0.range == range }) else {
+            // Duplicate range, ignore
+            return
+        }
+
+        var mergedSelection: TextSelection?
+        var idx = 0
+        while idx < textSelections.count {
+            let textSelection = textSelections[idx]
+            if (range.length > 0 && textSelection.range.intersection(range) != nil)
+                || textSelection.range.max == range.location {
+                // Range intersects an existing range. Merge every intersecting selection into one so overlapping
+                // selections never coexist.
+                if let mergedSelection {
+                    mergedSelection.range.formUnion(textSelection.range)
+                    textSelection.view?.removeFromSuperview()
+                    textSelections.remove(at: idx)
+                    continue
+                } else {
+                    textSelection.range.formUnion(range)
+                    mergedSelection = textSelection
+                }
             }
+            idx += 1
         }
-        if !didHandle {
-            textSelections.append(newTextSelection)
-            textSelections.sort(by: { $0.range.location < $1.range.location })
+        if mergedSelection == nil {
+            textSelections.append(TextSelection(range: range))
         }
+        textSelections.sort(by: { $0.range.location < $1.range.location })
 
         updateSelectionViews()
         NotificationCenter.default.post(Notification(name: Self.selectionChangedNotification, object: self))
-        delegate?.setNeedsDisplay()
+        setNeedsDisplayForSelections()
+    }
+
+    /// Clamps an externally-supplied range to the document's bounds, normalizing negative lengths to an empty
+    /// range so an invalid range can never become a live selection.
+    /// - Parameter range: The range to clamp.
+    /// - Returns: A range guaranteed to lie inside the document.
+    private func clampedToDocument(_ range: NSRange) -> NSRange {
+        let documentLength = textStorage?.length ?? 0
+        let location = min(max(range.location, 0), documentLength)
+        let length = min(max(range.length, 0), documentLength - location)
+        return NSRange(location: location, length: length)
     }
 
     // MARK: - Selection Views
 
     /// Update all selection cursors. Placing them in the correct position for each text selection and
     /// optionally reseting the blink timer.
+    ///
+    /// Cursor views only exist while the text view is first responder, but `boundingRect` bookkeeping runs
+    /// unconditionally so scroll-to-visible works for selections set while the view isn't focused.
     public func updateSelectionViews(force: Bool = false, skipTimerReset: Bool = false) {
-        guard textView?.isFirstResponder ?? false else { return }
+        let showCursorViews = textView?.isFirstResponder ?? false
         var didUpdate: Bool = false
 
         for textSelection in textSelections {
             if textSelection.range.isEmpty {
-                didUpdate = didUpdate || repositionCursorSelection(textSelection: textSelection)
+                let cursorUpdated = if showCursorViews {
+                    repositionCursorSelection(textSelection: textSelection)
+                } else {
+                    updateCursorBoundingRect(textSelection: textSelection)
+                }
+                didUpdate = cursorUpdated || didUpdate
             } else if !textSelection.range.isEmpty && textSelection.view != nil {
                 textSelection.view?.removeFromSuperview()
                 textSelection.view = nil
@@ -154,12 +241,26 @@ public class TextSelectionManager: NSObject {
         }
 
         if didUpdate || force {
-            delegate?.setNeedsDisplay()
-            if !skipTimerReset {
+            setNeedsDisplayForSelections()
+            if showCursorViews && !skipTimerReset {
                 cursorTimer.resetTimer()
                 resetSystemCursorTimers()
             }
         }
+    }
+
+    /// Updates the cached `boundingRect` for a caret without creating or moving any cursor view. Used while the
+    /// text view isn't first responder so programmatic selection changes still track their visual position.
+    private func updateCursorBoundingRect(textSelection: TextSelection) -> Bool {
+        guard let cursorRect = layoutManager?.rectForOffset(textSelection.range.location) else {
+            return false
+        }
+        let newRect = CGRect(origin: cursorRect.origin, size: CGSize(width: 1, height: cursorRect.height))
+        guard textSelection.boundingRect != newRect else {
+            return false
+        }
+        textSelection.boundingRect = newRect
+        return true
     }
 
     private func repositionCursorSelection(textSelection: TextSelection) -> Bool {
@@ -213,7 +314,7 @@ public class TextSelectionManager: NSObject {
         return false
     }
 
-    private func resetSystemCursorTimers() {
+    func resetSystemCursorTimers() {
         guard #available(macOS 14, *) else { return }
         for cursorView in textSelections.compactMap({ $0.view as? NSTextInsertionIndicator }) {
             let frame = cursorView.frame

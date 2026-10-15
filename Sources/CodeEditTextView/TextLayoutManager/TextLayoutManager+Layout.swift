@@ -1,5 +1,5 @@
 //
-//  TextLayoutManager+ensureLayout.swift
+//  TextLayoutManager+Layout.swift
 //  CodeEditTextView
 //
 //  Created by Khan Winter on 4/7/25.
@@ -17,207 +17,277 @@ extension TextLayoutManager {
 
     // MARK: - Layout Lines
 
-    /// Lays out all visible lines
+    /// Lays out all visible lines.
     ///
-    /// ## Overview Of The Layout Routine
+    /// ## Overview
     ///
-    /// The basic premise of this method is that it loops over all lines in the given rect (defaults to the visible
-    /// rect), checks if the line needs a layout calculation, and performs layout on the line if it does.
+    /// Walks the lines overlapping the viewport (plus vertical padding), triggers per-line typesetting only when the
+    /// line was not previously laid out for the current width / was previously off-screen / has not been fully broken
+    /// into fragments, and collects every visible fragment into `visibleFragments` for the subsequent draw pass.
     ///
-    /// The thing that makes this layout method so fast is the second point, checking if a line needs layout. To
-    /// determine if a line needs a layout pass, the layout manager can check three things:
-    /// - **1** Was the line laid out under the assumption of a different maximum layout width?
-    ///   For instance, if a line was previously broken by the line wrapping setting, it won’t need to wrap once the
-    ///   line wrapping is disabled. This will detect that, and cause the lines to be recalculated.
-    /// - **2** Was the line previously not visible? This is determined by keeping a set of visible line IDs. If the
-    ///   line does not appear in that set, we can assume it was previously off screen and may need layout.
-    /// - **3** Was the line entirely laid out? We break up lines into line fragments. When we do layout, we determine
-    ///   all line fragments but don't necessarily place them all in the view. This checks if all line fragments have
-    ///   been placed in the view. If not, we need to place them.
-    ///
-    /// Once it has been determined that a line needs layout, we perform layout by recalculating it's line fragments,
-    /// removing all old line fragment views, and creating new ones for the line.
-    ///
-    /// ## Laziness
-    ///
-    /// At the end of the layout pass, we clean up any old lines by updating the set of visible line IDs and fragment
-    /// IDs. Any IDs that no longer appear in those sets are removed to save resources. This facilitates the text view's
-    /// ability to only render text that is visible and saves tons of resources (similar to the lazy loading of
-    /// collection or table views).
-    ///
-    /// The other important lazy attribute is the line iteration. Line iteration is done lazily. As we iterate
-    /// through lines and potentially update their heights, the next line is only queried for *after* the updates are
-    /// finished.
+    /// Unlike the previous architecture this method does **not** mutate the view tree - there are no per-fragment
+    /// `NSView`s to insert/remove. The only subviews this method touches are *view zones* (opaque host views the caller
+    /// supplies) and the output is a flat y-ordered list of `VisibleFragment` records. After layout we dirty
+    /// `layoutView` so `draw(_:)` renders the new fragments.
     ///
     /// ## Reentry
     ///
-    /// An important thing to note is that this method cannot be reentered. If a layout pass has begun while a layout
-    /// pass is already ongoing, internal data structures will be broken. In debug builds, this is checked with a simple
-    /// boolean and assertion.
+    /// Layout is *not* reentrant - entering `layoutLines()` while a pass is already running corrupts `visibleFragments`
+    /// and produces lost-update bugs. Calls made while a transaction is open (``isInTransaction``) or while another
+    /// pass holds `layoutLock` are skipped, and a follow-up pass is scheduled on the layout view.
     ///
-    /// To help ensure this property, all view modifications are performed within a `CATransaction`. This guarantees
-    /// that macOS calls `layout` on any related views only after we’ve finished inserting and removing line fragment
-    /// views. Otherwise, inserting a line fragment view could trigger a layout pass prematurely and cause this method
-    /// to re-enter.
-    /// - Warning: This is probably not what you're looking for. If you need to invalidate layout, or update lines, this
-    ///            is not the way to do so. This should only be called when macOS performs layout.
+    /// - Returns: The IDs of the lines this pass typeset (lines whose existing fragments were reused are not
+    ///   included); empty when the pass was skipped. The same in every build configuration.
     @discardableResult
-    public func layoutLines(in rect: NSRect? = nil) -> Set<TextLine.ID> { // swiftlint:disable:this function_body_length
-        guard let visibleRect = rect ?? delegate?.visibleRect,
-              !isInTransaction,
+    public func layoutLines(in rect: NSRect? = nil) -> Set<TextLine.ID> {
+        // Rect-less passes use the delegate's preferred layout rect, which includes any responsive-scrolling
+        // prepared band - laying out only `visibleRect` here would drop the band's fragments and the follow-up
+        // draw would erase already-rendered band pixels AppKit still considers valid. The requested rect is
+        // then grown to cover the live viewport so a pass can never shrink on-screen fragment coverage.
+        guard let requestedRect = rect ?? delegate?.preferredLayoutRect,
               let textStorage else {
             return []
         }
+        finishAttributeFixingIfEditedBeforeLayout()
+        let (visibleRect, viewport) = layoutPassRects(for: requestedRect)
 
-        // The macOS may call `layout` on the textView while we're laying out fragment views. This ensures the view
-        // tree modifications caused by this method are atomic, so macOS won't call `layout` while we're already doing
-        // that
-        CATransaction.begin()
-        layoutLock.lock()
-
-        let minY = max(visibleRect.minY - verticalLayoutPadding, 0)
-        let maxY = max(visibleRect.maxY + verticalLayoutPadding, 0)
-        let originalHeight = lineStorage.height + viewZones.totalHeight
-        var usedFragmentIDs = Set<LineFragment.ID>()
-        let forceLayout: Bool = needsLayout
-        var didLayoutChange = false
-        var newVisibleLines: Set<TextLine.ID> = []
-        var yContentAdjustment: CGFloat = 0
-        var maxFoundLineWidth = maxLineWidth
-        let hasViewZones = !viewZones.zones.isEmpty
-
-        // When view zones exist, line storage Y positions don't include whitespace.
-        // We subtract total whitespace from minY for a conservative lower bound on which lines to iterate,
-        // and keep maxY as-is (since line storage Y is always <= document Y).
-        let queryMinY = hasViewZones ? max(minY - viewZones.totalHeight, 0) : minY
-        let queryMaxY = maxY
-
-#if DEBUG
-        var laidOutLines: Set<TextLine.ID> = []
-#endif
-        // Track which view zone views are still in use so we can remove stale ones.
-        var usedZoneIDs = Set<UUID>()
-
-        // Layout all lines, fetching lines lazily as they are laid out.
-        for linePosition in linesStartingAt(queryMinY, until: queryMaxY).lazy {
-            // Compute the document Y (with view zone offsets) for visibility checks.
-            let whitespaceOffset = hasViewZones
-                ? viewZones.whitespaceHeightBeforeLine(linePosition.index)
-                : 0
-            let documentYPos = linePosition.yPos + whitespaceOffset
-
-            guard documentYPos < maxY else { continue }
-
-            // Layout any view zones that appear before this line.
-            if hasViewZones {
-                let zonesBeforeLine = viewZones.zones(afterLine: linePosition.index - 1)
-                for zone in zonesBeforeLine where zone.afterLineNumber == linePosition.index - 1
-                                                  || (linePosition.index == 0 && zone.afterLineNumber == 0) {
-                    // Compute the zone's document Y position: it sits between the previous line and this line.
-                    let zoneDocY: CGFloat
-                    if zone.afterLineNumber <= 0 {
-                        zoneDocY = viewZones.whitespaceHeightBeforeLine(0)
-                            - zone.heightInPoints // This zone is part of the whitespace before line 0
-                    } else {
-                        // Zone sits after the line it follows
-                        if let prevLine = lineStorage.getLine(atIndex: zone.afterLineNumber - 1) {
-                            let prevWhitespace = viewZones.whitespaceHeightBeforeLine(zone.afterLineNumber - 1)
-                            zoneDocY = prevLine.yPos + prevLine.height + prevWhitespace
-                        } else {
-                            zoneDocY = documentYPos - zone.heightInPoints
-                        }
-                    }
-                    layoutViewZone(zone, at: zoneDocY)
-                    usedZoneIDs.insert(zone.id)
-                }
+        guard !isInTransaction, layoutLock.try() else {
+            // Mid-transaction, or re-entered from client code a running pass called out to. Skip and schedule a
+            // follow-up pass instead of laying out half-applied state or deadlocking the non-recursive lock.
+            layoutView?.needsLayout = true
+            // The fragment lists are mid-flight, but the viewport may have moved, and rows a scroll just revealed
+            // must still get pixels. The fragments covering them already exist inside the padded band the last
+            // completed pass laid out. With tiles, cover the viewport now (new tiles are entirely dirty); the
+            // follow-up pass's fragment diff then repaints whatever it changes in them. Without tiles, the record
+            // of committed pixels decides what to dirty. Both only ever dirty more, never less, and take no lock.
+            if let tiles = activeTileManager {
+                _ = tiles.updateCoverage(viewport: viewport, pass: visibleRect, bands: lastPassBands)
+                updateTileFollowerCoverage(viewport: viewport, pass: visibleRect)
+            } else if !viewport.isEmpty {
+                retainRasterized(within: viewport)
+                setNeedsDisplayForUnrasterized(viewport: viewport)
             }
-
-            // Three ways to determine if a line needs to be re-calculated.
-            let linePositionNeedsLayout = linePosition.data.needsLayout(maxWidth: maxLineLayoutWidth)
-            let wasNotVisible = !visibleLineIds.contains(linePosition.data.id)
-            let lineNotEntirelyLaidOut = linePosition.height != linePosition.data.lineFragments.height
-
-            defer { newVisibleLines.insert(linePosition.data.id) }
-
-            func fullLineLayout() {
-                let (yAdjustment, wasLineHeightChanged) = layoutLine(
-                    linePosition,
-                    whitespaceOffset: whitespaceOffset,
-                    usedFragmentIDs: &usedFragmentIDs,
-                    textStorage: textStorage,
-                    yRange: minY..<maxY,
-                    maxFoundLineWidth: &maxFoundLineWidth
-                )
-                yContentAdjustment += yAdjustment
-#if DEBUG
-                laidOutLines.insert(linePosition.data.id)
-#endif
-                // If we've updated a line's height, or a line position was newly laid out, force re-layout for the
-                // rest of the pass (going down the screen).
-                //
-                // These two signals identify:
-                // - New lines being inserted & Lines being deleted (lineNotEntirelyLaidOut)
-                // - Line updated for width change (wasLineHeightChanged)
-
-                didLayoutChange = didLayoutChange || wasLineHeightChanged || lineNotEntirelyLaidOut
-            }
-
-            if forceLayout || linePositionNeedsLayout || wasNotVisible || lineNotEntirelyLaidOut {
-                fullLineLayout()
-            } else {
-                if didLayoutChange || yContentAdjustment > 0 {
-                    // Layout happened and this line needs to be moved but not necessarily re-added
-                    let needsFullLayout = updateLineViewPositions(linePosition, whitespaceOffset: whitespaceOffset)
-                    if needsFullLayout {
-                        fullLineLayout()
-                        continue
-                    }
-                }
-
-                // Make sure the used fragment views aren't dequeued.
-                usedFragmentIDs.formUnion(linePosition.data.lineFragments.map(\.data.id))
-            }
+            return []
         }
 
-        // Remove view zone views that are no longer in the viewport.
+        // Forced passes follow config/attribute changes; drop the cached line height estimate so empty lines and
+        // estimate-based fallbacks pick up the current typing attributes.
+        if needsLayout {
+            _estimateLineHeight = nil
+        }
+
+        let bands = layoutPassBands(pass: visibleRect, request: requestedRect)
+        let hasViewZones = !viewZones.zones.isEmpty
+
+        // Reset the visible fragment list for this pass, keeping the previous pass's list for change detection.
+        // Swapping (not copying) reuses both buffers so we don't thrash the allocator between passes.
+        swap(&visibleFragments, &previousVisibleFragments)
+        visibleFragments.removeAll(keepingCapacity: true)
+        levelFragmentBufferCapacity()
+
+        var ctx = LayoutPassContext(
+            minY: bands.first.minY,
+            maxY: bands.first.maxY,
+            forceLayout: needsLayout,
+            hasViewZones: hasViewZones,
+            maxFoundLineWidth: maxLineWidth,
+            textStorage: textStorage,
+            cachedMaxLineLayoutWidth: maxLineLayoutWidth,
+            passGeneration: nextPassGeneration(),
+            previousPassGeneration: lastCompletedPassGeneration
+        )
+
+        walkBands(bands, ctx: &ctx)
+        measureVisibleInkOverflow()
+
         if hasViewZones {
-            for zone in viewZones.zones where !usedZoneIDs.contains(zone.id) {
+            layoutVisibleZones(ctx: &ctx)
+            // Remove view zone views that are no longer in the viewport.
+            for zone in viewZones.zones where !ctx.usedZoneIDs.contains(zone.id) {
                 zone.view?.removeFromSuperview()
             }
         }
 
-        // Enqueue any lines not used in this layout pass.
-        viewReuseQueue.enqueueViews(notInSet: usedFragmentIDs)
-
-        // Update the visible lines with the new set.
-        visibleLineIds = newVisibleLines
+        // The lines this pass stamped are now the visible set.
+        lastCompletedPassGeneration = ctx.passGeneration
+        lastPassBands = bands
 
         // The delegate methods below may call another layout pass, make sure we don't send it into a loop of forced
         // layout.
         needsLayout = false
 
-        // Commit the view tree changes we just made.
         layoutLock.unlock()
-        CATransaction.commit()
 
-        if maxFoundLineWidth > maxLineWidth {
-            maxLineWidth = maxFoundLineWidth
+        applyRedrawDecision(forceLayout: ctx.forceLayout, viewport: viewport, pass: visibleRect, bands: bands)
+        if let textView = layoutView as? TextView {
+            textView.layoutPassDidComplete()
+        } else {
+            layoutTiles?.layoutPassDidComplete()
         }
 
-        if yContentAdjustment != 0 {
-            delegate?.layoutManagerYAdjustment(yContentAdjustment)
+        reclaimFragmentBufferCapacity(liveCount: visibleFragments.count)
+
+        notifyDelegateAfterPass(ctx: ctx)
+
+        return ctx.laidOutLines
+    }
+
+    /// Records the furthest any visible fragment paints past its rect, for ``drawVisibleFragments(in:)``.
+    private func measureVisibleInkOverflow() {
+        var above: CGFloat = 0
+        var below: CGFloat = 0
+        visibleFragments.withUnsafeBufferPointer { fragments in
+            for fragment in fragments {
+                above = max(above, fragment.yPos - fragment.drawMinY)
+                below = max(below, fragment.drawMaxY - fragment.yPos - fragment.height)
+            }
+        }
+        visibleInkOverflow = (above, below)
+    }
+
+    /// Sends post-pass notifications for width, y-adjustment, and height changes. Called outside `layoutLock` -
+    /// each delegate method may synchronously trigger another layout pass.
+    private func notifyDelegateAfterPass(ctx: LayoutPassContext) {
+        if ctx.maxFoundLineWidth > maxLineWidth {
+            maxLineWidth = ctx.maxFoundLineWidth
         }
 
-        if originalHeight != lineStorage.height + viewZones.totalHeight
-            || layoutView?.frame.size.height != lineStorage.height + viewZones.totalHeight {
-            delegate?.layoutManagerHeightDidUpdate(newHeight: lineStorage.height + viewZones.totalHeight)
+        if ctx.yContentAdjustment != 0 {
+            delegate?.layoutManagerYAdjustment(ctx.yContentAdjustment)
         }
 
-#if DEBUG
-        return laidOutLines
-#else
-        return []
-#endif
+        // Compare against the height last reported to the delegate, not the view's frame - the frame intentionally
+        // includes overscroll, so a frame comparison reports (and re-runs frame/selection updates) on every pass.
+        let contentHeight = lineStorage.height + viewZones.totalHeight
+        if contentHeight != lastReportedContentHeight {
+            lastReportedContentHeight = contentHeight
+            delegate?.layoutManagerHeightDidUpdate(newHeight: contentHeight)
+        }
+    }
+
+    /// Walks the pass's bands, in document order, and leaves `ctx` on the primary one - which is what the
+    /// view-zone pass and the delegate notifications downstream read.
+    ///
+    /// A second band exists only when a caller asked for a region the viewport's own pass could not absorb (see
+    /// ``layoutPassBands(pass:request:)``). The two are disjoint by construction, so no fragment is appended
+    /// twice, but the second may sit *above* the first and `visibleFragments` has to stay in document order for
+    /// the fragment diff's two-pointer merge to mean anything.
+    private func walkBands(_ bands: (first: LayoutBand, second: LayoutBand?), ctx: inout LayoutPassContext) {
+        iterateLines(ctx: &ctx)
+        guard let second = bands.second else { return }
+        ctx.minY = second.minY
+        ctx.maxY = second.maxY
+        iterateLines(ctx: &ctx)
+        ctx.minY = bands.first.minY
+        ctx.maxY = bands.first.maxY
+        if second.maxY <= bands.first.minY {
+            visibleFragments.sort { $0.yPos < $1.yPos }
+        }
+    }
+
+    private func iterateLines(ctx: inout LayoutPassContext) {
+        // When view zones exist, line storage Y positions don't include whitespace. Subtract total whitespace from minY
+        // for a conservative lower bound; keep maxY as-is since line storage Y is always <= document Y.
+        let queryMinY = ctx.hasViewZones ? max(ctx.minY - viewZones.totalHeight, 0) : ctx.minY
+
+        for linePosition in linesStartingAt(queryMinY, until: ctx.maxY).lazy {
+            let whitespaceOffset = ctx.hasViewZones
+                ? viewZones.whitespaceHeightBeforeLine(linePosition.index)
+                : 0
+            let documentYPos = linePosition.yPos + whitespaceOffset
+
+            guard documentYPos < ctx.maxY else { continue }
+
+            processLine(linePosition, whitespaceOffset: whitespaceOffset, ctx: &ctx)
+        }
+    }
+
+    /// Positions every view zone whose band intersects the laid-out y range and records it in `usedZoneIDs`.
+    ///
+    /// Zone layout is driven by the zones themselves rather than by the line following each zone, so zones after
+    /// the final line (which have no following line) and zones taller than the vertical layout padding are still
+    /// positioned. A zone with `afterLineNumber == k` occupies the whitespace band directly below line index `k` -
+    /// the same convention `ViewZoneManager.whitespaceHeightBeforeLine(_:)` uses to shift line positions.
+    private func layoutVisibleZones(ctx: inout LayoutPassContext) {
+        // `zones` is sorted by (afterLineNumber, ordinal), so zone document y positions are non-decreasing and the
+        // loop can stop at the first zone starting past `maxY`. Binary-search the first zone whose band can reach
+        // the viewport instead of walking every zone above it - each distinct gap line in the walk costs an
+        // O(log n) line-storage lookup, which adds up with thousands of zones above the viewport.
+        let zones = viewZones.zones
+        let startIndex = firstZoneIndex(reaching: ctx.minY, in: zones)
+        guard startIndex < zones.count else { return }
+        var gapLine = Int.min
+        var zoneY: CGFloat = 0
+        for zone in zones[startIndex...] {
+            if zone.afterLineNumber != gapLine {
+                gapLine = zone.afterLineNumber
+                let lineBottom: CGFloat
+                if gapLine < 0 {
+                    lineBottom = 0
+                } else if let linePosition = lineStorage.getLine(atIndex: gapLine) {
+                    lineBottom = linePosition.yPos + linePosition.height
+                } else {
+                    lineBottom = lineStorage.height
+                }
+                zoneY = lineBottom + viewZones.whitespaceHeightBeforeLine(gapLine)
+            }
+            if zoneY >= ctx.maxY {
+                break
+            }
+            let zoneMaxY = zoneY + zone.heightInPoints
+            if zoneMaxY > ctx.minY {
+                layoutViewZone(zone, at: zoneY)
+                ctx.usedZoneIDs.insert(zone.id)
+            }
+            zoneY = zoneMaxY
+        }
+    }
+
+    /// Advances ``passGeneration`` for a pass that is about to run. Generation 0 is never used: it is the stamp of a
+    /// line no pass has walked. When the counter wraps (after 2³² passes), every line's stamp is cleared first, so a
+    /// stamp from the previous cycle cannot alias a new generation.
+    private func nextPassGeneration() -> UInt32 {
+        passGeneration &+= 1
+        if passGeneration == 0 {
+            // Lines without a `TextLine` yet have no stamp to clear.
+            lineStorage.forEachExistingData { line in
+                line.visibleStamp = 0
+            }
+            lastCompletedPassGeneration = 0
+            passGeneration = 1
+        }
+        return passGeneration
+    }
+
+    /// Decides whether a line needs typesetting or can just re-use its existing fragments, dispatches accordingly, and
+    /// tracks it as visible.
+    private func processLine(
+        _ linePosition: TextLineStorage<TextLine>.TextLinePosition,
+        whitespaceOffset: CGFloat,
+        ctx: inout LayoutPassContext
+    ) {
+        let line = linePosition.data
+        let wasNotVisible = ctx.previousPassGeneration == 0 || line.visibleStamp != ctx.previousPassGeneration
+        line.visibleStamp = ctx.passGeneration
+
+        let linePositionNeedsLayout = line.needsLayout(maxWidth: ctx.cachedMaxLineLayoutWidth)
+        let lineNotEntirelyLaidOut = linePosition.height != linePosition.data.lineFragments.height
+
+        if ctx.forceLayout || linePositionNeedsLayout || wasNotVisible || lineNotEntirelyLaidOut {
+            let (yAdjustment, _) = layoutLine(
+                linePosition,
+                whitespaceOffset: whitespaceOffset,
+                textStorage: ctx.textStorage,
+                yRange: ctx.minY..<ctx.maxY,
+                maxFoundLineWidth: &ctx.maxFoundLineWidth,
+                maxLineLayoutWidth: ctx.cachedMaxLineLayoutWidth
+            )
+            ctx.yContentAdjustment += yAdjustment
+            ctx.laidOutLines.insert(linePosition.data.id)
+        } else {
+            // Line is already laid out - just append its fragments at their current positions.
+            appendVisibleFragments(for: linePosition, whitespaceOffset: whitespaceOffset)
+        }
     }
 
     // MARK: - Layout Single Line
@@ -225,21 +295,19 @@ extension TextLayoutManager {
     private func layoutLine(
         _ linePosition: TextLineStorage<TextLine>.TextLinePosition,
         whitespaceOffset: CGFloat = 0,
-        usedFragmentIDs: inout Set<LineFragment.ID>,
         textStorage: NSTextStorage,
         yRange: Range<CGFloat>,
-        maxFoundLineWidth: inout CGFloat
+        maxFoundLineWidth: inout CGFloat,
+        maxLineLayoutWidth: CGFloat
     ) -> (CGFloat, wasLineHeightChanged: Bool) {
-        let lineSize = layoutLineViews(
+        let lineSize = typesetAndCollect(
             linePosition,
             whitespaceOffset: whitespaceOffset,
             textStorage: textStorage,
-            layoutData: LineLayoutData(minY: yRange.lowerBound, maxY: yRange.upperBound, maxWidth: maxLineLayoutWidth),
-            laidOutFragmentIDs: &usedFragmentIDs
+            layoutData: LineLayoutData(minY: yRange.lowerBound, maxY: yRange.upperBound, maxWidth: maxLineLayoutWidth)
         )
         let wasLineHeightChanged = lineSize.height != linePosition.height
         var yContentAdjustment: CGFloat = 0.0
-        var maxFoundLineWidth = maxFoundLineWidth
 
         if wasLineHeightChanged {
             lineStorage.update(
@@ -247,6 +315,8 @@ extension TextLayoutManager {
                 delta: 0,
                 deltaHeight: lineSize.height - linePosition.height
             )
+            // Y positions of subsequent lines just shifted; cached selection rects are now stale.
+            layoutRevision &+= 1
 
             if linePosition.yPos < yRange.lowerBound {
                 // Adjust the scroll position by the difference between the new height and old.
@@ -260,19 +330,13 @@ extension TextLayoutManager {
         return (yContentAdjustment, wasLineHeightChanged)
     }
 
-    /// Lays out a single text line.
-    /// - Parameters:
-    ///   - position: The line position from storage to use for layout.
-    ///   - textStorage: The text storage object to use for text info.
-    ///   - layoutData: The information required to perform layout for the given line.
-    ///   - laidOutFragmentIDs: Updated by this method as line fragments are laid out.
-    /// - Returns: A `CGSize` representing the max width and total height of the laid out portion of the line.
-    private func layoutLineViews(
+    /// Runs typesetting for the given line and appends each of its fragments to `visibleFragments`.
+    /// - Returns: The total laid-out width and height of the line.
+    private func typesetAndCollect(
         _ position: TextLineStorage<TextLine>.TextLinePosition,
         whitespaceOffset: CGFloat = 0,
         textStorage: NSTextStorage,
-        layoutData: LineLayoutData,
-        laidOutFragmentIDs: inout Set<LineFragment.ID>
+        layoutData: LineLayoutData
     ) -> CGSize {
         let lineDisplayData = TextLine.DisplayData(
             maxWidth: layoutData.maxWidth,
@@ -281,23 +345,20 @@ extension TextLayoutManager {
             breakStrategy: lineBreakStrategy
         )
 
+        // Dispatch to the pre-bound closure if the render delegate installed one, otherwise go straight to the
+        // default path. No witness-table lookup or weak-ref load on the common (no-override) path.
         let line = position.data
-        if let renderDelegate {
-            renderDelegate.prepareForDisplay(
-                textLine: line,
-                displayData: lineDisplayData,
-                range: position.range,
-                stringRef: textStorage,
-                markedRanges: markedTextManager.markedRanges(in: position.range),
-                attachments: attachments.getAttachmentsStartingIn(position.range)
-            )
+        let markedRanges = markedTextManager.markedRanges(in: position.range)
+        let lineAttachments = attachments.getAttachmentsStartingIn(position.range)
+        if let prepareOverride = _prepareForDisplayOverride {
+            prepareOverride(line, lineDisplayData, position.range, textStorage, markedRanges, lineAttachments)
         } else {
             line.prepareForDisplay(
                 displayData: lineDisplayData,
                 range: position.range,
                 stringRef: textStorage,
-                markedRanges: markedTextManager.markedRanges(in: position.range),
-                attachments: attachments.getAttachmentsStartingIn(position.range)
+                markedRanges: markedRanges,
+                attachments: lineAttachments
             )
         }
 
@@ -307,78 +368,52 @@ extension TextLayoutManager {
 
         var height: CGFloat = 0
         var width: CGFloat = 0
+        let xOrigin = edgeInsets.left
+        let lineY = position.yPos + whitespaceOffset
 
         for lineFragmentPosition in line.lineFragments {
             let lineFragment = lineFragmentPosition.data
             lineFragment.documentRange = lineFragmentPosition.range.translate(location: position.range.location)
 
-            layoutFragmentView(
-                inLine: position,
-                for: lineFragmentPosition,
-                at: position.yPos + whitespaceOffset + lineFragmentPosition.yPos
+            visibleFragments.append(
+                VisibleFragment(
+                    fragment: lineFragment,
+                    xPos: xOrigin,
+                    yPos: lineY + lineFragmentPosition.yPos,
+                    width: lineFragment.width,
+                    height: lineFragment.scaledHeight
+                )
             )
 
             width = max(width, lineFragment.width)
             height += lineFragment.scaledHeight
-            laidOutFragmentIDs.insert(lineFragment.id)
         }
 
         return CGSize(width: width, height: height)
     }
 
-    // MARK: - Layout Fragment
-
-    /// Positions a view zone's view at the given document y position.
-    /// - Parameters:
-    ///   - zone: The view zone to layout.
-    ///   - yPos: The y position in document coordinates where the zone should be placed.
-    private func layoutViewZone(_ zone: ViewZone, at yPos: CGFloat) {
-        guard let zoneView = zone.view else { return }
-        zoneView.translatesAutoresizingMaskIntoConstraints = true
-        let width = (delegate?.textViewportSize().width ?? layoutView?.bounds.width) ?? 0
-        zoneView.frame = CGRect(x: 0, y: yPos, width: width, height: zone.heightInPoints)
-        if zoneView.superview !== layoutView {
-            layoutView?.addSubview(zoneView, positioned: .above, relativeTo: nil)
-        }
-    }
-
-    /// Lays out a line fragment view for the given line fragment at the specified y value.
-    /// - Parameters:
-    ///   - lineFragment: The line fragment position to lay out a view for.
-    ///   - yPos: The y value at which the line should begin.
-    private func layoutFragmentView(
-        inLine line: TextLineStorage<TextLine>.TextLinePosition,
-        for lineFragment: TextLineStorage<LineFragment>.TextLinePosition,
-        at yPos: CGFloat
+    /// Appends fragments of an already-laid-out line to `visibleFragments`. Used for lines that skipped typesetting.
+    private func appendVisibleFragments(
+        for position: TextLineStorage<TextLine>.TextLinePosition,
+        whitespaceOffset: CGFloat
     ) {
-        let fragmentRange = lineFragment.range.translate(location: line.range.location)
-        let view = viewReuseQueue.getOrCreateView(forKey: lineFragment.data.id) {
-            renderDelegate?.lineFragmentView(for: lineFragment.data) ?? LineFragmentView()
-        }
-        view.translatesAutoresizingMaskIntoConstraints = true // Small optimization for lots of subviews
-        view.setLineFragment(lineFragment.data, fragmentRange: fragmentRange, renderer: lineFragmentRenderer)
-        view.frame.origin = CGPoint(x: edgeInsets.left, y: yPos)
-        layoutView?.addSubview(view, positioned: .below, relativeTo: nil)
-        view.needsDisplay = true
-    }
-
-    private func updateLineViewPositions(
-        _ position: TextLineStorage<TextLine>.TextLinePosition,
-        whitespaceOffset: CGFloat = 0
-    ) -> Bool {
         let line = position.data
+        let xOrigin = edgeInsets.left
+        let lineY = position.yPos + whitespaceOffset
+
         for lineFragmentPosition in line.lineFragments {
-            guard let view = viewReuseQueue.getView(forKey: lineFragmentPosition.data.id) else {
-                return true
-            }
-            lineFragmentPosition.data.documentRange = lineFragmentPosition.range.translate(
-                location: position.range.location
-            )
-            view.frame.origin = CGPoint(
-                x: edgeInsets.left,
-                y: position.yPos + whitespaceOffset + lineFragmentPosition.yPos
+            let lineFragment = lineFragmentPosition.data
+            lineFragment.documentRange = lineFragmentPosition.range.translate(location: position.range.location)
+
+            visibleFragments.append(
+                VisibleFragment(
+                    fragment: lineFragment,
+                    xPos: xOrigin,
+                    yPos: lineY + lineFragmentPosition.yPos,
+                    width: lineFragment.width,
+                    height: lineFragment.scaledHeight
+                )
             )
         }
-        return false
     }
 }

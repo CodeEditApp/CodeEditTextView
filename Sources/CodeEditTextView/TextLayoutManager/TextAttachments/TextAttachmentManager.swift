@@ -13,8 +13,13 @@ import Foundation
 /// If two attachments are overlapping, the one placed further along in the document will be
 /// ignored when laying out attachments.
 public final class TextAttachmentManager {
-    private var orderedAttachments: [AnyTextAttachment] = []
+    @usableFromInline
+    internal private(set) var orderedAttachments: [AnyTextAttachment] = []
     weak var layoutManager: TextLayoutManager?
+
+    /// Whether no attachment is installed, in which case no line is merged with another for display.
+    @inlinable
+    var isEmpty: Bool { orderedAttachments.isEmpty }
     private var selectionObserver: (any NSObjectProtocol)?
 
     public weak var delegate: TextAttachmentManagerDelegate?
@@ -27,22 +32,29 @@ public final class TextAttachmentManager {
         let insertIndex = findInsertionIndex(for: range.location)
         orderedAttachments.insert(attachment, at: insertIndex)
 
-        // This is ugly, but if our attachment meets the end of the next line, we need to merge that line with this
-        // one.
+        // This is ugly, but if our attachment meets the end of a line, we need to merge the trailing line with this
+        // one. The boundary check has to consider every line in the range, including the first one - an attachment
+        // contained in a single line can still consume that line's terminator.
         var getNextOne = false
-        layoutManager?.lineStorage.linesInRange(range).dropFirst().forEach {
-            if $0.height != 0 {
-                layoutManager?.lineStorage.update(atOffset: $0.range.location, delta: 0, deltaHeight: -$0.height)
+        var isFirstLine = true
+        layoutManager?.lineStorage.lineSpans(in: range).forEach { linePosition in
+            if !isFirstLine && linePosition.height != 0 {
+                layoutManager?.lineStorage.update(
+                    atOffset: linePosition.range.location,
+                    delta: 0,
+                    deltaHeight: -linePosition.height
+                )
             }
+            isFirstLine = false
 
             // Only do this if it's not the end of the document
-            if range.max == $0.range.max && range.max != layoutManager?.lineStorage.length {
+            if range.max == linePosition.range.max && range.max != layoutManager?.lineStorage.length {
                 getNextOne = true
             }
         }
 
         if getNextOne,
-            let trailingLine = layoutManager?.lineStorage.getLine(atOffset: range.max),
+            let trailingLine = layoutManager?.lineStorage.lineSpan(atOffset: range.max),
            trailingLine.height != 0 {
             // Update the one trailing line.
             layoutManager?.lineStorage.update(atOffset: range.max, delta: 0, deltaHeight: -trailingLine.height)
@@ -126,18 +138,30 @@ public final class TextAttachmentManager {
     }
 
     /// Updates the text attachments to stay in the same relative spot after the edit, and removes any attachments that
-    /// were in the updated range.
+    /// were in the replaced range.
     /// - Parameters:
-    ///   - atOffset: The offset text was updated at.
+    ///   - replacedRange: The range of text that was replaced by the edit. Empty for insertions.
     ///   - delta: The change delta, positive is an insertion.
-    package func textUpdated(atOffset: Int, delta: Int) {
+    /// - Returns: The attachments the edit removed, with their ranges as they were before it.
+    @discardableResult
+    package func textUpdated(replacedRange: NSRange, delta: Int) -> [AnyTextAttachment] {
+        var removed: [AnyTextAttachment] = []
         for (idx, attachment) in orderedAttachments.enumerated().reversed() {
-            if attachment.range.contains(atOffset) {
-                orderedAttachments.remove(at: idx)
-            } else if attachment.range.location > atOffset {
+            if attachment.range.contains(replacedRange.location)
+                || replacedRange.contains(attachment.range.location)
+                || attachment.range.intersection(replacedRange)?.length ?? 0 > 0 {
+                removed.append(orderedAttachments.remove(at: idx))
+            } else if attachment.range.location >= replacedRange.max {
                 orderedAttachments[idx].range.location += delta
             }
         }
+        return removed
+    }
+
+    /// Removes every attachment without touching layout. For a layout manager that is about to lay out a new
+    /// document: the attachments' ranges refer to the old one.
+    package func removeAll() {
+        orderedAttachments.removeAll()
     }
 
     /// Set up the attachment manager to listen to selection updates, giving text attachments a chance to respond to

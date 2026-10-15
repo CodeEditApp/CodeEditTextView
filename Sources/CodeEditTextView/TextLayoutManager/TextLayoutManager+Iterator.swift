@@ -49,35 +49,37 @@ public extension TextLayoutManager {
     struct YPositionIterator: LazySequenceProtocol, IteratorProtocol {
         typealias TextLinePosition = TextLineStorage<TextLine>.TextLinePosition
 
-        private weak var layoutManager: TextLayoutManager?
-        private let minY: CGFloat
-        private let maxY: CGFloat
-        private var currentPosition: (position: TextLinePosition, indexRange: ClosedRange<Int>)?
+        /// Strong reference - these iterators are handed out by public API (``TextLayoutManager/visibleLines()``,
+        /// ``TextLayoutManager/linesStartingAt(_:until:)``) and may outlive the layout manager's other owners.
+        /// One retain per iterator creation; `next()` itself pays no weak-ref or liveness-check cost.
+        @usableFromInline let layoutManager: TextLayoutManager
+        @usableFromInline let minY: CGFloat
+        @usableFromInline let maxY: CGFloat
+        @usableFromInline var cursor: VisibleLineCursor
 
         init(minY: CGFloat, maxY: CGFloat, layoutManager: TextLayoutManager) {
             self.minY = minY
             self.maxY = maxY
             self.layoutManager = layoutManager
+            self.cursor = VisibleLineCursor(storage: layoutManager.lineStorage)
         }
 
         /// Iterates over the "visible" text positions.
         ///
-        /// See documentation on ``TextLayoutManager/determineVisiblePosition(for:)`` for details.
+        /// See documentation on ``TextLayoutManager/determineVisiblePosition(for:)`` for details. Inlinable, so a
+        /// caller in another module (CESE's gutter) runs the specialized walk.
+        @inlinable
         public mutating func next() -> TextLineStorage<TextLine>.TextLinePosition? {
-            if let currentPosition {
-                guard let nextPosition = layoutManager?.lineStorage.getLine(
-                    atIndex: currentPosition.indexRange.upperBound + 1
-                ), nextPosition.yPos < maxY else {
+            if cursor.hasPosition {
+                guard let nextPosition = layoutManager.advance(&cursor), nextPosition.yPos < maxY else {
                     return nil
                 }
-                self.currentPosition = layoutManager?.determineVisiblePosition(for: nextPosition)
-                return self.currentPosition?.position
-            } else if let position = layoutManager?.lineStorage.getLine(atPosition: minY) {
-                currentPosition = layoutManager?.determineVisiblePosition(for: position)
-                return currentPosition?.position
+                return nextPosition
             }
-
-            return nil
+            return layoutManager.startVisibleLines(
+                at: layoutManager.lineStorage.getLine(atPosition: minY),
+                cursor: &cursor
+            )
         }
     }
 
@@ -89,34 +91,132 @@ public extension TextLayoutManager {
     struct RangeIterator: LazySequenceProtocol, IteratorProtocol {
         typealias TextLinePosition = TextLineStorage<TextLine>.TextLinePosition
 
-        private weak var layoutManager: TextLayoutManager?
-        private let range: NSRange
-        private var currentPosition: (position: TextLinePosition, indexRange: ClosedRange<Int>)?
+        /// Strong reference - see `YPositionIterator` for rationale.
+        @usableFromInline let layoutManager: TextLayoutManager
+        @usableFromInline let range: NSRange
+        @usableFromInline var cursor: VisibleLineCursor
 
         init(range: NSRange, layoutManager: TextLayoutManager) {
             self.range = range
             self.layoutManager = layoutManager
+            self.cursor = VisibleLineCursor(storage: layoutManager.lineStorage)
         }
 
         /// Iterates over the "visible" text positions.
         ///
-        /// See documentation on ``TextLayoutManager/determineVisiblePosition(for:)`` for details.
+        /// See documentation on ``TextLayoutManager/determineVisiblePosition(for:)`` for details. Inlinable, see
+        /// `YPositionIterator`.
+        @inlinable
         public mutating func next() -> TextLineStorage<TextLine>.TextLinePosition? {
-            if let currentPosition {
-                guard let nextPosition = layoutManager?.lineStorage.getLine(
-                    atIndex: currentPosition.indexRange.upperBound + 1
-                ), nextPosition.range.location < range.max else {
+            if cursor.hasPosition {
+                guard let nextPosition = layoutManager.advance(&cursor),
+                      nextPosition.range.location < range.location + range.length else {
                     return nil
                 }
-                self.currentPosition = layoutManager?.determineVisiblePosition(for: nextPosition)
-                return self.currentPosition?.position
-            } else if let position = layoutManager?.lineStorage.getLine(atOffset: range.location) {
-                currentPosition = layoutManager?.determineVisiblePosition(for: position)
-                return currentPosition?.position
+                return nextPosition
             }
-
-            return nil
+            return layoutManager.startVisibleLines(
+                at: layoutManager.lineStorage.getLine(atOffset: range.location),
+                cursor: &cursor
+            )
         }
+    }
+
+    /// Where a visible-line iterator stands: the last position it returned, kept as plain fields. Holding that
+    /// position in an optional (with or without its index range) cost a copy and a destroy through runtime value
+    /// witnesses on every step, more than the walk itself.
+    @usableFromInline
+    internal struct VisibleLineCursor {
+        /// The layout manager's line storage, read once. (`lineStorage` is never reassigned; reading the class
+        /// property on every step cost a dynamic exclusivity check per line.)
+        @usableFromInline let storage: TextLineStorage<TextLine>
+        /// Whether a position has been returned yet.
+        @usableFromInline var hasPosition = false
+        /// The last returned position's location, y position and index.
+        @usableFromInline var location = 0
+        @usableFromInline var yPos: CGFloat = 0
+        @usableFromInline var index = 0
+        /// The index of the last line merged into that position; equal to `index` unless attachments merged lines.
+        @usableFromInline var lastIndex = 0
+        /// The storage node of the line at `lastIndex` when known, `Int32.min` otherwise.
+        @usableFromInline var handle: TextLineStorage<TextLine>.NodeHandle = Int32.min
+
+        @usableFromInline
+        init(storage: TextLineStorage<TextLine>) {
+            self.storage = storage
+        }
+
+        @usableFromInline
+        mutating func move(
+            to visible: (position: TextLineStorage<TextLine>.TextLinePosition, indexRange: ClosedRange<Int>)
+        ) {
+            hasPosition = true
+            location = visible.position.range.location
+            yPos = visible.position.yPos
+            index = visible.position.index
+            lastIndex = visible.indexRange.upperBound
+            handle = Int32.min
+        }
+    }
+
+    /// The first visible position of an iteration, starting from the storage line `position`.
+    @usableFromInline
+    internal func startVisibleLines(
+        at position: TextLineStorage<TextLine>.TextLinePosition?,
+        cursor: inout VisibleLineCursor
+    ) -> TextLineStorage<TextLine>.TextLinePosition? {
+        guard let visible = determineVisiblePosition(for: position) else { return nil }
+        cursor.move(to: visible)
+        return visible.position
+    }
+
+    /// Advances `cursor` to the next visible position and returns it, for the iterators above.
+    ///
+    /// Without attachments no lines merge, so this steps to the storage's in-order successor in O(1) amortized and
+    /// builds the position from node fields read now, instead of an O(log n) `getLine(atIndex:)` search per line.
+    /// Reading the fields at call time keeps the iterators' contract: the caller may change the height of the line it
+    /// was just handed (layout does) before asking for the next one. That line's `yPos` and location stay valid
+    /// through such a change; its height and length are re-read from its node.
+    ///
+    /// With attachments, merged lines resolve through ``determineVisiblePosition(for:)`` exactly as before
+    /// (``advanceMergingLines(_:)``).
+    @inlinable
+    internal func advance(_ cursor: inout VisibleLineCursor) -> TextLineStorage<TextLine>.TextLinePosition? {
+        guard attachments.isEmpty, cursor.index == cursor.lastIndex else {
+            return advanceMergingLines(&cursor)
+        }
+        let storage = cursor.storage
+        var currentHandle = cursor.handle
+        if currentHandle == Int32.min {
+            guard let found = storage.search(forIndex: cursor.lastIndex)?.handle else { return nil }
+            currentHandle = found
+        }
+        let nextHandle = storage.successor(currentHandle)
+        guard nextHandle != Int32.min else { return nil }
+        let nodes = storage.nodesPtr
+        let currentNode = nodes + Int(currentHandle)
+        let nextNode = nodes + Int(nextHandle)
+        let nextIndex = cursor.lastIndex + 1
+        cursor.location += currentNode.pointee.length
+        cursor.yPos += currentNode.pointee.height
+        cursor.index = nextIndex
+        cursor.lastIndex = nextIndex
+        cursor.handle = nextHandle
+        return TextLineStorage<TextLine>.TextLinePosition(
+            data: storage.data(of: nextNode),
+            range: NSRange(location: cursor.location, length: nextNode.pointee.length),
+            yPos: cursor.yPos,
+            height: nextNode.pointee.height,
+            index: nextIndex
+        )
+    }
+
+    /// ``advance(_:)`` when attachments may merge lines.
+    @usableFromInline
+    internal func advanceMergingLines(
+        _ cursor: inout VisibleLineCursor
+    ) -> TextLineStorage<TextLine>.TextLinePosition? {
+        startVisibleLines(at: lineStorage.getLine(atIndex: cursor.lastIndex + 1), cursor: &cursor)
     }
 
     /// Determines the “visible” line position by merging any consecutive lines
@@ -195,8 +295,14 @@ public extension TextLayoutManager {
             minIndex = min(minIndex, newPosition.index)
         }
 
-        if lastAttachment.range.max > originalPosition.position.range.max,
-           let extendedLinePosition = lineStorage.getLine(atOffset: lastAttachment.range.max) {
+        // `>=` so an attachment ending exactly at this line's end (covering its line terminator) merges the next
+        // line. `getAttachmentsOverlapping` includes attachments ending exactly at a queried line's start, so the
+        // next line merges backwards at that boundary - the forward merge must match or the two queries disagree
+        // and the layout pass lays this line out twice. `getLine(atOffset:)` returns `nil` for the document-end
+        // offset when the last line is non-empty; clamp to the last line so attachments ending at the document
+        // end still merge every line they cover.
+        if lastAttachment.range.max >= originalPosition.position.range.max,
+           let extendedLinePosition = lineStorage.getLine(atOffset: lastAttachment.range.max) ?? lineStorage.last {
             newPosition = TextLineStorage<TextLine>.TextLinePosition(
                 data: newPosition.data,
                 range: NSRange(start: newPosition.range.location, end: extendedLinePosition.range.max),
@@ -205,14 +311,6 @@ public extension TextLayoutManager {
                 index: newPosition.index // We want to keep the minimum index.
             )
             maxIndex = max(maxIndex, extendedLinePosition.index)
-        }
-
-        if firstAttachment.range.location == newPosition.range.location {
-            minIndex = max(minIndex, 0)
-        }
-
-        if lastAttachment.range.max == newPosition.range.max {
-            maxIndex = min(maxIndex, lineStorage.count - 1)
         }
 
         // Base case, we haven't updated anything

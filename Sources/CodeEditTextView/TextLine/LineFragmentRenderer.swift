@@ -9,11 +9,55 @@ import AppKit
 import CodeEditTextViewObjC
 
 /// Manages drawing line fragments into a drawing context.
-public final class LineFragmentRenderer {
+///
+/// Subclass to override the drawing behavior (see `MinimapLineFragmentRenderer` for an example). Consumers inject a
+/// subclass by setting `TextLayoutManager.lineFragmentRenderer`.
+open class LineFragmentRenderer {
     private struct CacheKey: Hashable {
         let string: String
         let font: NSFont
         let color: NSColor
+    }
+
+    /// The same key compared by font and color identity. Hashing an `NSFont` and comparing it with `isEqual` for
+    /// every invisible character cost more than drawing it, and delegates normally hand out the same cached
+    /// instances. Holds them strongly, so an identity cannot be reused by another object while it is cached.
+    private struct IdentityCacheKey: Hashable {
+        let string: String
+        let font: NSFont
+        let color: NSColor
+
+        static func == (lhs: IdentityCacheKey, rhs: IdentityCacheKey) -> Bool {
+            lhs.font === rhs.font && lhs.color === rhs.color && lhs.string == rhs.string
+        }
+
+        func hash(into hasher: inout Hasher) {
+            hasher.combine(ObjectIdentifier(font))
+            hasher.combine(ObjectIdentifier(color))
+            hasher.combine(string)
+        }
+    }
+
+    /// Membership of a delegate's trigger characters: a bit per unit below 0x100, the rest in a set.
+    struct TriggerSet {
+        private var low = SIMD4<UInt64>(repeating: 0)
+        private var high: Set<UInt16> = []
+
+        init(_ characters: Set<UInt16>) {
+            for character in characters {
+                if character < 0x100 {
+                    low[Int(character >> 6)] |= UInt64(1) << UInt64(character & 63)
+                } else {
+                    high.insert(character)
+                }
+            }
+        }
+
+        @inline(__always)
+        func contains(_ character: UInt16) -> Bool {
+            guard character < 0x100 else { return !high.isEmpty && high.contains(character) }
+            return low[Int(character >> 6)] & (UInt64(1) << UInt64(character & 63)) != 0
+        }
     }
 
     private struct InvisibleDrawingContext {
@@ -24,9 +68,49 @@ public final class LineFragmentRenderer {
         let context: CGContext
     }
 
-    weak var textStorage: NSTextStorage?
-    weak var invisibleCharacterDelegate: InvisibleCharactersDelegate?
+    public weak var textStorage: NSTextStorage?
+    public weak var invisibleCharacterDelegate: InvisibleCharactersDelegate?
     private var attributedStringCache: [CacheKey: CTLine] = [:]
+    /// Front of ``attributedStringCache`` for repeated identical instances; see `IdentityCacheKey`.
+    private var identityCache: [IdentityCacheKey: CTLine] = [:]
+
+    /// Leading-edge caret offsets of ``caretOffsetsLine``, indexed from its string range start, or NaN where Core
+    /// Text reports none (inside a grapheme cluster). Built once per scanned line: `CTLineGetOffsetForStringIndex`
+    /// walks the line's carets on every call, so a call per invisible character was quadratic in the line length.
+    private var caretOffsets: [CGFloat] = []
+    private var caretOffsetsLine: CTLine?
+    /// Hard cap on the replacement-character cache. Replacement glyphs are tiny in practice
+    /// (a handful of distinct (char, font, color) combos), so this is generous.
+    private static let attributedStringCacheCap: Int = 64
+
+    // MARK: - Per-draw-pass snapshot
+
+    /// Snapshot of the invisible character delegate's state, taken once per draw pass via ``beginDrawPass()`` to avoid
+    /// repeated weak-ref loads + witness-table dispatches per fragment.
+    private var _cachedTriggerCharacters: TriggerSet?
+    /// Strong reference to the delegate for the duration of one draw pass. Set to `nil` after the pass.
+    private var _drawPassDelegate: InvisibleCharactersDelegate?
+
+    /// Call once before iterating `visibleFragments`. Snapshots the invisible-character delegate's trigger set and
+    /// checks the cache-clear flag, so `draw(lineFragment:in:yPos:)` can skip the delegate entirely per fragment.
+    public func beginDrawPass() {
+        guard let delegate = invisibleCharacterDelegate else {
+            endDrawPass()
+            return
+        }
+        if delegate.invisibleStyleShouldClearCache() {
+            attributedStringCache.removeAll(keepingCapacity: true)
+            identityCache.removeAll(keepingCapacity: true)
+        }
+        _cachedTriggerCharacters = TriggerSet(delegate.triggerCharacters)
+        _drawPassDelegate = delegate
+    }
+
+    /// Call after the draw pass completes to release the strong delegate reference.
+    public func endDrawPass() {
+        _cachedTriggerCharacters = nil
+        _drawPassDelegate = nil
+    }
 
     /// Create a fragment renderer.
     /// - Parameters:
@@ -43,9 +127,12 @@ public final class LineFragmentRenderer {
     ///   - lineFragment: The line fragment to drawn
     ///   - context: The drawing context to draw into.
     ///   - yPos: In the drawing context, what `y` position to start drawing at.
-    public func draw(lineFragment: LineFragment, in context: CGContext, yPos: CGFloat) {
-        if invisibleCharacterDelegate?.invisibleStyleShouldClearCache() == true {
+    open func draw(lineFragment: LineFragment, in context: CGContext, yPos: CGFloat) {
+        // If beginDrawPass() was NOT called (e.g. subclass or standalone use), fall back to a per-fragment
+        // delegate check.
+        if _drawPassDelegate == nil, invisibleCharacterDelegate?.invisibleStyleShouldClearCache() == true {
             attributedStringCache.removeAll(keepingCapacity: true)
+            identityCache.removeAll(keepingCapacity: true)
         }
 
         context.saveGState()
@@ -74,11 +161,26 @@ public final class LineFragmentRenderer {
             context.saveGState()
             switch content.data {
             case .text(let ctLine):
-                context.textPosition = CGPoint(
+                let baseline = CGPoint(
                     x: currentPosition,
                     y: yPos + lineFragment.height - lineFragment.descent + (lineFragment.heightDifference/2)
                 ).pixelAligned
-                CTLineDraw(ctLine, context)
+                if lineFragment.hasVerticalGlyphOffsets {
+                    // Core Text applies glyph positions in user space, so under the flipped text matrix a mark
+                    // the font stacks above its base glyph lands below it. Draw such lines in an unflipped space
+                    // anchored at the baseline. (Lines without such offsets keep the flipped text matrix: the two
+                    // round fractional baselines differently, and their pixels must not change.)
+                    context.saveGState()
+                    context.translateBy(x: baseline.x, y: baseline.y)
+                    context.scaleBy(x: 1, y: -1)
+                    context.textMatrix = .identity
+                    context.textPosition = .zero
+                    CTLineDraw(ctLine, context)
+                    context.restoreGState()
+                } else {
+                    context.textPosition = baseline
+                    CTLineDraw(ctLine, context)
+                }
 
                 drawInvisibles(
                     lineFragment: lineFragment,
@@ -88,14 +190,15 @@ public final class LineFragmentRenderer {
                     in: context
                 )
             case .attachment(let attachment):
+                // Device-aligned so the attachment's fills look the same whichever rect a redraw clips to.
                 attachment.attachment.draw(
                     in: context,
-                    rect: NSRect(
+                    rect: context.deviceAligned(NSRect(
                         x: currentPosition,
                         y: yPos + (lineFragment.heightDifference/2),
                         width: attachment.width,
                         height: lineFragment.height
-                    )
+                    ))
                 )
             }
             context.restoreGState()
@@ -112,7 +215,10 @@ public final class LineFragmentRenderer {
         position: CGPoint,
         in context: CGContext
     ) {
-        guard let textStorage, let invisibleCharacterDelegate else { return }
+        // Prefer the draw-pass snapshot (avoids weak-ref load + witness-table dispatch per fragment).
+        // Fall back to the delegate directly for standalone/subclass callers that skip beginDrawPass().
+        let delegate = _drawPassDelegate ?? invisibleCharacterDelegate
+        guard let textStorage, let delegate else { return }
 
         let drawingContext = InvisibleDrawingContext(
             lineFragment: lineFragment,
@@ -122,15 +228,23 @@ public final class LineFragmentRenderer {
             context: context
         )
 
-        let range = createTextRange(for: drawingContext).clamped(to: (textStorage.string as NSString).length)
-        let string = (textStorage.string as NSString).substring(with: range)
-
-        processInvisibleCharacters(
-            in: string,
-            range: range,
-            delegate: invisibleCharacterDelegate,
-            drawingContext: drawingContext
-        )
+        let characters = textStorage.string as NSString
+        let range = createTextRange(for: drawingContext).clamped(to: characters.length)
+        guard range.length > 0 else { return }
+        // Scan the fragment's code units in place: a `String` substring per fragment plus a hashed set lookup per
+        // character cost more than the drawing itself on a viewport of indented code.
+        let triggerCharacters = _cachedTriggerCharacters ?? TriggerSet(delegate.triggerCharacters)
+        withUnsafeTemporaryAllocation(of: UInt16.self, capacity: range.length) { buffer in
+            guard let units = buffer.baseAddress else { return }
+            characters.getCharacters(units, range: range)
+            processInvisibleCharacters(
+                in: UnsafeBufferPointer(buffer),
+                range: range,
+                delegate: delegate,
+                triggerCharacters: triggerCharacters,
+                drawingContext: drawingContext
+            )
+        }
     }
 
     private func createTextRange(for drawingContext: InvisibleDrawingContext) -> NSRange {
@@ -143,9 +257,10 @@ public final class LineFragmentRenderer {
     }
 
     private func processInvisibleCharacters(
-        in string: String,
+        in units: UnsafeBufferPointer<UInt16>,
         range: NSRange,
         delegate: InvisibleCharactersDelegate,
+        triggerCharacters: TriggerSet,
         drawingContext: InvisibleDrawingContext
     ) {
         drawingContext.context.saveGState()
@@ -153,8 +268,8 @@ public final class LineFragmentRenderer {
 
         lazy var offset = CTLineGetStringRange(drawingContext.ctLine).location
 
-        for (idx, character) in string.utf16.enumerated()
-        where delegate.triggerCharacters.contains(character) {
+        for (idx, character) in units.enumerated()
+        where triggerCharacters.contains(character) {
             processInvisibleCharacter(
                 character: character,
                 at: idx,
@@ -184,7 +299,7 @@ public final class LineFragmentRenderer {
             return
         }
 
-        let xOffset = CTLineGetOffsetForStringIndex(drawingContext.ctLine, offset + index, nil)
+        let xOffset = caretOffset(in: drawingContext.ctLine, at: offset + index)
 
         switch style {
         case let .replace(replacementCharacter, color, font):
@@ -216,6 +331,30 @@ public final class LineFragmentRenderer {
         }
     }
 
+    /// `CTLineGetOffsetForStringIndex(line, stringIndex, nil)`, from a table built once per line.
+    func caretOffset(in line: CTLine, at stringIndex: Int) -> CGFloat {
+        let lineRange = CTLineGetStringRange(line)
+        if caretOffsetsLine !== line {
+            var offsets = caretOffsets
+            offsets.removeAll(keepingCapacity: true)
+            offsets.append(contentsOf: repeatElement(CGFloat.nan, count: lineRange.length + 1))
+            CTLineEnumerateCaretOffsets(line) { offset, index, leadingEdge, _ in
+                let slot = index - lineRange.location
+                // The first leading edge reported for an index is the primary offset the direct call returns.
+                if leadingEdge, slot >= 0, slot < offsets.count, offsets[slot].isNaN {
+                    offsets[slot] = offset
+                }
+            }
+            caretOffsets = offsets
+            caretOffsetsLine = line
+        }
+        let slot = stringIndex - lineRange.location
+        if slot >= 0, slot < caretOffsets.count, !caretOffsets[slot].isNaN {
+            return caretOffsets[slot]
+        }
+        return CTLineGetOffsetForStringIndex(line, stringIndex, nil)
+    }
+
     private func calculateReplacementPosition(
         basePosition: CGPoint,
         xOffset: CGFloat,
@@ -237,7 +376,7 @@ public final class LineFragmentRenderer {
         let xEndOffset = if offset + characterIndex + 1 == drawingContext.lineFragment.documentRange.length {
             drawingContext.lineFragment.width
         } else {
-            CTLineGetOffsetForStringIndex(drawingContext.ctLine, offset + characterIndex + 1, nil)
+            caretOffset(in: drawingContext.ctLine, at: offset + characterIndex + 1)
         }
 
         return NSRect(
@@ -255,6 +394,12 @@ public final class LineFragmentRenderer {
         at position: CGPoint,
         in context: CGContext
     ) {
+        let identityKey = IdentityCacheKey(string: replacementCharacter, font: font, color: color)
+        if let cachedValue = identityCache[identityKey] {
+            context.textPosition = position
+            CTLineDraw(cachedValue, context)
+            return
+        }
         let cacheKey = CacheKey(string: replacementCharacter, font: font, color: color)
         let ctLine: CTLine
         if let cachedValue = attributedStringCache[cacheKey] {
@@ -265,8 +410,17 @@ public final class LineFragmentRenderer {
                 .foregroundColor: color
             ])
             ctLine = CTLineCreateWithAttributedString(attrString)
+            if attributedStringCache.count >= Self.attributedStringCacheCap {
+                // Simple cap-and-evict: drop everything when full. Replacement glyphs rarely
+                // change at runtime; the cost of an occasional full rebuild is trivial.
+                attributedStringCache.removeAll(keepingCapacity: true)
+            }
             attributedStringCache[cacheKey] = ctLine
         }
+        if identityCache.count >= Self.attributedStringCacheCap {
+            identityCache.removeAll(keepingCapacity: true)
+        }
+        identityCache[identityKey] = ctLine
         context.textPosition = position
         CTLineDraw(ctLine, context)
     }
@@ -287,6 +441,7 @@ public final class LineFragmentRenderer {
             rect = forRect
         }
 
-        context.fill(rect)
+        // Device-aligned so the fill looks the same whichever rect a redraw clips to.
+        context.fill(context.deviceAligned(rect))
     }
 }

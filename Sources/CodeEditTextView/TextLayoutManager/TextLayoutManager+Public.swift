@@ -30,22 +30,28 @@ extension TextLayoutManager {
     /// - Parameter documentY: The Y position in the full document coordinate space (includes view zones).
     /// - Returns: The Y position in line-storage coordinate space (excludes view zones).
     func documentYToLineStorageY(_ documentY: CGFloat) -> CGFloat {
-        guard !viewZones.zones.isEmpty else { return documentY }
+        guard !viewZones.zones.isEmpty, lineStorage.count > 0 else { return documentY }
 
-        var adjustedY = documentY
-        var lastWhitespace: CGFloat = 0
-
-        // Iterate to convergence (usually 1-2 iterations)
-        for _ in 0..<10 {
-            // For the current adjustedY, find which line it would fall on without whitespace
-            guard let linePosition = lineStorage.getLine(atPosition: adjustedY) else { break }
-            let whitespace = viewZones.whitespaceHeightBeforeLine(linePosition.index)
-            if abs(whitespace - lastWhitespace) < 0.5 { break }
-            lastWhitespace = whitespace
-            adjustedY = documentY - whitespace
+        // A line's document y is its storage y plus the whitespace of the zones above it, and both only grow with
+        // the line index. The line holding `documentY` - the last one whose document y is at or above it - is
+        // therefore found by a binary search, which keeps the mapping monotonic: a point lower in the document
+        // never maps to an earlier line. (Iterating `documentY - whitespace` to a fixed point did not: inside a
+        // zone's whitespace it could settle on a line above a point it had mapped higher a moment before.)
+        var low = 0
+        var high = lineStorage.count - 1
+        while low < high {
+            let middle = (low + high + 1) / 2
+            guard let line = lineStorage.lineSpan(atIndex: middle) else { break }
+            if line.yPos + viewZones.whitespaceHeightBeforeLine(middle) <= documentY {
+                low = middle
+            } else {
+                high = middle - 1
+            }
         }
-
-        return adjustedY
+        guard let line = lineStorage.lineSpan(atIndex: low) else { return documentY }
+        // Inside the line the offset carries over. In the zones below it, the point belongs to the top of the next
+        // line, which is where this line ends in storage coordinates.
+        return min(documentY - viewZones.whitespaceHeightBeforeLine(low), line.yPos + line.height)
     }
 
     /// Converts a line-storage Y position to a document Y position by adding view zone whitespace.
@@ -282,17 +288,28 @@ extension TextLayoutManager {
         let realRangeStart = textStorage.rangeOfComposedCharacterSequence(at: clampedLower)
         let realRangeEnd = textStorage.rangeOfComposedCharacterSequence(at: clampedUpper)
 
+        // Clamp to this line's bounds before going line-relative. For ranges spanning multiple lines the composed
+        // bounds extend outside this line and would otherwise produce a negative line-relative location.
+        let clampedStart = max(realRangeStart.lowerBound, line.range.location)
+        let clampedEnd = min(realRangeEnd.upperBound, line.range.max)
+        guard clampedEnd > clampedStart else { return [] }
+
         // Fragments are relative to the line
         let relativeRange = NSRange(
-            start: realRangeStart.lowerBound - line.range.location,
-            end: realRangeEnd.upperBound - line.range.location
+            start: clampedStart - line.range.location,
+            end: clampedEnd - line.range.location
         )
 
         let whitespaceOffset = viewZones.whitespaceHeightBeforeLine(line.index)
         var rects: [CGRect] = []
         for fragmentPosition in line.data.lineFragments.linesInRange(relativeRange) {
             guard let intersectingRange = fragmentPosition.range.intersection(relativeRange) else { continue }
-            let fragmentRect = characterRect(in: fragmentPosition.data, for: intersectingRange)
+            // `characterRect` resolves offsets against the fragment's own contents, so translate the line-relative
+            // intersection into fragment-relative offsets.
+            let fragmentRect = characterRect(
+                in: fragmentPosition.data,
+                for: intersectingRange.translate(location: -fragmentPosition.range.location)
+            )
             guard fragmentRect.width > 0 else { continue }
             rects.append(
                 CGRect(
@@ -311,20 +328,24 @@ extension TextLayoutManager {
     /// - Parameters:
     ///   - range: The range of text offsets to generate the path for.
     ///   - cornerRadius: The radius of the edges when rounding. Defaults to four.
-    /// - Returns: An `NSBezierPath` representing the visual shape for the text range, or `nil` if the range is invalid.
+    /// - Returns: An `NSBezierPath` representing the visual shape for the text range, or `nil` if the range's location
+    ///            lies outside the document.
     public func roundedPathForRange(_ range: NSRange, cornerRadius: CGFloat = 4) -> NSBezierPath? {
         // Ensure the range is within the bounds of the text storage
+        guard range.lowerBound >= 0, range.lowerBound <= lineStorage.length else { return nil }
         let validRange = NSRange(
             location: range.lowerBound,
             length: min(range.length, lineStorage.length - range.lowerBound)
         )
 
-        guard validRange.length > 0 else { return rectForEndOffset().map { NSBezierPath(rect: $0) } }
+        guard validRange.length > 0 else {
+            return rectForOffset(validRange.location).map { NSBezierPath(rect: $0) }
+        }
 
         var rightSidePoints: [CGPoint] = [] // Points for Bottom-right → Top-right
         var leftSidePoints: [CGPoint] = []  // Points for Bottom-left → Top-left
 
-        for fragmentRect in rectsFor(range: range) {
+        for fragmentRect in rectsFor(range: validRange) {
             rightSidePoints.append(
                 contentsOf: [
                     CGPoint(x: fragmentRect.maxX, y: fragmentRect.minY), // Bottom-right
@@ -384,14 +405,28 @@ extension TextLayoutManager {
     // MARK: - Line Fragment Rects
 
     /// Finds the x position of the offset in the string the fragment represents.
+    ///
+    /// Hot path: called twice per selection-fragment per draw (via `rectForOffset`) and on every cursor hit-test. The
+    /// common case - no render delegate installed - is a single nil compare + inlined `LineFragment._xPos` call. Custom
+    /// renderers (the minimap) install an override that's pre-bound into a closure at delegate-set time, so this call
+    /// is a single function-pointer indirection instead of a protocol-witness lookup.
     /// - Parameters:
     ///   - lineFragment: The line fragment to calculate for.
-    ///   - offset: The offset, relative to the start of the *line*.
+    ///   - offset: The offset, relative to the start of the *fragment*.
     /// - Returns: The x position of the character in the drawn line, from the left.
+    @inline(__always)
     public func characterXPosition(in lineFragment: LineFragment, for offset: Int) -> CGFloat {
-        renderDelegate?.characterXPosition(in: lineFragment, for: offset) ?? lineFragment._xPos(for: offset)
+        if let _xPosOverride {
+            return _xPosOverride(lineFragment, offset)
+        }
+        return lineFragment._xPos(for: offset)
     }
 
+    /// Finds the bounding rect of a character range inside a single line fragment.
+    /// - Parameters:
+    ///   - lineFragment: The line fragment to calculate for.
+    ///   - range: The character range, relative to the start of the *fragment*.
+    /// - Returns: The rect, in fragment-local coordinates, containing the queried characters.
     public func characterRect(in lineFragment: LineFragment, for range: NSRange) -> CGRect {
         let minXPos = characterXPosition(in: lineFragment, for: range.lowerBound)
         let maxXPos = characterXPosition(in: lineFragment, for: range.upperBound)

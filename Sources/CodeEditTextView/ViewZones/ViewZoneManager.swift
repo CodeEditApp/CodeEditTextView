@@ -7,7 +7,7 @@
 
 import AppKit
 
-/// Manages view zones — horizontal bands of space inserted between lines of text.
+/// Manages view zones - horizontal bands of space inserted between lines of text.
 ///
 /// The manager maintains a sorted array of ``ViewZone`` entries and computes prefix sums of their heights
 /// for O(log n) position lookups. This is modeled after VSCode's `LinesLayout` whitespace system.
@@ -140,40 +140,54 @@ public final class ViewZoneManager {
 
     /// Returns all view zones that are visible in the given y-position range, accounting for line positions.
     ///
+    /// Uses the same placement convention as the layout pass: a zone with `afterLineNumber == k` occupies the
+    /// whitespace band directly below line index `k`, shifted by the whitespace of all zones at earlier gap
+    /// lines and stacked below same-line zones with a lower ordinal.
+    ///
     /// - Parameters:
     ///   - minY: The minimum y position (in document coordinates).
     ///   - maxY: The maximum y position (in document coordinates).
-    ///   - lineYPosition: A closure that returns the y position of a given line index (0-based). The y position
-    ///     should be the position *without* view zone offsets (raw line position from the line storage).
+    ///   - lineBottomYPosition: A closure that returns the *bottom* y position (`yPos + height`) of a given line
+    ///     index (0-based). The position should be the raw line-storage position, *without* view zone offsets.
+    ///     Return the total raw text height for indices past the last line, or `nil` to skip that line's zones.
     /// - Returns: An array of tuples containing the zone, its computed y position, and its index in the zones array.
     public func zonesInViewport(
         minY: CGFloat,
         maxY: CGFloat,
-        lineYPosition: (Int) -> CGFloat?
+        lineBottomYPosition: (Int) -> CGFloat?
     ) -> [(zone: ViewZone, yPosition: CGFloat, index: Int)] {
         guard !zones.isEmpty else { return [] }
         ensurePrefixSums()
 
         var result: [(zone: ViewZone, yPosition: CGFloat, index: Int)] = []
+        var gapLine = Int.min
+        var gapLineResolved = true
+        var zoneY: CGFloat = 0
 
         for (index, zone) in zones.enumerated() {
-            // The zone's y-position is after the line it follows, plus the whitespace of all prior zones.
-            let lineEndY: CGFloat
-            if zone.afterLineNumber <= 0 {
-                lineEndY = 0
-            } else if let lineY = lineYPosition(zone.afterLineNumber - 1) {
-                lineEndY = lineY
-            } else {
-                continue
+            if zone.afterLineNumber != gapLine {
+                gapLine = zone.afterLineNumber
+                let lineBottom: CGFloat?
+                if gapLine < 0 {
+                    lineBottom = 0
+                } else {
+                    lineBottom = lineBottomYPosition(gapLine)
+                }
+                if let lineBottom {
+                    zoneY = lineBottom + whitespaceHeightBeforeLine(gapLine)
+                    gapLineResolved = true
+                } else {
+                    gapLineResolved = false
+                }
             }
+            guard gapLineResolved else { continue }
+            if zoneY >= maxY { break }
 
-            let priorWhitespace: CGFloat = index > 0 ? prefixSums[index - 1] : 0
-            let zoneY = lineEndY + priorWhitespace
-
-            if zoneY + zone.heightInPoints < minY { continue }
-            if zoneY > maxY { break }
-
-            result.append((zone: zone, yPosition: zoneY, index: index))
+            let zoneMaxY = zoneY + zone.heightInPoints
+            if zoneMaxY > minY {
+                result.append((zone: zone, yPosition: zoneY, index: index))
+            }
+            zoneY = zoneMaxY
         }
 
         return result

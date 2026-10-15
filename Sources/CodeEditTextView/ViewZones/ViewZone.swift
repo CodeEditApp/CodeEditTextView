@@ -20,9 +20,9 @@ public struct ViewZone: Identifiable {
     /// Unique identifier for this view zone.
     public let id: UUID
 
-    /// The line number after which this zone appears.
-    /// A value of `0` means the zone appears before the first line.
-    /// Must be >= 0 and <= the number of lines in the document.
+    /// The 0-based line index below which this zone appears. A value of `k` places the zone in the whitespace
+    /// band directly below line index `k` - `0` places it below the first line. Valid values are
+    /// `0...(line count - 1)`; placing a zone *above* the first line is not supported.
     public var afterLineNumber: Int
 
     /// The height of the zone in points.

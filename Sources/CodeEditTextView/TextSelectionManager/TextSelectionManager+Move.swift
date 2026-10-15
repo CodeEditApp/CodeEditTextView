@@ -30,7 +30,10 @@ extension TextSelectionManager {
             )
         }
         updateSelectionViews()
-        delegate?.setNeedsDisplay()
+        // Unconditional, for the same reason ``setSelectedRange(_:)`` is: `updateSelectionViews` only reports a
+        // change when a *cursor view* moved, so extending an already-non-empty selection would otherwise never
+        // repaint the rows it grew over.
+        setNeedsDisplayForSelections()
         NotificationCenter.default.post(Notification(name: Self.selectionChangedNotification, object: self))
     }
 
