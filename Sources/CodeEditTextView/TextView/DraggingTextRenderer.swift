@@ -11,6 +11,14 @@ class DraggingTextRenderer: NSView {
     let ranges: [NSRange]
     let layoutManager: TextLayoutManager
 
+    /// The line-storage y position of the top of the first selected fragment. Fragments draw relative to this,
+    /// so the rendered image is contiguous regardless of any view zones between the selected lines.
+    private let contentStartY: CGFloat
+
+    /// The union of all dragged ranges. Lines are enumerated once over this span so fragments shared by
+    /// multiple ranges are drawn exactly once.
+    private let fullRange: NSRange
+
     override var isFlipped: Bool {
         true
     }
@@ -19,25 +27,46 @@ class DraggingTextRenderer: NSView {
         self.frame.size
     }
 
+    /// - Parameters:
+    ///   - ranges: The dragged ranges, sorted ascending by location, non-overlapping.
+    ///   - layoutManager: The layout manager the ranges belong to. All ranges must be laid out.
     init?(ranges: [NSRange], layoutManager: TextLayoutManager) {
         self.ranges = ranges
         self.layoutManager = layoutManager
 
-        assert(!ranges.isEmpty, "Empty ranges not allowed")
-
         var minY: CGFloat = .infinity
-        var maxY: CGFloat = 0.0
+        var maxY: CGFloat = -.infinity
+        var firstLineIndex: Int?
 
-        for range in ranges {
+        for range in ranges where !range.isEmpty {
             for line in layoutManager.lineStorage.linesInRange(range) {
-                minY = min(minY, line.yPos)
-                maxY = max(maxY, line.yPos + line.height)
+                for fragment in line.data.lineFragments {
+                    let fragmentRange = fragment.range.translate(location: line.range.location)
+                    guard let intersection = fragmentRange.intersection(range), !intersection.isEmpty else {
+                        continue
+                    }
+                    minY = min(minY, line.yPos + fragment.yPos)
+                    maxY = max(maxY, line.yPos + fragment.yPos + fragment.height)
+                    if firstLineIndex == nil {
+                        firstLineIndex = line.index
+                    }
+                }
             }
         }
 
+        guard let firstLineIndex, minY < maxY,
+              let firstRange = ranges.first(where: { !$0.isEmpty }),
+              let lastRange = ranges.last(where: { !$0.isEmpty }) else {
+            return nil
+        }
+
+        self.contentStartY = minY
+        self.fullRange = NSRange(start: firstRange.lowerBound, end: lastRange.upperBound)
+
+        // The frame is positioned in the text view's coordinate space, which includes view zone whitespace.
         let frame = CGRect(
             x: layoutManager.edgeInsets.left,
-            y: minY,
+            y: layoutManager.lineStorageYToDocumentY(minY, lineIndex: firstLineIndex),
             width: layoutManager.maxLineWidth,
             height: maxY - minY
         )
@@ -51,59 +80,74 @@ class DraggingTextRenderer: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
-        guard let context = NSGraphicsContext.current?.cgContext,
-              let firstRange = ranges.first,
-              let minRect = layoutManager.rectForOffset(firstRange.lowerBound) else {
+        guard let context = NSGraphicsContext.current?.cgContext else {
             return
         }
-
-        for range in ranges {
-            for line in layoutManager.lineStorage.linesInRange(range) {
-                drawLine(line, in: range, yOffset: minRect.minY, context: context)
-            }
+        let renderer = LineFragmentRenderer(
+            textStorage: layoutManager.textStorage,
+            invisibleCharacterDelegate: layoutManager.invisibleCharacterDelegate
+        )
+        for line in layoutManager.lineStorage.linesInRange(fullRange) {
+            drawLine(line, context: context, renderer: renderer)
         }
     }
 
     private func drawLine(
         _ line: TextLineStorage<TextLine>.TextLinePosition,
-        in selectedRange: NSRange,
-        yOffset: CGFloat,
-        context: CGContext
+        context: CGContext,
+        renderer: LineFragmentRenderer
     ) {
-        let renderer = LineFragmentRenderer(
-            textStorage: layoutManager.textStorage,
-            invisibleCharacterDelegate: layoutManager.invisibleCharacterDelegate
-        )
         for fragment in line.data.lineFragments {
-            guard let fragmentRange = fragment.range.shifted(by: line.range.location),
-                  fragmentRange.intersection(selectedRange) != nil else {
+            let fragmentRange = fragment.range.translate(location: line.range.location)
+            let fragmentOffset = fragmentRange.location
+
+            // The selected x intervals in this fragment, gathered across every dragged range so a fragment
+            // shared by multiple ranges is drawn once and masked once.
+            var selectedIntervals: [(minX: CGFloat, maxX: CGFloat)] = []
+            for range in ranges {
+                guard let intersection = fragmentRange.intersection(range), !intersection.isEmpty else {
+                    continue
+                }
+                let startX = layoutManager.characterXPosition(
+                    in: fragment.data,
+                    for: intersection.lowerBound - fragmentOffset
+                )
+                let endX = layoutManager.characterXPosition(
+                    in: fragment.data,
+                    for: intersection.upperBound - fragmentOffset
+                )
+                selectedIntervals.append((min(startX, endX), max(startX, endX)))
+            }
+
+            guard !selectedIntervals.isEmpty else {
                 continue
             }
-            let fragmentYPos = line.yPos + fragment.yPos - yOffset
+            selectedIntervals.sort(by: { $0.minX < $1.minX })
+
+            let fragmentYPos = line.yPos + fragment.yPos - contentStartY
             renderer.draw(lineFragment: fragment.data, in: context, yPos: fragmentYPos)
 
-            // Clear text that's not selected
-            if fragmentRange.contains(selectedRange.lowerBound) {
-                let relativeOffset = selectedRange.lowerBound - line.range.lowerBound
-                let selectionXPos = layoutManager.characterXPosition(in: fragment.data, for: relativeOffset)
-                context.clear(
-                    CGRect(
-                        x: 0.0,
-                        y: fragmentYPos,
-                        width: selectionXPos,
-                        height: fragment.height
-                    ).pixelAligned
-                )
+            // Clear everything outside the selected intervals.
+            var clearStartX: CGFloat = 0.0
+            for interval in selectedIntervals {
+                if interval.minX > clearStartX {
+                    context.clear(
+                        CGRect(
+                            x: clearStartX,
+                            y: fragmentYPos,
+                            width: interval.minX - clearStartX,
+                            height: fragment.height
+                        ).pixelAligned
+                    )
+                }
+                clearStartX = max(clearStartX, interval.maxX)
             }
-
-            if fragmentRange.contains(selectedRange.upperBound) {
-                let relativeOffset = selectedRange.upperBound - line.range.lowerBound
-                let selectionXPos = layoutManager.characterXPosition(in: fragment.data, for: relativeOffset)
+            if clearStartX < frame.width {
                 context.clear(
                     CGRect(
-                        x: selectionXPos,
+                        x: clearStartX,
                         y: fragmentYPos,
-                        width: frame.width - selectionXPos,
+                        width: frame.width - clearStartX,
                         height: fragment.height
                     ).pixelAligned
                 )
