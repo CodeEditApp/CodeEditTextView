@@ -12,12 +12,19 @@ extension Array where Element == CGRect {
     /// Returns `.zero` if the array is empty.
     /// - Returns: The minimum rectangle that contains all rectangles in this array.
     func boundingRect() -> CGRect {
-        guard !self.isEmpty else { return .zero }
-        let minX = self.min(by: { $0.origin.x < $1.origin.x })?.origin.x ?? 0
-        let minY = self.min(by: { $0.origin.y < $1.origin.y })?.origin.y ?? 0
-        let max = self.max(by: { $0.maxY < $1.maxY }) ?? .zero
-        let origin = CGPoint(x: minX, y: minY)
-        let size = CGSize(width: max.maxX - minX, height: max.maxY - minY)
-        return CGRect(origin: origin, size: size)
+        guard let first else { return .zero }
+        var minX = Swift.min(first.origin.x, first.origin.x + first.size.width)
+        var maxX = Swift.max(first.origin.x, first.origin.x + first.size.width)
+        var minY = Swift.min(first.origin.y, first.origin.y + first.size.height)
+        var maxY = Swift.max(first.origin.y, first.origin.y + first.size.height)
+        for rect in dropFirst() {
+            let x2 = rect.origin.x + rect.size.width
+            let y2 = rect.origin.y + rect.size.height
+            minX = Swift.min(minX, Swift.min(rect.origin.x, x2))
+            maxX = Swift.max(maxX, Swift.max(rect.origin.x, x2))
+            minY = Swift.min(minY, Swift.min(rect.origin.y, y2))
+            maxY = Swift.max(maxY, Swift.max(rect.origin.y, y2))
+        }
+        return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
     }
 }
