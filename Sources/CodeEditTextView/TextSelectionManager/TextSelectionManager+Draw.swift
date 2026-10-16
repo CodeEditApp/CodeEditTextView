@@ -56,7 +56,8 @@ extension TextSelectionManager {
 
         let padding = LineHighlightDrawing.horizontalPadding
         let insetXPos = edgeInsets.left + padding
-        let width = (textView?.bounds.width ?? 0) - insetXPos - edgeInsets.right - padding
+        let trailingInset = layoutManager?.edgeInsets.right ?? edgeInsets.right
+        let width = (textView?.bounds.width ?? 0) - insetXPos - trailingInset - padding
         // Line storage y leaves out the view zones above the line; the highlight belongs at the line's document y.
         let documentY = layoutManager?.lineStorageYToDocumentY(linePosition.yPos, lineIndex: linePosition.index)
             ?? linePosition.yPos

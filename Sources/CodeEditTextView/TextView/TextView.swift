@@ -188,7 +188,11 @@ open class TextView: NSView, NSTextContent {
             layoutManager.edgeInsets - selectionManager.edgeInsets
         }
         set {
+            let trailingChanged = newValue.right != textInsets.right
             layoutManager.edgeInsets = edgeInsets + newValue
+            if trailingChanged {
+                selectionManager.setNeedsDisplayForSelections()
+            }
         }
     }
 
