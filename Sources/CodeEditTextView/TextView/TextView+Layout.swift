@@ -101,7 +101,7 @@ extension TextView {
     public var unobscuredVisibleRect: NSRect {
         let rect = visibleRect
         guard let scrollView, let clipView = superview as? NSClipView else { return rect }
-        let insets = scrollView.contentInsets
+        let insets = obscuringInsets(of: scrollView)
         let clipBounds = clipView.bounds
         let unobscuredInClip = NSRect(
             x: clipBounds.minX + insets.left,
@@ -114,6 +114,18 @@ extension TextView {
         // An empty intersection means the chrome covers the whole viewport; callers need a rect they can
         // measure against, and the visible rect is the only honest one left.
         return unobscured.isEmpty ? rect : unobscured
+    }
+
+    /// The part of the scroll view's `contentInsets` covered by the host's chrome: the insets less
+    /// ``contentInsetPadding``, which pads the text but is still readable screen area.
+    func obscuringInsets(of scrollView: NSScrollView) -> NSEdgeInsets {
+        let insets = scrollView.contentInsets
+        return NSEdgeInsets(
+            top: max(0, insets.top - contentInsetPadding.top),
+            left: max(0, insets.left - contentInsetPadding.left),
+            bottom: max(0, insets.bottom - contentInsetPadding.bottom),
+            right: max(0, insets.right - contentInsetPadding.right)
+        )
     }
 
     public var visibleTextRange: NSRange? {

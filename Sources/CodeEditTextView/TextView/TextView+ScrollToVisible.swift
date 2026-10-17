@@ -18,6 +18,12 @@ extension TextView {
     private static let maxScrollStabilizationPasses = 8
 
     /// Scrolls the upmost selection to the visible rect if `scrollView` is not `nil`.
+    ///
+    /// The selection's line fragment is brought just inside the unobscured viewport (below the host's chrome) with
+    /// the smallest scroll that reveals it, so moving the caret past an edge - holding an arrow key, say - keeps its
+    /// line pinned at that edge while the text slides under it. The clip view is scrolled directly rather than
+    /// through `scrollToVisible(_:)`: AppKit may animate that scroll, leaving the caret and line highlight a line
+    /// ahead of the text until the animation catches up, and it doesn't account for the content insets.
     public func scrollSelectionToVisible() {
         guard let scrollView, let selection = getSelection() else {
             return
@@ -25,20 +31,56 @@ extension TextView {
         let offset = offsetNotPivot(selection)
 
         // The frame is resized lazily on layout passes. After an edit that grows the document, the frame may not
-        // include the target rect yet, which would make `scrollToVisible` a no-op (the clip view can't scroll past
-        // the document's current bounds). Resize first so the scroll target is reachable.
+        // include the target rect yet, and the clip view can't scroll past the document's current bounds. Resize
+        // first so the scroll target is reachable.
         updateFrameIfNeeded()
 
-        var lastRect: CGRect = .zero
+        let clipView = scrollView.contentView
         var remainingPasses = Self.maxScrollStabilizationPasses
-        while remainingPasses > 0, let rect = layoutManager.rectForOffset(offset), rect != lastRect {
+        while remainingPasses > 0, let rect = layoutManager.rectForOffset(offset) {
             remainingPasses -= 1
-            lastRect = rect
-            scrollToVisible(rect)
-            scrollView.reflectScrolledClipView(scrollView.contentView)
+            let origin = scrollOrigin(revealing: rect, in: scrollView)
+            guard origin != clipView.bounds.origin else { break }
+            clipView.scroll(to: origin)
+            scrollView.reflectScrolledClipView(clipView)
             layoutManager.layoutLines()
             selectionManager.updateSelectionViews()
         }
+    }
+
+    /// The clip view bounds origin that brings `rect` (in this view's coordinates) inside the region not covered by
+    /// the host's chrome with the least movement, or the current origin if it's already there. Content inset padding
+    /// isn't chrome: a line scrolled to an edge goes right up against the chrome, over the padding.
+    ///
+    /// The rect is snapped to whole points the way the line highlight is drawn (see
+    /// ``TextSelectionManager/drawSelections(in:)``), so a line pinned to an edge leaves no sliver between its
+    /// highlight and the chrome, whatever fraction of a point its height has.
+    private func scrollOrigin(revealing rect: CGRect, in scrollView: NSScrollView) -> CGPoint {
+        let clipView = scrollView.contentView
+        let bounds = clipView.bounds
+        let insets = obscuringInsets(of: scrollView)
+        let target = convert(rect.pixelAligned, to: clipView)
+        var origin = bounds.origin
+
+        // The far edge first, then the near one: a target taller than the viewport keeps its top (leading) edge in
+        // view rather than flipping between the two on successive passes.
+        if target.maxY > bounds.maxY - insets.bottom {
+            origin.y = target.maxY - bounds.height + insets.bottom
+        }
+        if target.minY < origin.y + insets.top {
+            origin.y = target.minY - insets.top
+        }
+        if target.maxX > bounds.maxX - insets.right {
+            origin.x = target.maxX - bounds.width + insets.right
+        }
+        if target.minX < origin.x + insets.left {
+            origin.x = target.minX - insets.left
+        }
+
+        guard origin != bounds.origin else { return origin }
+        var proposed = bounds
+        proposed.origin = origin
+        return clipView.constrainBoundsRect(proposed).origin
     }
 
     /// Scrolls the view to the specified range.

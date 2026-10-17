@@ -181,6 +181,12 @@ open class TextView: NSView, NSTextContent {
         }
     }
 
+    /// The part of the enclosing scroll view's `contentInsets` that only pads the text - space left above the first
+    /// line or below the last - rather than sitting under the host's chrome. It is readable screen area, so
+    /// ``unobscuredVisibleRect`` keeps it, and scrolling the selection into view puts the line right against the
+    /// chrome instead of a padding's distance from it.
+    public var contentInsetPadding: NSEdgeInsets = NSEdgeInsetsZero
+
     /// Insets just drawn text from the horizontal edges. This is in addition to the insets in ``edgeInsets``, but does
     /// not apply to other drawn content.
     public var textInsets: HorizontalEdgeInsets {
